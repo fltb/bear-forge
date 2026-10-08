@@ -1,0 +1,112 @@
+[
+  {
+    "original": "README.md",
+    "archived": "archive/2026-10-08/README.md",
+    "sha256": "4698dbf215ee6d8edcaedb5e7d8be5035c7dc2ce4a4853bab6d9e507b3185ce8"
+  },
+  {
+    "original": "docs/architecture.md",
+    "archived": "archive/2026-10-08/docs/architecture.md",
+    "sha256": "3242e0439ac6aa5ce6b606e1de56c3c9df8a19f92ea6f1ef6b7f0c0b54167193"
+  },
+  {
+    "original": "docs/cost-estimate.md",
+    "archived": "archive/2026-10-08/docs/cost-estimate.md",
+    "sha256": "8225eb42f6f9b90fbc935c38b65dee193832588b9751caf4bf91d040d6db401d"
+  },
+  {
+    "original": "docs/engine-reuse.md",
+    "archived": "archive/2026-10-08/docs/engine-reuse.md",
+    "sha256": "520e2467dbf1eec68512d17de2b755774d6bc9a277fd93b17ccbdcaf946341ac"
+  },
+  {
+    "original": "docs/plan.md",
+    "archived": "archive/2026-10-08/docs/plan.md",
+    "sha256": "3b5bc110c3ea2ee0b3edbdadadcf6aacbaf9b50cc4b3e7b00497e2dc45fbd509"
+  },
+  {
+    "original": "docs/references.md",
+    "archived": "archive/2026-10-08/docs/references.md",
+    "sha256": "9b2f272dcc7356da07c2576ae7d36935a03ebc685501264ad595e0c8e6d4e987"
+  },
+  {
+    "original": "docs/runtime-budget.md",
+    "archived": "archive/2026-10-08/docs/runtime-budget.md",
+    "sha256": "aa08f2fb2e32830d570d9d4aeae50338ede8577e2f137480ebc213fb55dcca07"
+  },
+  {
+    "original": "docs/stress-cases.md",
+    "archived": "archive/2026-10-08/docs/stress-cases.md",
+    "sha256": "4209256c42107376cae4b32c0648f95e79bdd1a8bbd2396564356632118b6a34"
+  },
+  {
+    "original": "docs/system-reuse.md",
+    "archived": "archive/2026-10-08/docs/system-reuse.md",
+    "sha256": "021450728be559a6939390a35252a3f683717d7cc1fc80f214813d322cb9cede"
+  },
+  {
+    "original": "docs/training.md",
+    "archived": "archive/2026-10-08/docs/training.md",
+    "sha256": "6679266982551128b361952e3999ba17827a005f69f74b703bbdd6b18a979831"
+  },
+  {
+    "original": "docs/verification.md",
+    "archived": "archive/2026-10-08/docs/verification.md",
+    "sha256": "ac1df8c0ef3a34b817925424b0d830c3f8233926721b1ba071c982dcf6aed2f5"
+  },
+  {
+    "original": "spec/authoring.md",
+    "archived": "archive/2026-10-08/spec/authoring.md",
+    "sha256": "29218543d01f5f2291486505c86f4dbd3db298a9706b7e6eb647fc3079d36ea7"
+  },
+  {
+    "original": "spec/core.md",
+    "archived": "archive/2026-10-08/spec/core.md",
+    "sha256": "4053e32a2bba76b5e75addb9a3319b21d694931870e20373f167ae3e8e4946bf"
+  },
+  {
+    "original": "spec/execution.md",
+    "archived": "archive/2026-10-08/spec/execution.md",
+    "sha256": "492534dccea6cd0b3d6d5becbe0651db0f5e5fda86f1731107d6d54932294014"
+  },
+  {
+    "original": "spec/layers.md",
+    "archived": "archive/2026-10-08/spec/layers.md",
+    "sha256": "723cb4c88b95497fd75d470df78fafef61cf04c47a4f320b36a7550726706af2"
+  },
+  {
+    "original": "spec/mtg-conformance.md",
+    "archived": "archive/2026-10-08/spec/mtg-conformance.md",
+    "sha256": "b976480b10edd88c67474c60456445859fcca418b6d153fcafdcfe6678d19ba9"
+  },
+  {
+    "original": "spec/planning.md",
+    "archived": "archive/2026-10-08/spec/planning.md",
+    "sha256": "9df8df0c661ec7d46f65b707236cf94978de7639d8119293c5a86c2ec440c366"
+  },
+  {
+    "original": "spec/policies.md",
+    "archived": "archive/2026-10-08/spec/policies.md",
+    "sha256": "bbaee1404d20df75c5cb71a3699c77532fe5a6cb12e2b1b20c55e301d747bfbb"
+  },
+  {
+    "original": "spec/ports.md",
+    "archived": "archive/2026-10-08/spec/ports.md",
+    "sha256": "7018d3c9261036d3d49ca4256cf4ef20f9c7596041fa3e7f404fbb995721a882"
+  },
+  {
+    "original": "spec/proofs.md",
+    "archived": "archive/2026-10-08/spec/proofs.md",
+    "sha256": "64a6d0147f63da10b8af3ff9e426148bed33a358f0ebeaef86ebba38f59ffe7a"
+  },
+  {
+    "original": "spec/runtime-contract.md",
+    "archived": "archive/2026-10-08/spec/runtime-contract.md",
+    "sha256": "295bbff11a3664414ce13d51224c791a436f8b70e4fb8fd958f1431c1df032b1"
+  },
+  {
+    "original": "spec/session.md",
+    "archived": "archive/2026-10-08/spec/session.md",
+    "sha256": "f412da927c1e2cd5c2155d142f26df8c1fa1ac9a8e6b70d2af1566eb37c3e2dc"
+  }
+]

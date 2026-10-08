@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "current_checkpoint": "C00",
+  "next_checkpoint": "C01",
+  "additional_active_docs": [
+    "docs/scenario-resolution-requirements.md"
+  ],
+  "checkpoints": {
+    "C00": {
+      "status": "done",
+      "depends_on": [],
+      "items": {
+        "C00-01": "passed",
+        "C00-02": "passed",
+        "C00-03": "passed"
+      },
+      "evidence": "evidence/C00/report.json",
+      "blocker": null,
+      "next_action": "Bear Forge naming and architecture documentation verified. C01 remains pending."
+    },
+    "C01": {
+      "status": "pending",
+      "depends_on": [
+        "C00"
+      ],
+      "items": {
+        "C01-01": "pending",
+        "C01-02": "pending",
+        "C01-03": "pending",
+        "C01-04": "pending"
+      },
+      "evidence": null,
+      "blocker": null,
+      "next_action": "Implement executable contracts from architecture.md v0.1 and select the first game when implementation is requested; defer module internals to C02."
+    },
+    "C02": {
+      "status": "pending",
+      "depends_on": [
+        "C01"
+      ],
+      "items": {
+        "C02-01": "pending",
+        "C02-02": "pending",
+        "C02-03": "pending",
+        "C02-04": "pending"
+      },
+      "evidence": null,
+      "blocker": null,
+      "next_action": "尚未授权启动；授权后按 plan.md 本关验收清单登记命令。"
+    },
+    "C03": {
+      "status": "pending",
+      "depends_on": [
+        "C02"
+      ],
+      "items": {
+        "C03-01": "pending",
+        "C03-02": "pending",
+        "C03-03": "pending",
+        "C03-04": "pending"
+      },
+      "evidence": null,
+      "blocker": null,
+      "next_action": "尚未授权启动；授权后按 plan.md 本关验收清单登记命令。"
+    },
+    "C04": {
+      "status": "pending",
+      "depends_on": [
+        "C03"
+      ],
+      "items": {
+        "C04-01": "pending",
+        "C04-02": "pending",
+        "C04-03": "pending",
+        "C04-04": "pending"
+      },
+      "evidence": null,
+      "blocker": null,
+      "next_action": "尚未授权启动；授权后按 plan.md 本关验收清单登记命令。"
+    },
+    "C05": {
+      "status": "pending",
+      "depends_on": [
+        "C04"
+      ],
+      "items": {
+        "C05-01": "pending",
+        "C05-02": "pending",
+        "C05-03": "pending",
+        "C05-04": "pending"
+      },
+      "evidence": null,
+      "blocker": null,
+      "next_action": "尚未授权启动；授权后按 plan.md 本关验收清单登记命令。"
+    },
+    "C06": {
+      "status": "pending",
+      "depends_on": [
+        "C05"
+      ],
+      "items": {
+        "C06-01": "pending",
+        "C06-02": "pending",
+        "C06-03": "pending",
+        "C06-04": "pending"
+      },
+      "evidence": null,
+      "blocker": null,
+      "next_action": "尚未授权启动；授权后按 plan.md 本关验收清单登记命令。"
+    },
+    "C07": {
+      "status": "pending",
+      "depends_on": [
+        "C06"
+      ],
+      "items": {
+        "C07-01": "pending",
+        "C07-02": "pending",
+        "C07-03": "pending",
+        "C07-04": "pending"
+      },
+      "evidence": null,
+      "blocker": null,
+      "next_action": "尚未授权启动；授权后按 plan.md 本关验收清单登记命令。"
+    }
+  },
+  "changes": [
+    {
+      "date": "2026-10-08",
+      "source": "用户要求归档旧文档、重整有效计划，并设置严格 checkpoint/checklist",
+      "change": "旧 22 份文档全部失效；C00 只交付文档与检查机制；C01–C07 未实施。"
+    },
+    {
+      "date": "2026-10-08",
+      "source": "用户要求先虚构万智牌 like 场景，独立文档提炼需求，再决定技术",
+      "change": "新增独立需求讨论稿；S01–S10 为场景行为要求，存档/分支 S11 为条件能力。当前强制快照条款待需求评审，不以旧接口反推必要性；未启动 C01 或选择后端。"
+    },
+    {
+      "date": "2026-10-08",
+      "source": "本次新增用户指定的独立场景文档",
+      "change": "C00 文档目录验收支持账本已登记的附加文档，仍拒绝未登记文档；重跑审计及负向检查，不改变实现验收门槛。"
+    },
+    {
+      "date": "2026-10-08",
+      "source": "用户要求删除防御性描述，只保留 case 并增加分支、恢复、非法决策压力内容",
+      "change": "独立场景改为规则、主路径、5 个恢复点及15个压力案例；删除技术解释、免责声明与需求讨论。未改变实现范围。"
+    },
+    {
+      "date": "2026-10-08",
+      "source": "用户要求先固定模块架构图、代码文件树和模块协议，按协议分析完善性，暂缓内部实现",
+      "change": "重写 architecture 为 v0.1 协议基线；删除有效规格中的内部后端候选约束，同步需求与后续清单；本轮仍为C00文档，不实现引擎、不写bench。"
+    },
+    {
+      "date": "2026-10-08",
+      "source": "User confirmed Bear Forge as official name and bear-forge as lowercase slug.",
+      "change": "Rename project directory and active references; preserve archived documents unchanged. No implementation scope change."
+    }
+  ]
+}

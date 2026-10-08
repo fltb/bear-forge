@@ -1,0 +1,71 @@
+{
+  "checkpoint": "C00",
+  "kind": "documentation",
+  "summary": "C00 documentation: architecture v0.1, proposed source tree, fixed protocols, 15-case coverage and module-boundary review. No runtime implementation or benchmarks.",
+  "replay_command": "python3 tools/audit_c00.py && python3 tools/check_project.py && python3 tools/check_project.py --self-test",
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "8155e80dd42ab8da6324fe3266d162198db8c2090d824258d626e74f8f1c6cdd"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "0676ddfde15d7fbe993fec994e0b96edac422744d7d9a8913d10512890cd8460"
+    },
+    {
+      "path": "docs/requirements.md",
+      "sha256": "9d65027912dbd703bbf654978835cb77fd2a4827f5aaeb200483c8674f8be2f0"
+    },
+    {
+      "path": "docs/architecture.md",
+      "sha256": "18a4afdcb69cc77bfb1d2dc1121bac73b6ca2a8c3115568cf0c3c00e75119315"
+    },
+    {
+      "path": "docs/workflow.md",
+      "sha256": "8436e8e63b8713c6bdce42de9e2b83b60e554567898f9e7b847bf8f38e1543eb"
+    },
+    {
+      "path": "tools/check_project.py",
+      "sha256": "42fc42ba2f7f4b49aeabbfa0b7f09f7c885ae28eafd755f848589cf104880f55"
+    },
+    {
+      "path": "tools/audit_c00.py",
+      "sha256": "0fddb064432ab481d98dad99e9f013142d12d35ff4a4f7657ea10eb0c55224cc"
+    },
+    {
+      "path": "evidence/C00/review.md",
+      "sha256": "435db881eab09d1cb11b06ff32731a878acdb4d3e8cf0181d8b4df1f53900307"
+    },
+    {
+      "path": "evidence/C00/acceptance.md",
+      "sha256": "c6b4a18742e07a6332b56317a56e3f13e19a38d3b41d726df41eff845dfd0aff"
+    },
+    {
+      "path": "docs/scenario-resolution-requirements.md",
+      "sha256": "272006463aec4c1e11ced6504bbb38cc4b3ab83f4e32cffe6d075e25c5073458"
+    }
+  ],
+  "checks": [
+    {
+      "id": "C00-01",
+      "status": "passed",
+      "command": "python3 tools/audit_c00.py",
+      "exit_code": 0,
+      "log": "evidence/C00/archive.log"
+    },
+    {
+      "id": "C00-02",
+      "status": "passed",
+      "command": "python3 tools/audit_c00.py",
+      "exit_code": 0,
+      "log": "evidence/C00/structure.log"
+    },
+    {
+      "id": "C00-03",
+      "status": "passed",
+      "command": "python3 tools/check_project.py --self-test",
+      "exit_code": 0,
+      "log": "evidence/C00/negative.log"
+    }
+  ]
+}

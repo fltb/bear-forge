@@ -1,0 +1,84 @@
+
+> bear-forge@0.3.0 check
+> npm run typecheck && npm test && npm run check:boundaries
+
+
+> bear-forge@0.3.0 typecheck
+> tsc --noEmit
+
+
+> bear-forge@0.3.0 test
+> node --experimental-strip-types --test tests/contracts/*.test.ts tests/doudizhu/*.test.ts
+
+✔ author module maps to existing Core/Game: events drain once and rejected input preserves boundary (3.995041ms)
+✔ one author function also runs natively with matching state, requests, events and result (0.522709ms)
+✔ artifact shape is separate from source modules and is not an admission proof (0.441792ms)
+✔ Core faults cannot become a Game normal ending (0.222417ms)
+✔ fixed categories are enums; opaque identifiers have concrete validation (1.93425ms)
+✔ generic Core requests/capture work without game concepts; invalid replies do not advance (1.372875ms)
+✔ same transition capability supports stack exploration and repeated rollouts (0.133334ms)
+✔ exact and construct share a JSON envelope while games own concrete schemas (3.440875ms)
+✔ Dou Dizhu only accepts the concrete exact action reply (0.463333ms)
+✔ construct convention is interpreted by a caller, with no Core or game-state access (0.072459ms)
+✔ every Core kind/code pair accepts exactly the documented combinations (1.699ms)
+✔ game schema table binds options and validation to the selected contract (1.285084ms)
+✔ runtime contract dispatch rejects wrong key and wrong shape before domain validation (2.263833ms)
+✔ two request types retain distinct native results in one game loop (0.169375ms)
+✔ per-run options and Game snapshot schemas reject invalid public data (0.369458ms)
+✔ full GameRuntime -> Execution -> real program, landlord 0 (33.84925ms)
+✔ full GameRuntime -> Execution -> real program, landlord 1 (15.001834ms)
+✔ full GameRuntime -> Execution -> real program, landlord 2 (22.112917ms)
+✔ all-pass redeals; ordinary auction ends after exactly three bids (36.523458ms)
+✔ private doubling keeps the other original input valid, and reveals bottom later (0.658917ms)
+✔ full game can be driven by timeout templates after auction (16.819208ms)
+✔ all timeout defaults, including redouble and two passes (0.322916ms)
+✔ illegal/out-of-turn/exact-deadline inputs do not resume or capture; queries are typed (0.59175ms)
+✔ same public program inputs reproduce game trace, independent games interleave without contamination (107.61225ms)
+✔ one adapter hosts distinct games; exact query outputs are isolated (0.582167ms)
+✔ rulebook settlement and every farmer multiplier remain intact (0.420416ms)
+✔ terminal consistency is validated; there is no second independent boundary.result (11.858083ms)
+✔ executor reject preserves the correct adapter state (0.5625ms)
+✔ executor malformed preserves the correct adapter state (0.593708ms)
+✔ executor throw preserves the correct adapter state (0.186083ms)
+✔ exact play options include every lead single and all returned actions pass game validation (1.227584ms)
+✔ rulebook family single: 3 (0.553417ms)
+✔ rulebook family pair: 15,15 (0.332833ms)
+✔ rulebook family triple: 7,7,7 (0.0665ms)
+✔ rulebook family tripleSingle: 3,3,3,4 (0.064541ms)
+✔ rulebook family triplePair: 9,9,9,3,3 (0.04775ms)
+✔ rulebook family straight: 3,4,5,6,7 (0.052333ms)
+✔ rulebook family pairs: 3,3,4,4,5,5 (0.040541ms)
+✔ rulebook family airplane: 3,3,3,4,4,4 (0.0275ms)
+✔ rulebook family airplaneSingle: 3,3,3,4,4,4,5,5 (0.084ms)
+✔ rulebook family airplanePair: 3,3,3,4,4,4,6,6,9,9 (0.091583ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,9 (0.046166ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,3 (0.033292ms)
+✔ rulebook family fourPairs: 9,9,9,9,6,6,8,8 (0.033791ms)
+✔ rulebook family bomb: 15,15,15,15 (0.026416ms)
+✔ rulebook family rocket: 16,17 (0.025708ms)
+✔ illegal rank sequences, wings, double jokers and attached bomb are rejected (0.349792ms)
+✔ comparison requires same family/length; bombs and rocket override (0.128541ms)
+✔ complete legal-action set vs independent subset oracle 0 (1.973125ms)
+✔ complete legal-action set vs independent subset oracle 1 (1.121834ms)
+✔ complete legal-action set vs independent subset oracle 2 (7.321625ms)
+✔ complete legal-action set vs independent subset oracle 3 (4.82275ms)
+✔ complete legal-action set vs independent subset oracle 4 (3.795958ms)
+✔ complete legal-action set vs independent subset oracle 5 (7.437333ms)
+✔ complete legal-action set vs independent subset oracle 6 (5.959ms)
+✔ complete legal-action set vs independent subset oracle 7 (2.063708ms)
+✔ complete legal-action set vs independent subset oracle 8 (5.014083ms)
+✔ twos are not consecutive with ace when used as non-pair wings (0.077333ms)
+ℹ tests 58
+ℹ suites 0
+ℹ pass 58
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 369.25575
+
+> bear-forge@0.3.0 check:boundaries
+> node --experimental-strip-types tools/check_boundaries.ts
+
+PASS: Core/Game contracts separated; no protocol factories; game imports only local implementation/public contracts/Zod
+LIMIT: source dependency audit, not a controlled compiler or runtime sandbox proof

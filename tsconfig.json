@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "packages/contracts/src/**/*.ts",
+    "tests/contracts/**/*.ts",
+    "games/**/*.ts",
+    "tests/doudizhu/**/*.ts",
+    "tools/check_boundaries.ts",
+    "tools/schema_admission.ts",
+    "tools/check_schema_admission.ts",
+    "tools/check_protocol_coverage.ts"
+  ]
+}

@@ -1,0 +1,2 @@
+{"raw":0,"validated":1,"parsedAgain":2,"property":"parse(parse(x)) != parse(x)"}
+PROVED: public schema types admit non-idempotent normalization. This fixture is not a production runtime trace.

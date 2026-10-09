@@ -1,0 +1,808 @@
+{
+  "scope": "public-contract-definitions",
+  "sources": {
+    "packages/contracts/src/authoring/types.ts": "714bea6d61b60a280fda523b63ff7dd6531067e9026fc7147460b1b6a60f5dde",
+    "packages/contracts/src/core/schemas.ts": "46fe706135303f1c16b32897f358759d505e02c257390bc58fcc45117db5e109",
+    "packages/contracts/src/core/types.ts": "ddff702da8882d824c4159db78a5f69e3972670f1db3f499b707273dcac66a77",
+    "packages/contracts/src/game/schemas.ts": "392908c26b24ba432dcf847933ee40da7c310e38cdca951b53d6bad30e0df08e",
+    "packages/contracts/src/game/types.ts": "31e1fe74aa7fbc857911e5db91a9dc32aed2475f7836832f714d67d1d38a26a6",
+    "packages/contracts/src/index.ts": "b3583f8b335db1266daf185927626b48d23262d8fe37d337502b0b9758dd8539",
+    "packages/contracts/src/runtime/schemas.ts": "e9a033ee25aea4cdd84c071bd76a774067982ba4436f688874ab5181bc7bdcb6",
+    "packages/contracts/src/runtime/types.ts": "2038347029dccbd23afa9af60902d552f6da166ada5a66523e8defd1c424cf5d"
+  },
+  "laws": [
+    {
+      "id": "core",
+      "claim": "Instance is the sole complete state machine; fork and restore return independent same-type instances under state-closure and execution assumptions.",
+      "status": "conditional",
+      "assumptions": [
+        "Admitted program preserves TS semantics; inner mutable state is complete and isolated.",
+        "GameContract handlers are pure and value-isolated; program/contract pairing is correct.",
+        "Provider enforces lifecycle, exclusive binding and fork/restore laws in docs/protocol.md.",
+        "Callback driving obeys lease, explicit reply/pause, cancellation, late-return and boundary rules; host bindings are not snapshotted."
+      ],
+      "argument": "evidence/C01/boundary-migration-review.md",
+      "evidence": [
+        "tests/contracts/instance-types.ts",
+        "docs/protocol.md"
+      ],
+      "openObligations": [
+        "Production controlled executor, continuation fork/save/restore and capability rebinding remain C02 obligations.",
+        "Production binder ownership, lifecycle/failure isolation and real native/controlled differential execution remain unimplemented.",
+        "Runtime callback/manual equivalence, driver ownership, cancellation races and event retry behavior require actual provider conformance tests."
+      ]
+    },
+    {
+      "id": "game",
+      "claim": "BaseGame reads and drives its bound Instance; same-type fork and InstanceSnapshot save introduce no second transition engine.",
+      "status": "conditional",
+      "assumptions": [
+        "Admitted program preserves TS semantics; inner mutable state is complete and isolated.",
+        "GameContract handlers are pure and value-isolated; program/contract pairing is correct.",
+        "Provider enforces lifecycle, exclusive binding and fork/restore laws in docs/protocol.md.",
+        "Callback driving obeys lease, explicit reply/pause, cancellation, late-return and boundary rules; host bindings are not snapshotted."
+      ],
+      "argument": "evidence/C01/boundary-migration-review.md",
+      "evidence": [
+        "tests/contracts/basegame-types.ts",
+        "docs/protocol.md"
+      ],
+      "openObligations": [
+        "Production controlled executor, continuation fork/save/restore and capability rebinding remain C02 obligations.",
+        "Production binder ownership, lifecycle/failure isolation and real native/controlled differential execution remain unimplemented.",
+        "Runtime callback/manual equivalence, driver ownership, cancellation races and event retry behavior require actual provider conformance tests."
+      ]
+    },
+    {
+      "id": "authoring",
+      "claim": "GameModule joins inner program/SDK and pure shared GameContract; all continuation-relevant mutable state lives inside Instance.",
+      "status": "conditional",
+      "assumptions": [
+        "Admitted program preserves TS semantics; inner mutable state is complete and isolated.",
+        "GameContract handlers are pure and value-isolated; program/contract pairing is correct.",
+        "Provider enforces lifecycle, exclusive binding and fork/restore laws in docs/protocol.md.",
+        "Callback driving obeys lease, explicit reply/pause, cancellation, late-return and boundary rules; host bindings are not snapshotted."
+      ],
+      "argument": "evidence/C01/boundary-migration-review.md",
+      "evidence": [
+        "tests/doudizhu/game.test.ts",
+        "docs/protocol.md"
+      ],
+      "openObligations": [
+        "Production controlled executor, continuation fork/save/restore and capability rebinding remain C02 obligations.",
+        "Production binder ownership, lifecycle/failure isolation and real native/controlled differential execution remain unimplemented.",
+        "Runtime callback/manual equivalence, driver ownership, cancellation races and event retry behavior require actual provider conformance tests."
+      ]
+    },
+    {
+      "id": "runtime",
+      "claim": "Loaders provide execution; binder attaches a compatible contract to an existing Instance with exclusive driving authority.",
+      "status": "conditional",
+      "assumptions": [
+        "Admitted program preserves TS semantics; inner mutable state is complete and isolated.",
+        "GameContract handlers are pure and value-isolated; program/contract pairing is correct.",
+        "Provider enforces lifecycle, exclusive binding and fork/restore laws in docs/protocol.md.",
+        "Callback driving obeys lease, explicit reply/pause, cancellation, late-return and boundary rules; host bindings are not snapshotted."
+      ],
+      "argument": "evidence/C01/boundary-migration-review.md",
+      "evidence": [
+        "tests/contracts/basegame-types.ts",
+        "docs/protocol.md"
+      ],
+      "openObligations": [
+        "Production controlled executor, continuation fork/save/restore and capability rebinding remain C02 obligations.",
+        "Production binder ownership, lifecycle/failure isolation and real native/controlled differential execution remain unimplemented.",
+        "Runtime callback/manual equivalence, driver ownership, cancellation races and event retry behavior require actual provider conformance tests."
+      ]
+    }
+  ],
+  "definitions": [
+    {
+      "name": "BaseGame",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "BaseGameBinder",
+      "source": "packages/contracts/src/runtime/types.ts",
+      "laws": [
+        "runtime"
+      ]
+    },
+    {
+      "name": "CallbackControl",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "CallbackPause",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "CallbackPauseSchema",
+      "source": "packages/contracts/src/core/schemas.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "CallbackReply",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "CallId",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "CallIdSchema",
+      "source": "packages/contracts/src/core/schemas.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "Choice",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "ChoiceId",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "ChoiceIdSchema",
+      "source": "packages/contracts/src/game/schemas.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "ChoiceInput",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "CompiledProgram",
+      "source": "packages/contracts/src/runtime/types.ts",
+      "laws": [
+        "runtime"
+      ]
+    },
+    {
+      "name": "CompiledProgramDataSchema",
+      "source": "packages/contracts/src/runtime/schemas.ts",
+      "laws": [
+        "runtime"
+      ]
+    },
+    {
+      "name": "ControlledCoreLoader",
+      "source": "packages/contracts/src/runtime/types.ts",
+      "laws": [
+        "runtime"
+      ]
+    },
+    {
+      "name": "Core",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "DecisionData",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "DecisionId",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "DecisionIdSchema",
+      "source": "packages/contracts/src/game/schemas.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "DecisionOffer",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "DecisionPolicy",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "DescribeChoice",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "Encoding",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "Evaluation",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "EventDelivery",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "EventDeliveryId",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "EventDeliveryIdSchema",
+      "source": "packages/contracts/src/game/schemas.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "FactExtraction",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "FixedTable",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "GameBindings",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameBoundary",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameContract",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GameError",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameErrorSchema",
+      "source": "packages/contracts/src/game/schemas.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameHandle",
+      "source": "packages/contracts/src/runtime/types.ts",
+      "laws": [
+        "runtime"
+      ]
+    },
+    {
+      "name": "GameHistory",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameInput",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameInputDefinitions",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GameModule",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GameOutcome",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GamePorts",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GameQueryDefinition",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GameRequest",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameRunLimits",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameRunLimitsSchema",
+      "source": "packages/contracts/src/game/schemas.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameRunOptions",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameRunStop",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "GameSchemas",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GameSDK",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GameTypes",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GameUpdate",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "InputOptions",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "InputOptionsSchema",
+      "source": "packages/contracts/src/game/schemas.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "InputValidation",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "InputValidationSchema",
+      "source": "packages/contracts/src/game/schemas.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "Instance",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceCapture",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceError",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceErrorSchema",
+      "source": "packages/contracts/src/core/schemas.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceFault",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceId",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceIdSchema",
+      "source": "packages/contracts/src/core/schemas.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstancePersistence",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceRecord",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceRunLimits",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceRunLimitsSchema",
+      "source": "packages/contracts/src/core/schemas.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceRunOptions",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceRunStop",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceSnapshot",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceSnapshotSchema",
+      "source": "packages/contracts/src/core/schemas.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InstanceStop",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "InteractionShape",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "InteractionTable",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "IO",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "JsonValue",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "JsonValueSchema",
+      "source": "packages/contracts/src/game/schemas.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "LoadedCore",
+      "source": "packages/contracts/src/runtime/types.ts",
+      "laws": [
+        "runtime"
+      ]
+    },
+    {
+      "name": "NativeCoreLoader",
+      "source": "packages/contracts/src/runtime/types.ts",
+      "laws": [
+        "runtime"
+      ]
+    },
+    {
+      "name": "Outcome",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "PauseReason",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "PauseReasonSchema",
+      "source": "packages/contracts/src/core/schemas.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "PortBindings",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "PortCall",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "PortReturn",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "PortShape",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "PreparedReturn",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "Program",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "ProgramModule",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "ProgramSchemas",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "QueryCall",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "QueryShape",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "ReadView",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "RecordCursorSchema",
+      "source": "packages/contracts/src/core/schemas.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "RecordRead",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "RecordReadSchema",
+      "source": "packages/contracts/src/core/schemas.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "StateConstruction",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "StateResources",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "StateTransition",
+      "source": "packages/contracts/src/game/types.ts",
+      "laws": [
+        "game"
+      ]
+    },
+    {
+      "name": "Submission",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "TableKeys",
+      "source": "packages/contracts/src/core/types.ts",
+      "laws": [
+        "core"
+      ]
+    },
+    {
+      "name": "TerminalData",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    }
+  ]
+}

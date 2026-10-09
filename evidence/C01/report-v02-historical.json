@@ -1,0 +1,199 @@
+{
+  "checkpoint": "C01",
+  "kind": "design",
+  "summary": "Verified C01-01/03/05: public Zod/TypeScript protocols and complete competitive Dou Dizhu domain source through the public authoring toolkit. No production Core/Session/save implementation. Other C01 items remain pending.",
+  "replay_command": "npm ci --ignore-scripts && npm run check",
+  "artifacts": [
+    {
+      "path": "docs/doudizhu.md",
+      "sha256": "4a5e68893534e20f1957036953f0573740cc5139817cf2a5e33efeafce49a8d8"
+    },
+    {
+      "path": "docs/protocol.md",
+      "sha256": "27b4d0cbc5d3ce8708b7d643eb9a34cdb9ce6520c8c3373cfc21182dae8453bd"
+    },
+    {
+      "path": "evidence/C01/acceptance.md",
+      "sha256": "8b00f06fb5d70d1bfcf81fec3d591233580f13e602bb962df840de061664d2c7"
+    },
+    {
+      "path": "games/doudizhu/package.json",
+      "sha256": "f8217a6c8dd51cd8553a4ecdc94e0147f517279219741faf71b0e7886f3febe1"
+    },
+    {
+      "path": "games/doudizhu/src/errors.ts",
+      "sha256": "ea83eb1cf201029cfd1b45ccdaea827023ba9ee2fb2197c1b82e9017ff1aff3a"
+    },
+    {
+      "path": "games/doudizhu/src/hooks.ts",
+      "sha256": "8da7872cd50807aeac3417c435bb1285c91dced49d5e3196d590967dc92ed28f"
+    },
+    {
+      "path": "games/doudizhu/src/identity.ts",
+      "sha256": "df2dc2c2813736ab73b3e9900b7ef0cc2e65d394cd6f41f16cde648e0df1744e"
+    },
+    {
+      "path": "games/doudizhu/src/index.ts",
+      "sha256": "d054e50aa0f183a99e6bd85187e0062a81232de51a50d7f19245e5127a19f73b"
+    },
+    {
+      "path": "games/doudizhu/src/patterns.ts",
+      "sha256": "16f166c1a416be9d9f36dd08f1cbb446241657ccc258401d5bf8807b5557dbe0"
+    },
+    {
+      "path": "games/doudizhu/src/payload.ts",
+      "sha256": "9c64e9185931fbbd08966f12bd6ecad3e51e76d0c3aa0428bcbf5865f5169cb2"
+    },
+    {
+      "path": "games/doudizhu/src/program.ts",
+      "sha256": "03f82a6df75f079db0d2babd7414c85e0d8954206bb07e40ac8448ca2969e586"
+    },
+    {
+      "path": "games/doudizhu/src/rules.ts",
+      "sha256": "2958e8eac666d8f10c633c0c59c46161dadbd68e935e6592ac4edfd386e911aa"
+    },
+    {
+      "path": "games/doudizhu/src/schema.ts",
+      "sha256": "4309ea1a6161abea1cb4b9d0503933bfa20bffe119b2ecf834aa67eb5917a1af"
+    },
+    {
+      "path": "games/doudizhu/src/sdk.ts",
+      "sha256": "ad33797dd50ac6ac44e5ebfb7065b70a4c764602dc036e1db9c60fbf9a7ccecd"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "137bdffa71f00d037c64af7ca442c211eb34aea87ee665cf508aa0e101b2e36b"
+    },
+    {
+      "path": "package.json",
+      "sha256": "857ae3b8bca8c3bc5b0e8279c9f7e2d4f04ed9e1633bdfc064a91e9c3dcc38de"
+    },
+    {
+      "path": "packages/contracts/package.json",
+      "sha256": "70a27e01ad8b7917983cee1478d4ad5b76263d3244ab3a8b9ac6e5fc780561bc"
+    },
+    {
+      "path": "packages/contracts/src/analysis.ts",
+      "sha256": "72534d35d1b1c449b9d37770cdbd73f341e1279a6ead1b1e08f336d531690be5"
+    },
+    {
+      "path": "packages/contracts/src/authoring.ts",
+      "sha256": "03ccdb97a45c7096550cc7b699fcc784f2c3e9a9ec841147072571d303d95f6f"
+    },
+    {
+      "path": "packages/contracts/src/common.ts",
+      "sha256": "b7842b83ae48f8d1ec6a051922bd46a7f67ecb6c6285d3bf8a8258194fbd489b"
+    },
+    {
+      "path": "packages/contracts/src/conformance.ts",
+      "sha256": "b22e3a1f02dcec38a2627fcecba088cff7e83481a5b7a396d6389906c4ef6bb7"
+    },
+    {
+      "path": "packages/contracts/src/execution.ts",
+      "sha256": "62f888cb6f4ae89fbbf357b996d2ff0d34cd264de4da26f795210af73590727d"
+    },
+    {
+      "path": "packages/contracts/src/experiment.ts",
+      "sha256": "05eec1eeafb9433484abefeeda32ff246210195456cb4fb6c6ed088e556bf115"
+    },
+    {
+      "path": "packages/contracts/src/game.ts",
+      "sha256": "8e758e46d4f5d841c55d88aef2bdb1e26b41fc3175233ff4edff35c1ac382a80"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "4bac633bb28b7944776c1735db08dfb00d692e6b9f5a6041d8c69d32a420d112"
+    },
+    {
+      "path": "packages/contracts/src/planning.ts",
+      "sha256": "12af97ad6f1c78235cd8746fa893145a225b06b760d74ea4bee6859df7bc9bd9"
+    },
+    {
+      "path": "packages/contracts/src/policy.ts",
+      "sha256": "4079a87e8e058d3bb6b105f8e1c7007dec6b55a8f7a8c41edaec0d9b8986c10c"
+    },
+    {
+      "path": "packages/contracts/src/ports.ts",
+      "sha256": "e05efb04e538b0168450db5ddc023318d9dae7b94c81cc6481b244eb4c522d50"
+    },
+    {
+      "path": "packages/contracts/src/records.ts",
+      "sha256": "e3d91683a8cafbf9443acb27c11981d40f70e135810a0861f5bf677b9388b715"
+    },
+    {
+      "path": "packages/contracts/src/session.ts",
+      "sha256": "df287d5348c61c4a83a9d6271f727c0967d2b725655e76c5ebee26eb9fd26328"
+    },
+    {
+      "path": "packages/contracts/src/store.ts",
+      "sha256": "f3e2d974b86b297c01dc160bb4cfd7bdc999fb922db368d82c03541a6fe588ff"
+    },
+    {
+      "path": "packages/contracts/src/training.ts",
+      "sha256": "e512606e162055a5b816d6321ac1e0cf58d6ec7a4e867a5d0e7dc5d68bd80de6"
+    },
+    {
+      "path": "tests/contracts/business.test.ts",
+      "sha256": "68a80284855a2007958d67d220b4379bc4254fc8076283660c9cb400465ff2ed"
+    },
+    {
+      "path": "tests/contracts/fixtures.ts",
+      "sha256": "ed7d19bb1cfae9d2abcbacac5d0d2585276f8c8c1b941579d3119f4f437a2ded"
+    },
+    {
+      "path": "tests/contracts/operations.test.ts",
+      "sha256": "b84ae9d35042af8c6df2ce8cc44f94c3857580ac05e243c274b6381f06f43204"
+    },
+    {
+      "path": "tests/contracts/types.ts",
+      "sha256": "79dc7f8441427d2487fb56a5c3d76df2257dc400394ab54b4d8df3c0c54abb22"
+    },
+    {
+      "path": "tests/doudizhu/game.test.ts",
+      "sha256": "a677b72d2f85ec8998b3ee1491d86c2d48e603a9e15ed34db9336a1ac8220331"
+    },
+    {
+      "path": "tests/doudizhu/oracle.ts",
+      "sha256": "d072010d42830a8eea4f73d42edc7a4c820a42931c40e4f9fbed45dd502c2a00"
+    },
+    {
+      "path": "tests/doudizhu/rules.test.ts",
+      "sha256": "25b33d91a0586b11801a3519f9824d73abd2e5d8cf3d4cc267885841d4615946"
+    },
+    {
+      "path": "tools/check_boundaries.ts",
+      "sha256": "bae6cadfb4b79a32b15617204f61b4ae56d31710ca536149face88429a4d0a8a"
+    },
+    {
+      "path": "tools/update_game_identity.py",
+      "sha256": "be117446031741961ea1d6583505bfb0f523809d20e8ff42eb4f2b3a07f5ddbc"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "b116a2b2fd13107b8a8da5272152af03d07d7da3d2ba30e671c433d543304d07"
+    }
+  ],
+  "checks": [
+    {
+      "id": "C01-01",
+      "status": "passed",
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "evidence/C01/contracts.log"
+    },
+    {
+      "id": "C01-03",
+      "status": "passed",
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "evidence/C01/contracts.log"
+    },
+    {
+      "id": "C01-05",
+      "status": "passed",
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "evidence/C01/contracts.log"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+PASS: reject missing evidence
+PASS: reject skip dependency
+PASS: reject unchecked completion
+PASS: reject multiple active
+PASS: reject archive link
+PASS: reject changed artifact
+PASS: reject unregistered doc
+PASS: reject missing log
+PASS: 8 negative cases rejected

@@ -1,0 +1,319 @@
+{
+  "checkpoint": "C01",
+  "kind": "design",
+  "summary": "F10 scoped exact semantics and canonical game input counterexample repaired; 90 tests, 53 schema profiles and 103-export coverage pass. Overall proof remains open.",
+  "replay_command": "npm ci --ignore-scripts && npm run check",
+  "artifacts": [
+    {
+      "path": "docs/doudizhu.md",
+      "sha256": "8173027b9154ad61c81ade83881046eb7bd920f02707ef69e573b65c6d043bd8"
+    },
+    {
+      "path": "docs/protocol.md",
+      "sha256": "4079ab9ccf966797f70923f7bd66a246572165b1df5953a14caf298b08ce5e80"
+    },
+    {
+      "path": "evidence/C01/acceptance.md",
+      "sha256": "77a95cafd9e97e7eaeaacc956c6c19a31b5a613ad89f6348aa21da996a4f8f92"
+    },
+    {
+      "path": "evidence/C01/authoring-review.md",
+      "sha256": "db1ecc8331de491961f3f57fa766a02c4f9a762d1ff7bebd2944a7f2d8d09ea3"
+    },
+    {
+      "path": "evidence/C01/input-options-review.md",
+      "sha256": "b5f408479fabbc246d1fc2693f654fc5d0deb89632cd80e8c0be3013e22747c1"
+    },
+    {
+      "path": "evidence/C01/migration-review.md",
+      "sha256": "016ce8b7d62f2040bf04d6d6921c9a30c76948cf18980a7d0009e198c5bd4f1a"
+    },
+    {
+      "path": "games/doudizhu/package.json",
+      "sha256": "2bcf7d61186ac8f958a721afef2b49466355889d73520c821550c500ae45537e"
+    },
+    {
+      "path": "games/doudizhu/src/errors.ts",
+      "sha256": "ea83eb1cf201029cfd1b45ccdaea827023ba9ee2fb2197c1b82e9017ff1aff3a"
+    },
+    {
+      "path": "games/doudizhu/src/implementation.ts",
+      "sha256": "09100b880ce4aeca16e7216a93eeb3c41e494935257af1903cf50ac80b16f661"
+    },
+    {
+      "path": "games/doudizhu/src/index.ts",
+      "sha256": "3dbaf264b010e35ff6b146c343bf4aef85593af0dfc6a123a50b1eac69b5c82f"
+    },
+    {
+      "path": "games/doudizhu/src/patterns.ts",
+      "sha256": "16f166c1a416be9d9f36dd08f1cbb446241657ccc258401d5bf8807b5557dbe0"
+    },
+    {
+      "path": "games/doudizhu/src/program.ts",
+      "sha256": "b1f09b337c6a4f93730630323e3dfb232ae48169d403f07be012fdcc43577d4d"
+    },
+    {
+      "path": "games/doudizhu/src/rules.ts",
+      "sha256": "7a18f0ab2758c606968390c3edb7576ac476e6a0f20a4b70326b9f7f17509926"
+    },
+    {
+      "path": "games/doudizhu/src/schemas.ts",
+      "sha256": "fef06ed61f613554a1f3fea9d17eee90bf35df0aaa41e12d2dc5b28ab7c85409"
+    },
+    {
+      "path": "games/doudizhu/src/sdk.ts",
+      "sha256": "5bc4f0b8749cd2e55d569800b18dfc2d713932bbd95dde1654609ac4d49df38a"
+    },
+    {
+      "path": "games/doudizhu/src/types.ts",
+      "sha256": "426c0951080751ff8eab9cb0dcc8ba24ed6bc7f56b9a77748f506f1906dc4d35"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "59d772bebf0d9246d674c3a5e481487f586816883e1f1e285d9e776009192c72"
+    },
+    {
+      "path": "package.json",
+      "sha256": "53dbf6f120396afa57bc8132505eaa3e63d981e835ca47c2c5a1d8dc90c62f48"
+    },
+    {
+      "path": "packages/contracts/package.json",
+      "sha256": "0b3c01d63fbdfd0d015a3fb4491a2e88a1f03ceed54145121c8135a81e27e4c8"
+    },
+    {
+      "path": "packages/contracts/src/authoring/types.ts",
+      "sha256": "0647f5c23d368ca977491159d8c72520afeae865829790908986b6b2bf54e60a"
+    },
+    {
+      "path": "packages/contracts/src/core/schemas.ts",
+      "sha256": "19a59376e54719c55133fc6c738d51ef65522a48f5a455b5b86f9a898bee032d"
+    },
+    {
+      "path": "packages/contracts/src/core/types.ts",
+      "sha256": "5fcd0a97f0e6777d4d2187df4bdb1060191b15f9541b8d6192e0022246a9f5bc"
+    },
+    {
+      "path": "packages/contracts/src/game/schemas.ts",
+      "sha256": "bf606598bf13a343fc073b55736f6a60bbe36900794a8f087695b908abb1813b"
+    },
+    {
+      "path": "packages/contracts/src/game/types.ts",
+      "sha256": "b86b7337cf1ed0645cf02301730e6948938712c0045d99559e68ecfeeeb64250"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "b3583f8b335db1266daf185927626b48d23262d8fe37d337502b0b9758dd8539"
+    },
+    {
+      "path": "packages/contracts/src/runtime/schemas.ts",
+      "sha256": "df8dde6aae106327dffbc972fd63eb79c17b4816afbb708dec68f8bcd4ca742d"
+    },
+    {
+      "path": "packages/contracts/src/runtime/types.ts",
+      "sha256": "c5fe6934381212208942550dfa574d2583317e0c6ad047a5bf528a04b2d15150"
+    },
+    {
+      "path": "tests/contracts/authoring.test.ts",
+      "sha256": "645905b4bfc1a17d366b6d3b148f147e699e373e36392d5f95fcc607e283d8a4"
+    },
+    {
+      "path": "tests/contracts/authoring.ts",
+      "sha256": "4f9a3798977fb4b7e50a79f41829de186302b2829f8babc11a973f46c9912f55"
+    },
+    {
+      "path": "tests/contracts/capabilities.test.ts",
+      "sha256": "e3e585a5dbbbf142bacafdaedbcf9dc549f87ca169e6b93902090f9b67fdda78"
+    },
+    {
+      "path": "tests/contracts/input-options.test.ts",
+      "sha256": "5b1dace4433e0dd0f055ae10e2939a37f1742fd0bf392bf52c40113ae1e6c55e"
+    },
+    {
+      "path": "tests/contracts/types.ts",
+      "sha256": "d52967fdca3e2071e374301e8386931dac4aa0f3b9dea1fffb2b8a688703df16"
+    },
+    {
+      "path": "tests/doudizhu/game.test.ts",
+      "sha256": "479cc1bab15c8708e0a3161203bf24201b9542a72995c30fb3c3e99e5b476f8c"
+    },
+    {
+      "path": "tests/doudizhu/oracle.ts",
+      "sha256": "d072010d42830a8eea4f73d42edc7a4c820a42931c40e4f9fbed45dd502c2a00"
+    },
+    {
+      "path": "tests/doudizhu/rules.test.ts",
+      "sha256": "38ff15570d250107ccb4eb647940f2cef91017fb30468f6faac7268a7c221df6"
+    },
+    {
+      "path": "tests/support/execution-peer.ts",
+      "sha256": "35d07b9c8ee0602d3f5f0fa92b6c65f0f5d3bdc5b3330ea4fdc72d98390b7f3e"
+    },
+    {
+      "path": "tools/check_boundaries.ts",
+      "sha256": "7671b58ac9c7f23fb38c2c9c6ed6521b9d56314d752e2fe3ad93fc3ee38a7355"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "ed7cc8c028a131097067dc430a5c29f703e1325755de3863363802930596331a"
+    },
+    {
+      "path": "tests/contracts/protocol-repair.test.ts",
+      "sha256": "e710152759c35d43548afe060b0b9c376ce6602e79aba9e599faf1ad983500b9"
+    },
+    {
+      "path": "evidence/C01/protocol-repair-review.md",
+      "sha256": "4de8312e11e1744e8c9013e66654805d679e8bf9a13d939025a0d59af39ddaa8"
+    },
+    {
+      "path": "evidence/C01/proof-audit/counterexamples.ts",
+      "sha256": "49b59994f2b5f5a152c8a5c300004e195a47bca2e35a04422a16d16ac7273e87"
+    },
+    {
+      "path": "evidence/C01/proof-audit/normalization.log",
+      "sha256": "e1d99ca320343006a875876e6b44e924606bb1de49443af96f15f225f7416f13"
+    },
+    {
+      "path": "evidence/C01/proof-audit/normalization.ts",
+      "sha256": "4d3c6cfa6f5b57fa25d4f91916168d277744ad6262448912640e3f37b131c778"
+    },
+    {
+      "path": "evidence/C01/proof-audit/results.json",
+      "sha256": "e80e1fe1b4ea9e7c325d4898768f58fcb4e0eeb0d6810469ac91fed10962b42c"
+    },
+    {
+      "path": "evidence/C01/proof-audit/review.md",
+      "sha256": "c6a4ec46624ef1280b8bbd0cfb4d79959ed06b1987f022386aaa1fc878c15d5a"
+    },
+    {
+      "path": "evidence/C01/proof-audit/run.py",
+      "sha256": "92cc095112cddac2a2effc131127c1eb7299274e8bd17bdf1100c28fb5fa6752"
+    },
+    {
+      "path": "evidence/C01/proof-audit/tsconfig.json",
+      "sha256": "f5611e2a7ace82a25fcb7c9c35045a6104b0660068a971b71a09a27cd663ef6a"
+    },
+    {
+      "path": "evidence/C01/proof-audit/types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tests/contracts/strict-types.ts",
+      "sha256": "e2e01d10318d59472cf38f8aa57fd6b1ec0f28b2ce179f41318bc0bedd5d4d93"
+    },
+    {
+      "path": "tests/contracts/schema-admission.test.ts",
+      "sha256": "2a2113568655167968a2674f902c5e477b2ca377b8082e9485764d2325b13ae3"
+    },
+    {
+      "path": "tests/contracts/search-closure.test.ts",
+      "sha256": "c85fba6de82786d58c773b286ead52d414cbe3b969fbca71a722bf9878768eae"
+    },
+    {
+      "path": "tests/support/read-target-peer.ts",
+      "sha256": "eb9b8113f7c412dacb48d0b04673e2f52fb67382cf38714079e0d61b3dab0651"
+    },
+    {
+      "path": "tools/schema_admission.ts",
+      "sha256": "6ec8366f9f38bc24d803d285b42db08fe38840df6e77a9e21ab86f8bbefb7ddb"
+    },
+    {
+      "path": "tools/check_schema_admission.ts",
+      "sha256": "73013f55d2b2e6dd3d1e491ae5b337b52a3e400af4052fd656890b800b91f10e"
+    },
+    {
+      "path": "evidence/C01/strict-repair-review.md",
+      "sha256": "4ec9afbd14fa60c73dc4c0db9760db4dbc9c0e5cdf53cfefbc3ba44c893e873b"
+    },
+    {
+      "path": "evidence/C01/proof-continuation-review.md",
+      "sha256": "f684566665e972b47d767171d305e8ec0f1efae617ea84b8563785222195a583"
+    },
+    {
+      "path": "evidence/C01/union-table-before.ts",
+      "sha256": "7ccedc66a978170d2b720817f3e06c2bfe50c9b0f00b1f3a5af0b21aad348a37"
+    },
+    {
+      "path": "evidence/C01/union-table-before.log",
+      "sha256": "83dd0951b66a31125fabfe1d3cecfb84b941ff7dc05346f94a8ab6bf974798d2"
+    },
+    {
+      "path": "games/doudizhu/src/call-errors.ts",
+      "sha256": "4fbfd7fa811772f1a0bae658f83e6476135c43f81de10a528448a7197974c8f5"
+    },
+    {
+      "path": "tests/contracts/game-errors.test.ts",
+      "sha256": "e7b8ad89b39f49471139309841dc946b63a6067be510c48fb3cede71507530cf"
+    },
+    {
+      "path": "evidence/C01/game-failures-review.md",
+      "sha256": "bbf4dbbe8ef1b28a3dcbc292d93993f746e292b52457aed8c345cceaeb308a46"
+    },
+    {
+      "path": "tests/contracts/execution-lifecycle.test.ts",
+      "sha256": "95d1aa47513b93c9af7f0fdc69566d1e00ce6e27f024d1472660e01b4c529b4e"
+    },
+    {
+      "path": "evidence/C01/execution-laws-review.md",
+      "sha256": "cee90af2e0592222059036fbecf9b08d6c8b0bec96ad9748472e9b85ae9ef1a9"
+    },
+    {
+      "path": "tools/check_protocol_coverage.ts",
+      "sha256": "b1ad23f6a7b6c27203d184b8b042e9c260dad42a58ef78aa1317efa7f30eeb15"
+    },
+    {
+      "path": "evidence/C01/protocol-proof-index.json",
+      "sha256": "9dea9dcb1d19e3cfa2bff3d8c8ce629ad5b3bb921cb3915e44d7a35f90de2181"
+    },
+    {
+      "path": "evidence/C01/protocol-coverage-review.md",
+      "sha256": "4477407b0ecd7a7e41c860e8804f2a2a59f44bf12cad2d05a27b56fb93c79d4f"
+    },
+    {
+      "path": "evidence/C01/artifact-before.ts",
+      "sha256": "54c88ae21be37d3e3d2ca4a434fb0fb74e80156788355f56b4391e10d903e5f5"
+    },
+    {
+      "path": "evidence/C01/artifact-before.log",
+      "sha256": "83dd0951b66a31125fabfe1d3cecfb84b941ff7dc05346f94a8ab6bf974798d2"
+    },
+    {
+      "path": "tests/contracts/input-space-laws.test.ts",
+      "sha256": "c7b8bb5998fb19732cf7a2923f3802922b346c743decddb87120c1d0984f868e"
+    },
+    {
+      "path": "evidence/C01/input-space-laws-review.md",
+      "sha256": "baedda5ee03052dca04707abb7ba0fb97016708e8ce3680afe571ae6b3fb0ac3"
+    },
+    {
+      "path": "evidence/C01/exact-before.ts",
+      "sha256": "b8c18ef6d5ae3179fb1646d827a178ae2b927e9792fb81935e816bf8789dad74"
+    },
+    {
+      "path": "evidence/C01/exact-before.log",
+      "sha256": "7c48dfaf326acf4700adcbab4434453548051d635c6eac98f9eb508724ff36cd"
+    }
+  ],
+  "checks": [
+    {
+      "id": "C01-01",
+      "status": "passed",
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "evidence/C01/input-space-laws.log"
+    }
+  ],
+  "supplemental_checks": [
+    {
+      "scope": "F10 canonical/context laws and existing regressions",
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "evidence/C01/input-space-laws.log"
+    },
+    {
+      "scope": "Updated proof index",
+      "command": "npm run check:proof-coverage",
+      "exit_code": 0,
+      "log": "evidence/C01/input-space-coverage.log"
+    }
+  ]
+}

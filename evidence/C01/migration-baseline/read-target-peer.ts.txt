@@ -1,0 +1,67 @@
+/** Finite-state protocol witness only. Not a continuation runtime or production loader. */
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+import { GameRefSchema, GameSnapshotRefSchema, GameReadTargetSchema, BoundaryIdSchema, GameErrorSchema } from '@bear-forge/contracts';
+import type { GameError, GameModule, GameReadTarget, LoadedGame, GameUpdate, QueryCall } from '@bear-forge/contracts';
+import { parseBoundary, assertMatchingTables } from '../../tools/schema_admission.ts';
+
+const schemas={setup:z.number().int(),state:z.strictObject({total:z.number().int(),depth:z.number().int(),random:z.number().int()}),event:z.number().int(),result:z.number().int(),interactions:{step:{request:z.null(),input:z.number().int(),context:z.null(),description:z.never()}}};
+type G={setup:number;state:z.infer<typeof schemas.state>;event:number;result:number;interactions:{step:{request:null;input:number;context:null;description:never}}};
+type Q={score:{input:null;output:number};position:{input:null;output:G['state']}};
+const choices=(s:Readonly<G['state']>)=>[s.total+1+(s.random%2),s.total+2+(s.random%2)];
+const nextState=(s:Readonly<G['state']>,input:number):G['state']=>({total:s.total+input,depth:s.depth+1,random:(Math.imul(s.random,1664525)+1013904223)>>>0});
+export const treeModule:GameModule<G,Q>={
+  schemas,initialize:total=>({total,depth:0,random:0}),
+  async run(ctx){
+    while(ctx.state.read().depth<3){const input=await ctx.input.request('step',null);ctx.state.write(nextState(ctx.state.read(),input));ctx.output.emit(input);}
+    return ctx.state.read().total;
+  },
+  inputs:{step:{options:z.strictObject({kind:z.literal('exact'),values:z.array(schemas.interactions.step.input)}),describe:({state})=>({kind:'exact',values:choices(state)}),validate:({state,input})=>choices(state).includes(input)?{valid:true}:{valid:false,reason:'illegal'}}},
+  queries:{score:{input:z.null(),output:z.number().int(),run:v=>v.state.total},position:{input:z.null(),output:schemas.state,run:v=>({...v.state})}},
+};
+type Update=GameUpdate<{type:'step';data:null},number,number>;
+type Entry={state:G['state'];id:z.infer<typeof BoundaryIdSchema>;events:number[]};
+const refuse=(error:GameError):never=>{throw GameErrorSchema.parse(error);};
+export const readTargetPeer=():LoadedGame<G,Q>=>{
+  assertMatchingTables(schemas.interactions,treeModule.inputs);
+  const games=new Map<string,Entry>(),snapshots=new Map<string,Entry>();
+  const entry=(state:G['state'],events:number[]=[]):Entry=>({state:structuredClone(state),id:BoundaryIdSchema.parse(randomUUID()),events:[...events]});
+  const read=(target:GameReadTarget):Entry=>{
+    const parsed=GameReadTargetSchema.safeParse(target);
+    if(!parsed.success)return refuse({kind:'rejected',code:'invalid_argument',message:'invalid read target'});
+    const t=parsed.data;
+    const value=t.kind==='instance'?games.get(t.game.gameId):snapshots.get(t.snapshot.snapshotId);
+    if(!value)return refuse({kind:'rejected',code:t.kind==='instance'?'game_not_found':'snapshot_not_found',message:'unknown, foreign or released target'});
+    return structuredClone(value);
+  };
+  const update=(e:Entry):Update=>({boundary:e.state.depth===3?{kind:'ended',result:e.state.total}:{kind:'waiting',boundaryId:e.id,pending:{type:'step',data:null}},events:[...e.events]});
+  const waiting=(e:Entry,id:string)=>{if(e.state.depth===3||e.id!==id)return refuse({kind:'conflict',code:e.state.depth===3?'game_ended':'boundary_mismatch',message:'wrong boundary'});};
+  const queryView=(e:Entry)=>({state:e.state,boundary:e.state.depth===3?{kind:'ended' as const,result:e.state.total}:{kind:'waiting' as const,request:{type:'step' as const,data:null}}});
+  const validate=(e:Entry,input:number)=>{const parsed=schemas.interactions.step.input.safeParse(input);return parsed.success?treeModule.inputs.step.validate({state:e.state,request:null,input:parsed.data}):{valid:false as const,reason:'invalid input shape'};};
+  const move=(e:Entry,input:number)=>{if(e.state.depth===3)return refuse({kind:'conflict',code:'game_ended',message:'illegal input at terminal state'});if(!validate(e,input).valid)return refuse({kind:'rejected',code:'invalid_input',message:'illegal input'});return entry(nextState(e.state,input),[input]);};
+  const save=(e:Entry)=>{const ref=GameSnapshotRefSchema.parse({snapshotId:randomUUID()});snapshots.set(ref.snapshotId,structuredClone(e));return ref;};
+  return {
+    runtime:{
+      create:async (setup,options)=>{const state=treeModule.initialize(parseBoundary(schemas.setup,setup));state.random=options.randomSeed[0]??0;const e=entry(state),game=GameRefSchema.parse({gameId:randomUUID()});games.set(game.gameId,e);return {game,update:update(e)};},
+      inspect:async game=>update(read({kind:'instance',game})).boundary,
+      advance:async ({game,boundaryId,input})=>{const e=read({kind:'instance',game});waiting(e,boundaryId);if(input.type!=='step')return refuse({kind:'conflict',code:'boundary_mismatch',message:'wrong contract'});const child=move(e,input.data);games.set(game.gameId,child);return update(child);},
+      close:async game=>{games.delete(game.gameId);},
+    },
+    queries:{query:async <const A extends QueryCall<Q>>(call:A):Promise<Q[A['name']]['output']>=>{
+      const e=read(call.target),view=queryView(e);
+      parseBoundary(z.null(),call.args);
+      const values:{[K in keyof Q]:Q[K]['output']}={score:parseBoundary(treeModule.queries.score.output,treeModule.queries.score.run(view,null)),position:parseBoundary(treeModule.queries.position.output,treeModule.queries.position.run(view,null))};
+      return values[call.name];
+    }},
+    inputs:{
+      describe:async ({target,boundaryId,type,context})=>{const e=read(target);waiting(e,boundaryId);if(type!=='step')return refuse({kind:'conflict',code:'boundary_mismatch',message:'wrong contract'});const value=treeModule.inputs.step.describe({state:e.state,request:null,context:parseBoundary(z.null(),context)});return parseBoundary(treeModule.inputs.step.options,value);},
+      validate:async ({target,boundaryId,reply})=>{const e=read(target);waiting(e,boundaryId);if(reply.type!=='step')return refuse({kind:'conflict',code:'boundary_mismatch',message:'wrong contract'});return validate(e,reply.data);},
+    },
+    simulation:{
+      capture:async game=>save(read({kind:'instance',game})),
+      inspect:async snapshot=>update(read({kind:'snapshot',snapshot})),
+      transition:async ({state,input})=>{if(input.type!=='step')return refuse({kind:'conflict',code:'boundary_mismatch',message:'wrong contract'});const child=move(read({kind:'snapshot',snapshot:state}),input.data);return {state:save(child),view:update(child)};},
+      release:async refs=>{for(const ref of refs)read({kind:'snapshot',snapshot:ref});for(const ref of refs)snapshots.delete(ref.snapshotId);},
+    },
+  };
+};

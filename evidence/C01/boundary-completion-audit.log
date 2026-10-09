@@ -1,0 +1,9 @@
+PASS unchanged rule baseline: games/doudizhu/src/rules.ts
+PASS unchanged rule baseline: games/doudizhu/src/patterns.ts
+PASS unchanged rule baseline: tests/doudizhu/oracle.ts
+PASS unchanged rule baseline: tests/doudizhu/rules.test.ts
+PASS every public declaration file reproduced exactly in the field report
+PASS old boundaries removed and replacement capabilities exported
+PASS no compatibility entrypoints in active source
+PASS final full check counts and no skipped tests
+SCOPE declarations + complete native game author source; production runtime and Instance fork/save/restore implementation remain future conformance obligations

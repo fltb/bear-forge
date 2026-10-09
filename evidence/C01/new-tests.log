@@ -1,0 +1,66 @@
+
+> bear-forge@0.3.0 test
+> node --experimental-strip-types --test tests/contracts/*.test.ts tests/doudizhu/*.test.ts
+
+✔ fixed failure categories distinguish a rejected submission from execution failure (1.742666ms)
+✔ capture cursor permits initial and tail reads, not negative or fractional positions (0.42625ms)
+✔ input options retain exact payload lists and opaque JSON construction descriptions (1.023459ms)
+✔ schema profile rejects value changes, stripping and unknown nested constructors (3.188959ms)
+✔ approved structural schemas preserve values over repeated validation (3.3665ms)
+✔ custom checks require explicit trusted approval; equality guard rejects mutation anyway (0.656208ms)
+✔ F4 original transform is rejected before parsing; parser edge cases cannot silently change data (0.1555ms)
+✔ module key registries reject symbols, accessors, inheritance and mismatched handlers (0.133417ms)
+✔ boundary copying does not invoke getters or silently strip host properties (0.133958ms)
+✔ schema inspection does not execute lazy or object-shape getters (0.083959ms)
+✔ accepted boundary copies preserve aliases while isolating the caller (0.212333ms)
+✔ trusted approvals cannot override excluded transform and overwrite constructors (0.11025ms)
+✔ diagnostic callbacks are subject to admission too (0.1075ms)
+✔ byte boundary copies cannot retain shared mutable backing storage (0.549959ms)
+✔ new author ports drive complete Dou Dizhu: 1/0 (23.282ms)
+✔ new author ports drive complete Dou Dizhu: 7/1 (9.6835ms)
+✔ new author ports drive complete Dou Dizhu: 123/2 (11.149ms)
+✔ all-pass redeals and ordinary three-bid auction remain unchanged (16.293916ms)
+✔ private simultaneous choices preserve the remaining endpoint and reveal bottom later (5.504ms)
+✔ timeout signals drive a complete game without becoming fake action choices (5.417625ms)
+✔ all timeout defaults and two passes retain rule behavior (4.374042ms)
+✔ invalid choice, illegal action and equality deadline fail before rule mutation (4.635833ms)
+✔ concurrent native games reproduce sequential traces with independent service streams (46.083166ms)
+✔ every advertised legal payload prepares successfully with valid delivery data (10.563667ms)
+✔ all farmer multipliers and springs survive the protocol migration (3.390791ms)
+✔ terminal result has one authoritative source and canonical card encoding stays enforced (4.8015ms)
+✔ rulebook family single: 3 (0.95275ms)
+✔ rulebook family pair: 15,15 (0.060458ms)
+✔ rulebook family triple: 7,7,7 (0.055916ms)
+✔ rulebook family tripleSingle: 3,3,3,4 (0.0575ms)
+✔ rulebook family triplePair: 9,9,9,3,3 (0.047792ms)
+✔ rulebook family straight: 3,4,5,6,7 (0.086791ms)
+✔ rulebook family pairs: 3,3,4,4,5,5 (0.058417ms)
+✔ rulebook family airplane: 3,3,3,4,4,4 (0.042084ms)
+✔ rulebook family airplaneSingle: 3,3,3,4,4,4,5,5 (0.103042ms)
+✔ rulebook family airplanePair: 3,3,3,4,4,4,6,6,9,9 (0.087583ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,9 (0.046334ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,3 (0.036625ms)
+✔ rulebook family fourPairs: 9,9,9,9,6,6,8,8 (0.034625ms)
+✔ rulebook family bomb: 15,15,15,15 (0.038542ms)
+✔ rulebook family rocket: 16,17 (0.02125ms)
+✔ illegal rank sequences, wings, double jokers and attached bomb are rejected (0.371917ms)
+✔ comparison requires same family/length; bombs and rocket override (0.138958ms)
+✔ complete legal-action set vs independent subset oracle 0 (2.198334ms)
+✔ complete legal-action set vs independent subset oracle 1 (0.988584ms)
+✔ complete legal-action set vs independent subset oracle 2 (7.102083ms)
+✔ complete legal-action set vs independent subset oracle 3 (4.674125ms)
+✔ complete legal-action set vs independent subset oracle 4 (3.646541ms)
+✔ complete legal-action set vs independent subset oracle 5 (5.406291ms)
+✔ complete legal-action set vs independent subset oracle 6 (4.081875ms)
+✔ complete legal-action set vs independent subset oracle 7 (1.377375ms)
+✔ complete legal-action set vs independent subset oracle 8 (3.506166ms)
+✔ twos are not consecutive with ace when used as non-pair wings (0.07175ms)
+✔ canonical play encoding preserves every rulebook family and rejects permutation duplicates (2.128292ms)
+ℹ tests 54
+ℹ suites 0
+ℹ pass 54
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 245.344958

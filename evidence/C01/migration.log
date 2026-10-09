@@ -1,0 +1,71 @@
+
+> bear-forge@0.3.0 check
+> npm run typecheck && npm test && npm run check:boundaries
+
+
+> bear-forge@0.3.0 typecheck
+> tsc --noEmit
+
+
+> bear-forge@0.3.0 test
+> node --experimental-strip-types --test tests/contracts/*.test.ts tests/doudizhu/*.test.ts
+
+✔ fixed categories are enums; opaque identifiers have concrete validation (1.4225ms)
+✔ generic Core requests/capture work without game concepts; invalid replies do not advance (1.043875ms)
+✔ same transition capability supports stack exploration and repeated rollouts (0.099166ms)
+✔ full GameRuntime -> Execution -> real program, landlord 0 (33.106959ms)
+✔ full GameRuntime -> Execution -> real program, landlord 1 (14.922916ms)
+✔ full GameRuntime -> Execution -> real program, landlord 2 (22.706209ms)
+✔ all-pass redeals; ordinary auction ends after exactly three bids (36.789542ms)
+✔ private doubling keeps the other original input valid, and reveals bottom later (0.681334ms)
+✔ full game can be driven by timeout templates after auction (18.124333ms)
+✔ all timeout defaults, including redouble and two passes (0.369584ms)
+✔ illegal/out-of-turn/exact-deadline inputs do not resume or capture; queries are typed (1.147ms)
+✔ same public program inputs reproduce game trace, independent games interleave without contamination (107.5685ms)
+✔ one adapter hosts distinct games; cursors cannot cross game identities (0.723334ms)
+✔ rulebook settlement and every farmer multiplier remain intact (0.284917ms)
+✔ terminal consistency is validated; there is no second independent boundary.result (11.638583ms)
+✔ executor reject preserves the correct adapter state (0.545083ms)
+✔ executor malformed preserves the correct adapter state (0.546709ms)
+✔ executor throw preserves the correct adapter state (0.168917ms)
+✔ rulebook family single: 3 (0.53975ms)
+✔ rulebook family pair: 15,15 (0.299875ms)
+✔ rulebook family triple: 7,7,7 (0.066417ms)
+✔ rulebook family tripleSingle: 3,3,3,4 (0.062625ms)
+✔ rulebook family triplePair: 9,9,9,3,3 (0.048667ms)
+✔ rulebook family straight: 3,4,5,6,7 (0.042083ms)
+✔ rulebook family pairs: 3,3,4,4,5,5 (0.033042ms)
+✔ rulebook family airplane: 3,3,3,4,4,4 (0.028209ms)
+✔ rulebook family airplaneSingle: 3,3,3,4,4,4,5,5 (0.069334ms)
+✔ rulebook family airplanePair: 3,3,3,4,4,4,6,6,9,9 (0.073542ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,9 (0.042709ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,3 (0.033958ms)
+✔ rulebook family fourPairs: 9,9,9,9,6,6,8,8 (0.029291ms)
+✔ rulebook family bomb: 15,15,15,15 (0.027459ms)
+✔ rulebook family rocket: 16,17 (0.019084ms)
+✔ illegal rank sequences, wings, double jokers and attached bomb are rejected (0.330875ms)
+✔ comparison requires same family/length; bombs and rocket override (0.125291ms)
+✔ complete legal-action set vs independent subset oracle 0 (1.858625ms)
+✔ complete legal-action set vs independent subset oracle 1 (1.027375ms)
+✔ complete legal-action set vs independent subset oracle 2 (6.963292ms)
+✔ complete legal-action set vs independent subset oracle 3 (4.610291ms)
+✔ complete legal-action set vs independent subset oracle 4 (3.711584ms)
+✔ complete legal-action set vs independent subset oracle 5 (5.48425ms)
+✔ complete legal-action set vs independent subset oracle 6 (5.008417ms)
+✔ complete legal-action set vs independent subset oracle 7 (1.53725ms)
+✔ complete legal-action set vs independent subset oracle 8 (3.871333ms)
+✔ twos are not consecutive with ace when used as non-pair wings (0.060458ms)
+ℹ tests 45
+ℹ suites 0
+ℹ pass 45
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 355.312
+
+> bear-forge@0.3.0 check:boundaries
+> node --experimental-strip-types tools/check_boundaries.ts
+
+PASS: Core/Game contracts separated; no protocol factories; game imports only local implementation/public contracts/Zod
+LIMIT: source dependency audit, not a controlled compiler or runtime sandbox proof

@@ -1,12 +1,12 @@
 {
   "checkpoint": "C00",
   "kind": "documentation",
-  "summary": "C00 documentation: architecture v0.1, proposed source tree, fixed protocols, 15-case coverage and module-boundary review. No runtime implementation or benchmarks.",
+  "summary": "Active control protocol, two-sided game boundary and R01-R09 documentation re-audited; archive preserved. Callback lifecycle, state ownership and conditional proof scope synchronized.",
   "replay_command": "python3 tools/audit_c00.py && python3 tools/check_project.py && python3 tools/check_project.py --self-test",
   "artifacts": [
     {
       "path": "README.md",
-      "sha256": "8155e80dd42ab8da6324fe3266d162198db8c2090d824258d626e74f8f1c6cdd"
+      "sha256": "d143946de846c94daa1298c1af9c5bb949ed3fb27f38eb6e1bb7657b0e1a73cb"
     },
     {
       "path": "AGENTS.md",
@@ -14,11 +14,11 @@
     },
     {
       "path": "docs/requirements.md",
-      "sha256": "9d65027912dbd703bbf654978835cb77fd2a4827f5aaeb200483c8674f8be2f0"
+      "sha256": "db5ffb677ef4727476d87359ffe72f355840efcd36640c2e8b10c24b110a6108"
     },
     {
       "path": "docs/architecture.md",
-      "sha256": "18a4afdcb69cc77bfb1d2dc1121bac73b6ca2a8c3115568cf0c3c00e75119315"
+      "sha256": "270bca871d956ae15188afbab81ffd4cca677b1ff57b88282b24dd60d9e96300"
     },
     {
       "path": "docs/workflow.md",
@@ -34,7 +34,7 @@
     },
     {
       "path": "evidence/C00/review.md",
-      "sha256": "435db881eab09d1cb11b06ff32731a878acdb4d3e8cf0181d8b4df1f53900307"
+      "sha256": "ef3a65ad5bb65863b41b2517fb7e5f49abb951fa2102283ee8deec5d1a620d3c"
     },
     {
       "path": "evidence/C00/acceptance.md",
@@ -43,6 +43,22 @@
     {
       "path": "docs/scenario-resolution-requirements.md",
       "sha256": "272006463aec4c1e11ced6504bbb38cc4b3ab83f4e32cffe6d075e25c5073458"
+    },
+    {
+      "path": "docs/protocol.md",
+      "sha256": "6613f9fe8a1dca8cbd26f684a5f41d5f962284702443a8a9e02d0e679804f584"
+    },
+    {
+      "path": "docs/doudizhu.md",
+      "sha256": "de90cde69cd06696d5429ab150a955209cb8d1383a8754c5aa77100d9d8315a4"
+    },
+    {
+      "path": "docs/plan.md",
+      "sha256": "dbf3eb1c00ec9f7757c0fdb6caaa815b15ff27f61e59164782464db17db30d33"
+    },
+    {
+      "path": "docs/controlled-program-spec.md",
+      "sha256": "63da171f4770e03ccb39de7fb0f625b1a95ac2d99e0ed501d789b7a5c26223ed"
     }
   ],
   "checks": [
@@ -58,14 +74,14 @@
       "status": "passed",
       "command": "python3 tools/audit_c00.py",
       "exit_code": 0,
-      "log": "evidence/C00/structure.log"
+      "log": "evidence/C00/boundary-migration-audit.log"
     },
     {
       "id": "C00-03",
       "status": "passed",
       "command": "python3 tools/check_project.py --self-test",
       "exit_code": 0,
-      "log": "evidence/C00/negative.log"
+      "log": "evidence/C00/boundary-migration-negative.log"
     }
   ]
 }

@@ -1,0 +1,24 @@
+{
+  "name": "bear-forge",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/contracts",
+    "games/doudizhu"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/contracts/*.test.ts tests/doudizhu/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run check:boundaries && npm run check:schemas && npm run check:proof-coverage",
+    "check:boundaries": "node --experimental-strip-types tools/check_boundaries.ts",
+    "check:schemas": "node --experimental-strip-types tools/check_schema_admission.ts",
+    "check:proof-coverage": "node --experimental-strip-types tools/check_protocol_coverage.ts --self-test"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "typescript": "6.0.3"
+  }
+}

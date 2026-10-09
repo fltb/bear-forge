@@ -1,0 +1,82 @@
+/** Native witnesses for service protocol laws, not controlled-code admission or persistence. */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { z } from 'zod';
+import { CaptureReadInputSchema, CaptureSequenceSchema, ExecutionRefSchema } from '@bear-forge/contracts';
+import type { CoreCall } from '@bear-forge/contracts';
+import { executionPeer } from '../support/execution-peer.ts';
+const schemas={start:z.number(),request:z.number(),reply:z.number(),result:z.number()};
+const code=(call:CoreCall<unknown>)=>{assert.equal(call.ok,false);if(call.ok)throw new Error();return call.error.code;};
+
+test('capture argument schemas reject unsafe, fractional and negative coordinates',()=>{
+  const execution=ExecutionRefSchema.parse({executionId:'00000000-0000-4000-8000-000000000000'});
+  for(const n of [-1,0.1,Infinity,Number.MAX_SAFE_INTEGER+1]){
+    assert.equal(CaptureSequenceSchema.safeParse(n).success,false);
+    assert.equal(CaptureReadInputSchema.safeParse({execution,afterSequence:n,limit:1}).success,false);
+  }
+  for(const limit of [0,-1,0.5,Infinity,Number.MAX_SAFE_INTEGER+1])assert.equal(CaptureReadInputSchema.safeParse({execution,afterSequence:null,limit}).success,false);
+  assert.equal(CaptureReadInputSchema.safeParse({execution,afterSequence:null,limit:1,extra:true}).success,false);
+});
+
+test('busy resume rejects inspect, close and competing resume without stranding the original call',async()=>{
+  // The host gate only schedules a concurrency test; this program is not admitted source.
+  let release:()=>void=()=>{};
+  const gate=new Promise<void>(resolve=>{release=resolve;});
+  const peer=executionPeer(async(n,c)=>{const a=await c.request(n);await gate;return a;},schemas);
+  const initial=await peer.start(0);if(!initial.ok||initial.value.boundary.kind!=='waiting')throw new Error();
+  const execution=initial.value.execution,requestId=initial.value.boundary.requestId;
+  const pending=peer.resume({execution,requestId,reply:5});
+  try{
+    assert.equal(code(await peer.inspect(execution)),'execution_busy');
+    assert.equal(code(await peer.close(execution)),'execution_busy');
+    assert.equal(code(await peer.resume({execution,requestId,reply:6})),'execution_busy');
+  }finally{release();}
+  const completed=await pending;if(!completed.ok)throw new Error();
+  assert.deepEqual(completed.value.boundary,{kind:'done',result:5});
+  const records=await peer.read({execution,afterSequence:null,limit:10});if(!records.ok)throw new Error();
+  assert.deepEqual(records.value.records.map(r=>r.kind),['started','requested','resumed','completed']);
+  await peer.close(execution);assert.equal(code(await peer.read({execution,afterSequence:null,limit:10})),'execution_closed');
+  assert.equal((await peer.close(execution)).ok,true);
+});
+
+test('append-only capture pagination supports polling at the tail without skipping or aliasing',async()=>{
+  const peer=executionPeer(async(n,c)=>n+await c.request(n),schemas);
+  const initial=await peer.start(2);if(!initial.ok||initial.value.boundary.kind!=='waiting')throw new Error();
+  const execution=initial.value.execution;
+  const first=await peer.read({execution,afterSequence:null,limit:1});if(!first.ok)throw new Error();
+  assert.equal(first.value.nextSequence,0);assert.equal(first.value.records[0]?.kind,'started');
+  first.value.records.length=0;
+  const second=await peer.read({execution,afterSequence:0,limit:1});if(!second.ok)throw new Error();
+  assert.equal(second.value.nextSequence,null);assert.equal(second.value.records[0]?.sequence,1);
+  const tail=await peer.read({execution,afterSequence:1,limit:1});if(!tail.ok)throw new Error();
+  assert.deepEqual(tail.value,{records:[],nextSequence:null});
+  assert.equal(code(await peer.read({execution,afterSequence:2,limit:1})),'invalid_input');
+  await peer.resume({execution,requestId:initial.value.boundary.requestId,reply:3});
+  const appended=await peer.read({execution,afterSequence:1,limit:10});if(!appended.ok)throw new Error();
+  assert.deepEqual(appended.value.records.map(r=>r.sequence),[2,3]);
+  const entire=await peer.read({execution,afterSequence:null,limit:10});if(!entire.ok)throw new Error();
+  assert.deepEqual(entire.value.records.map(r=>r.sequence),[0,1,2,3]);
+  await peer.close(execution);
+});
+
+test('overlapping requests fault instead of overwriting the first pending continuation',async()=>{
+  const peer=executionPeer(async(n,c)=>{await Promise.all([c.request(n),c.request(n+1)]);return 0;},schemas);
+  const initial=await peer.start(0);if(!initial.ok)throw new Error();
+  const inspected=await peer.inspect(initial.value.execution);if(!inspected.ok)throw new Error();
+  assert.equal(inspected.value.boundary.kind,'fault');
+  const records=await peer.read({execution:initial.value.execution,afterSequence:null,limit:10});if(!records.ok)throw new Error();
+  assert.deepEqual(records.value.records.map(r=>r.kind),['started','requested','faulted']);
+  await peer.close(initial.value.execution);
+});
+
+test('catching an invalid request cannot turn a faulted execution into a successful result',async()=>{
+  const peer=executionPeer(async(_n,c)=>{try{await c.request(-1);}catch{}return 7;},{...schemas,request:z.number().positive()});
+  const initial=await peer.start(0);if(!initial.ok)throw new Error();
+  assert.equal(initial.value.boundary.kind,'fault');
+  const after=await peer.inspect(initial.value.execution);if(!after.ok)throw new Error();
+  assert.equal(after.value.boundary.kind,'fault');
+  const log=await peer.read({execution:initial.value.execution,afterSequence:null,limit:10});if(!log.ok)throw new Error();
+  assert.deepEqual(log.value.records.map(r=>r.kind),['started','faulted']);
+  if(after.value.boundary.kind==='fault')assert.equal(after.value.boundary.error.code,'invalid_output');
+  await peer.close(initial.value.execution);
+});

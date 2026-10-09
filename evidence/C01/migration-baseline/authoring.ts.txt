@@ -1,0 +1,88 @@
+import { z } from 'zod';
+import type { GameRef, GameModule, GameSchemas, GameContext, GameCoreProgram, GameCoreExecution, GameCorePersistence, GameCoreCapture, GameRequestPacket, GameResultPacket, LoadedGame, NativeGameLoader, ControlledGameLoader, CompiledGame, GameRuntime, ObservationCapability, InputOptionsCapability, InputValidationCapability, Execution, ExecutionPersistence, ExecutionCapture, InteractionRequest, InteractionReply, ManagedStateCapability, GameRunOptions } from '@bear-forge/contracts';
+
+export const schemas = {
+  setup:z.strictObject({initial:z.number().int()}),
+  state:z.strictObject({total:z.number().int(),remaining:z.number().int()}),
+  interactions:{add:{request:z.null(),input:z.number().int(),context:z.null(),description:z.never()}},
+  event:z.strictObject({kind:z.literal('added'),value:z.number().int()}),
+  result:z.number().int(),
+};
+export type Example = {[K in 'setup'|'state'|'event'|'result']:z.infer<(typeof schemas)[K]>}&{interactions:{add:{[K in keyof typeof schemas.interactions.add]:z.infer<(typeof schemas.interactions.add)[K]>}}};
+export type Request = InteractionRequest<Example['interactions']>;
+export type Reply = InteractionReply<Example['interactions']>;
+// Private fixture storage; not exported by the public contracts package.
+export type Owned = {state:Example['state'];unpublished:Example['event'][]};
+export type Queries = {observe:{input:null;output:number}};
+// Independent package shape: only public contracts and concrete schemas, no project runtime imports.
+export const module:GameModule<Example,Queries> = {
+  schemas,
+  initialize:setup=>({total:setup.initial,remaining:2}),
+  async run(ctx){
+    while(ctx.state.read().remaining>0){
+      const value=await ctx.input.request('add',null);
+      const current=ctx.state.read();
+      ctx.state.write({total:current.total+value,remaining:current.remaining-1});
+      ctx.output.emit({kind:'added',value});
+    }
+    return ctx.state.read().total;
+  },
+  inputs:{add:{
+    options:z.strictObject({kind:z.literal('exact'),values:z.array(schemas.interactions.add.input)}),
+    describe:()=>({kind:'exact',values:[0,1,2]}),
+    validate:({input})=>input>=0&&input<=2?{valid:true}:{valid:false,reason:'outside_range'},
+  }},
+  queries:{observe:{input:z.null(),output:z.number(),run:view=>view.state.total}},
+};
+
+// Exact structural substitutions into the existing protocols: no as-casts or private ports.
+export const schemasConsumer:GameSchemas<Example> = schemas;
+export const coreConsumer=(core:GameCoreExecution<Example>):Execution<Example['setup'],GameRequestPacket<Example>,Reply,GameResultPacket<Example>,GameRunOptions>=>core;
+export const persistenceConsumer=(core:GameCorePersistence<Example>):ExecutionPersistence<GameRequestPacket<Example>,GameResultPacket<Example>>=>core;
+export const captureConsumer=(core:GameCoreCapture<Example>):ExecutionCapture<Example['setup'],GameRequestPacket<Example>,Reply,GameResultPacket<Example>,GameRunOptions>=>core;
+export const gameConsumer=(loaded:LoadedGame<Example,Queries>):GameRuntime<Example['setup'],Reply,Request,Example['event'],Example['result'],GameRunOptions>=>loaded.runtime;
+export const observationConsumer=(loaded:LoadedGame<Example,Queries>):ObservationCapability<null,number>=>({observe:({target,observer})=>loaded.queries.query({target,name:'observe',args:observer})});
+
+export const negativeTypes=(native:NativeGameLoader,controlled:ControlledGameLoader,artifact:CompiledGame<Example,Queries>,ctx:GameContext<Example>,loaded:LoadedGame<Example,Queries>,ref:GameRef)=>{
+  native.load(module);
+  controlled.load(artifact);
+  // @ts-expect-error raw source module cannot be passed to controlled runtime
+  controlled.load(module);
+  // @ts-expect-error bytes are not a typed admitted artifact (runtime verification is ALSO required)
+  controlled.load({kind:'controlled-game',content:new Uint8Array()});
+  // @ts-expect-error state.read is not writable
+  ctx.state.read().total=9;
+  // @ts-expect-error request has a concrete template
+  ctx.input.request('invented',null);
+  // @ts-expect-error emitted events have a concrete template
+  ctx.output.emit({kind:'added',value:'wrong'});
+  // @ts-expect-error query arguments follow the selected query template
+  loaded.queries.query({target:{kind:'instance',game:ref},name:'observe',args:'not-null'});
+};
+
+/** A protocol mapping fixture only, not a compiler or production binder. */
+export const mappedProgram:GameCoreProgram<Example,{state:ManagedStateCapability<Owned>}> = async (setup,core)=>{
+  core.state.initialize({state:module.initialize(setup),unpublished:[]});
+  const result=await module.run({
+    state:{read:()=>core.state.read().state,write:next=>core.state.write({state:structuredClone(next),unpublished:structuredClone([...core.state.read().unpublished])})},
+    input:{request:async (type,request)=>{
+      const before=core.state.read();
+      const packet={state:structuredClone(before.state),request:{type,data:request},events:structuredClone([...before.unpublished])};
+      core.state.write({state:structuredClone(before.state),unpublished:[]});
+      const reply=await core.request(packet);
+      if(reply.type!==type)throw new Error('reply contract mismatch');
+      return reply.data;
+    }},
+    output:{emit:event=>{const current=core.state.read();core.state.write({state:structuredClone(current.state),unpublished:[...structuredClone(current.unpublished),structuredClone(event)]});}},
+    random:{integer:args=>core.integer(args)},
+  });
+  const last=core.state.read();
+  return {state:structuredClone(last.state),result,events:structuredClone([...last.unpublished])};
+};
+
+export const perInstanceCoreConsumer=(core:GameCoreExecution<Example>)=>{
+  core.start({initial:1},{randomSeed:new Uint8Array([1])});
+  core.start({initial:1},{randomSeed:new Uint8Array([2])});
+  // @ts-expect-error game-bound Core requires per-instance random configuration
+  core.start({initial:1});
+};

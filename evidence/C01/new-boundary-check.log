@@ -1,0 +1,6 @@
+
+> bear-forge@0.3.0 check:boundaries
+> node --experimental-strip-types tools/check_boundaries.ts
+
+PASS: Core/Game contracts separated; no protocol factories; game imports only local implementation/public contracts/Zod
+LIMIT: source dependency audit, not a controlled compiler or runtime sandbox proof

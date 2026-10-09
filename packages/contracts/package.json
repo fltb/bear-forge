@@ -1,0 +1,13 @@
+{
+  "name": "@bear-forge/contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./authoring": "./src/authoring/types.ts",
+    "./runtime": "./src/runtime/types.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  }
+}

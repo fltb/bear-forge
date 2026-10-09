@@ -1,0 +1,89 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { BoundaryIdSchema, GameErrorSchema } from '@bear-forge/contracts';
+import type { GameSnapshotRef } from '@bear-forge/contracts';
+import { readTargetPeer } from '../support/read-target-peer.ts';
+
+test('F1: simulation-only service recursively queries, validates and releases every child',async()=>{
+  const loaded=readTargetPeer(),{game}=await loaded.runtime.create(1,{randomSeed:new Uint8Array([7])});
+  assert.equal(loaded.persistence,undefined);assert.ok(loaded.simulation);
+  const sim=loaded.simulation;
+  const live=await loaded.queries.query({target:{kind:'instance',game},name:'position',args:null});
+  const root=await sim.capture(game);let visited=0;
+  const walk=async (snapshot:GameSnapshotRef):Promise<number>=>{
+    visited++;
+    const before=await sim.inspect(snapshot),target={kind:'snapshot' as const,snapshot};
+    const position=await loaded.queries.query({target,name:'position',args:null});
+    assert.equal(await loaded.queries.query({target,name:'score',args:null}),position.total);
+    if(before.boundary.kind==='ended'){
+      // A terminal state is readable, but it has no next input boundary.
+      const boundaryId=BoundaryIdSchema.parse('00000000-0000-4000-8000-000000000000');
+      await assert.rejects(loaded.inputs.describe({target,boundaryId,type:'step',context:null}), {message:/boundary/});
+      await assert.rejects(loaded.inputs.validate({target,boundaryId,reply:{type:'step',data:0}}), {message:/boundary/});
+      await assert.rejects(sim.transition({state:snapshot,input:{type:'step',data:0}}), {message:/illegal/});
+      assert.deepEqual(await sim.inspect(snapshot),before);
+      return before.boundary.result;
+    }
+    const boundaryId=before.boundary.boundaryId;
+    const options=await loaded.inputs.describe({target,boundaryId,type:'step',context:null});
+    const scores:number[]=[];
+    for(const n of options.values){
+      const reply={type:'step' as const,data:n};
+      assert.equal((await loaded.inputs.validate({target,boundaryId,reply})).valid,true);
+      const child=await sim.transition({state:snapshot,input:reply});
+      scores.push(await walk(child.state));
+      await sim.release([child.state]);
+      await assert.rejects(loaded.queries.query({target:{kind:'snapshot',snapshot:child.state},name:'score',args:null}), {message:/released/});
+      assert.deepEqual(await sim.inspect(snapshot),before);
+      assert.deepEqual(await loaded.queries.query({target,name:'position',args:null}),position);
+    }
+    return Math.max(...scores);
+  };
+  const score=await walk(root);assert.equal(visited,15);assert.ok(score>live.total);
+  assert.deepEqual(await loaded.queries.query({target:{kind:'instance',game},name:'position',args:null}),live);
+  await sim.release([root]);await loaded.runtime.close(game);
+});
+test('read targets reject foreign, wrong-boundary and illegal-input cases without changing snapshots',async()=>{
+  const a=readTargetPeer(),b=readTargetPeer(),{game}=await a.runtime.create(0,{randomSeed:new Uint8Array([1])});
+  assert.ok(a.simulation);const sim=a.simulation,root=await sim.capture(game),target={kind:'snapshot' as const,snapshot:root};
+  const view=await sim.inspect(root);if(view.boundary.kind!=='waiting')throw new Error();
+  await assert.rejects(b.queries.query({target,name:'score',args:null}), {message:/foreign/});
+  await assert.rejects(a.inputs.describe({target,boundaryId:BoundaryIdSchema.parse('00000000-0000-4000-8000-000000000000'),type:'step',context:null}), {message:/boundary/});
+  assert.equal((await a.inputs.validate({target,boundaryId:view.boundary.boundaryId,reply:{type:'step',data:-1}})).valid,false);
+  await assert.rejects(sim.transition({state:root,input:{type:'step',data:-1}}), {message:/illegal/});
+  assert.deepEqual(await sim.inspect(root),view);
+  const options=await a.inputs.describe({target,boundaryId:view.boundary.boundaryId,type:'step',context:null});
+  options.values.length=0;
+  assert.equal((await a.inputs.describe({target,boundaryId:view.boundary.boundaryId,type:'step',context:null})).values.length,2);
+  await sim.release([root]);await a.runtime.close(game);
+});
+
+test('snapshot batch release validates all refs before deleting any; duplicate refs denote one resource',async()=>{
+  const loaded=readTargetPeer(),foreign=readTargetPeer();
+  const {game}=await loaded.runtime.create(0,{randomSeed:new Uint8Array([1])});
+  const {game:other}=await foreign.runtime.create(0,{randomSeed:new Uint8Array([1])});
+  assert.ok(loaded.simulation);assert.ok(foreign.simulation);
+  const sim=loaded.simulation,root=await sim.capture(game),stranger=await foreign.simulation.capture(other);
+  const before=await sim.inspect(root);
+  await sim.release([]);
+  await assert.rejects(sim.release([root,stranger]),error=>GameErrorSchema.parse(error).code==='snapshot_not_found');
+  assert.deepEqual(await sim.inspect(root),before);
+  await sim.release([root,root]);
+  await assert.rejects(sim.inspect(root),error=>GameErrorSchema.parse(error).code==='snapshot_not_found');
+  const live=await loaded.runtime.inspect(game);assert.deepEqual(live,before.boundary);
+  await assert.rejects(sim.release([root]),error=>GameErrorSchema.parse(error).code==='snapshot_not_found');
+  await foreign.simulation.release([stranger]);
+  await loaded.runtime.close(game);await foreign.runtime.close(other);
+});
+
+test('releasing parent snapshot or closing source game does not release the independent child',async()=>{
+  const loaded=readTargetPeer(),{game}=await loaded.runtime.create(0,{randomSeed:new Uint8Array([1])});
+  assert.ok(loaded.simulation);const sim=loaded.simulation,root=await sim.capture(game),view=await sim.inspect(root);
+  if(view.boundary.kind!=='waiting')throw new Error();
+  const options=await loaded.inputs.describe({target:{kind:'snapshot',snapshot:root},boundaryId:view.boundary.boundaryId,type:'step',context:null});
+  const child=await sim.transition({state:root,input:{type:'step',data:options.values[0]!}});
+  await sim.release([root]);await loaded.runtime.close(game);
+  assert.deepEqual(await sim.inspect(child.state),child.view);
+  assert.equal(typeof await loaded.queries.query({target:{kind:'snapshot',snapshot:child.state},name:'score',args:null}),'number');
+  await sim.release([child.state]);
+});

@@ -1,31 +1,36 @@
 # Bear Forge
 
-Official name: **Bear Forge**. Directory and package slug: `bear-forge`.
-目前只有设计文档和文档验收工具。没有游戏引擎、模型训练器或可用设计分析系统。当前目标是先交付一个游戏的脚本对局与有证据的关系分析闭环。
+正式名称 **Bear Forge**，目录与包写法 `bear-forge`。当前交付 Core / Instance / BaseGame 协议声明及迁移后的完整斗地主游戏作者包；生产执行、编译、绑定与训练实现留在后续关卡。
 
-## 唯一有效入口
+## 有效入口
 
-按以下顺序阅读，不自行扩大阅读范围：
+1. [目标与边界](docs/requirements.md)
+2. [分层与数据流](docs/architecture.md)
+3. [执行规则](docs/workflow.md)
+4. [计划与清单](docs/plan.md)
+5. [协议字段和法则](docs/protocol.md)
+6. [斗地主规则和接线](docs/doudizhu.md)
+7. [受控程序规范](docs/controlled-program-spec.md)
 
-1. [目标与边界](docs/requirements.md)：做什么、不做什么、验收义务。
-2. [架构与接口](docs/architecture.md)：v0.1 模块图、拟建代码树、固定协议及业务覆盖表。
-3. [执行规则](docs/workflow.md)：如何工作、留证、恢复和报告完成。
-4. [实施计划与清单](docs/plan.md)：唯一实施顺序和逐项验收。
-5. [进度账本](checkpoints.json)：当前步骤、状态、证据和下一动作。
+代理读取 [AGENTS.md](AGENTS.md)；状态以 checkpoints.json 为准。归档与旧 evidence 是历史记录，不补充当前规范。
 
-代理必须先读 [AGENTS.md](AGENTS.md)。旧版 22 份文档已移到 archive/2026-10-08，全部失效，日常工作不读取。有效文档不依赖旧文档补充定义。
+## 当前结构
 
-## 当前交付
+Core 提供通用执行机制，Instance 承载完整现场。游戏只通过声明端口进行外部调用。Instance.bind/run 负责通用端口回调与驱动；BaseGame.bind/run 提供游戏请求、事件、暂停与继续，另支持手动提交及读取；具体游戏以 GameModule={program,contract} 提供真实规则程序和共享游戏约定。搜索、训练、会话与分析在上层。
 
-本轮固定架构与协议，同步文档与执行机制，对应 C00。C01–C07 全部未开始。内部执行库、编译方式和存储实现暂缓决定。
+游戏入口：[game / program](games/doudizhu/src/index.ts)。[SDK](games/doudizhu/src/sdk.ts) 在 Instance 内持有显式 seed 驱动的随机流并发牌，[主循环](games/doudizhu/src/program.ts) 通过 decision 端口请求输入、event 端口主动发布事件。没有第二份规则状态或旧接口兼容层。
 
-业务核对以[双潮焚契的 15 个场景](docs/scenario-resolution-requirements.md)为输入；协议覆盖分析位于架构文档第 12 节。
+输入选择是指定真实入口上的 exact 值列表或 construct JSON 约定。动作、交付时间与会话信号分别声明。Core 捕捉/保存是可选能力，游戏保存复用 InstanceSnapshot，搜索使用同类型 fork 后的普通游戏接口；普通运行不要求存档或训练。
 
-检查文档、清单、状态与证据一致性：
+完整迁移报告、字段清单与功能等价证明见 [报告](evidence/C01/boundary-migration-review.md)。万智牌 like 需求保留在 [15 个压力场景](docs/scenario-resolution-requirements.md)。
+
+## 检查
 
 ```sh
+npm ci --ignore-scripts
+npm run check
 python3 tools/check_project.py
 python3 tools/check_project.py --self-test
 ```
 
-从本目录运行。校验通过仅表示这些机械检查通过，不表示规则正确、游戏覆盖完整、训练有效或设计平衡。
+类型与 schema 检查、实际原生游戏测试、独立牌型 oracle 和公共导出证明索引共同验证本轮交付。它们不代表生产 runtime 已实现或训练已完成。

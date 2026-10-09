@@ -1,0 +1,118 @@
+
+> bear-forge@0.3.0 check
+> npm run typecheck && npm test && npm run check:boundaries && npm run check:schemas
+
+
+> bear-forge@0.3.0 typecheck
+> tsc --noEmit
+
+
+> bear-forge@0.3.0 test
+> node --experimental-strip-types --test tests/contracts/*.test.ts tests/doudizhu/*.test.ts
+
+✔ author module maps to existing Core/Game: events drain once and rejected input preserves boundary (4.360208ms)
+✔ one author function also runs natively with matching state, requests, events and result (0.539667ms)
+✔ artifact shape is separate from source modules and is not an admission proof (0.364458ms)
+✔ Core faults cannot become a Game normal ending (0.217417ms)
+✔ fixed categories are enums; opaque identifiers have concrete validation (1.626084ms)
+✔ generic Core requests/capture work without game concepts; invalid replies do not advance (2.540542ms)
+✔ same transition capability supports stack exploration and repeated rollouts (0.128208ms)
+✔ capture argument schemas reject unsafe, fractional and negative coordinates (1.526375ms)
+✔ busy resume rejects inspect, close and competing resume without stranding the original call (1.499875ms)
+✔ append-only capture pagination supports polling at the tail without skipping or aliasing (0.340084ms)
+✔ overlapping requests fault instead of overwriting the first pending continuation (0.213834ms)
+✔ catching an invalid request cannot turn a faulted execution into a successful result (0.215791ms)
+✔ Game failures have closed kind/code/state combinations and value-preserving schemas (2.896125ms)
+✔ every Core failure maps into the public Game carrier without losing its class (0.373458ms)
+✔ exact and construct share a JSON envelope while games own concrete schemas (3.6625ms)
+✔ Dou Dizhu only accepts the concrete exact action reply (0.427166ms)
+✔ construct convention is interpreted by a caller, with no Core or game-state access (0.071ms)
+✔ every Core kind/code pair accepts exactly the documented combinations (2.499875ms)
+✔ game schema table binds options and validation to the selected contract (1.543417ms)
+✔ runtime contract dispatch rejects wrong key and wrong shape before domain validation (3.993417ms)
+✔ two request types retain distinct native results in one game loop (0.142666ms)
+✔ per-run options and Game snapshot schemas reject invalid public data (0.369125ms)
+✔ schema profile rejects value changes, stripping and unknown nested constructors (3.536292ms)
+✔ approved structural schemas preserve values over repeated validation (3.117958ms)
+✔ custom checks require explicit trusted approval; equality guard rejects mutation anyway (1.676584ms)
+✔ F4 original transform is rejected before parsing; parser edge cases cannot silently change data (0.254083ms)
+✔ module key registries reject symbols, accessors, inheritance and mismatched handlers (0.176375ms)
+✔ boundary copying does not invoke getters or silently strip host properties (0.193375ms)
+✔ schema inspection does not execute lazy or object-shape getters (0.113333ms)
+✔ accepted boundary copies preserve aliases while isolating the caller (0.304833ms)
+✔ trusted approvals cannot override excluded transform and overwrite constructors (0.160542ms)
+✔ diagnostic callbacks are subject to admission too (0.121167ms)
+✔ byte boundary copies cannot retain shared mutable backing storage (0.257833ms)
+✔ F1: simulation-only service recursively queries, validates and releases every child (9.376666ms)
+✔ read targets reject foreign, wrong-boundary and illegal-input cases without changing snapshots (0.346542ms)
+✔ snapshot batch release validates all refs before deleting any; duplicate refs denote one resource (0.243625ms)
+✔ releasing parent snapshot or closing source game does not release the independent child (0.179458ms)
+✔ full GameRuntime -> Execution -> real program, landlord 0 (34.661625ms)
+✔ full GameRuntime -> Execution -> real program, landlord 1 (15.415709ms)
+✔ full GameRuntime -> Execution -> real program, landlord 2 (23.5765ms)
+✔ all-pass redeals; ordinary auction ends after exactly three bids (36.066667ms)
+✔ private doubling keeps the other original input valid, and reveals bottom later (0.679958ms)
+✔ full game can be driven by timeout templates after auction (16.816583ms)
+✔ all timeout defaults, including redouble and two passes (0.316167ms)
+✔ illegal/out-of-turn/exact-deadline inputs do not resume or capture; queries are typed (0.583042ms)
+✔ same public program inputs reproduce game trace, independent games interleave without contamination (109.002666ms)
+✔ one adapter hosts distinct games; exact query outputs are isolated (0.614875ms)
+✔ rulebook settlement and every farmer multiplier remain intact (0.26625ms)
+✔ terminal consistency is validated; there is no second independent boundary.result (10.012541ms)
+✔ executor reject preserves the correct adapter state (0.649458ms)
+✔ executor malformed preserves the correct adapter state (0.689708ms)
+✔ executor throw preserves the correct adapter state (0.243208ms)
+✔ executor outer-fault preserves the correct adapter state (0.181583ms)
+✔ executor boundary-fault preserves the correct adapter state (0.175292ms)
+✔ exact play options include every lead single and all returned actions pass game validation (1.289084ms)
+✔ synchronous Core exceptions quarantine just like rejected promises (0.216667ms)
+✔ close and advance cannot race; failed cleanup remains retryable (0.218875ms)
+✔ different execution identity in a successful reply is an output fault (0.309708ms)
+✔ confirmed missing Core execution permits idempotent local cleanup (0.292125ms)
+✔ rulebook family single: 3 (0.693959ms)
+✔ rulebook family pair: 15,15 (0.453167ms)
+✔ rulebook family triple: 7,7,7 (0.069834ms)
+✔ rulebook family tripleSingle: 3,3,3,4 (0.068916ms)
+✔ rulebook family triplePair: 9,9,9,3,3 (0.057ms)
+✔ rulebook family straight: 3,4,5,6,7 (0.048875ms)
+✔ rulebook family pairs: 3,3,4,4,5,5 (0.036333ms)
+✔ rulebook family airplane: 3,3,3,4,4,4 (0.029333ms)
+✔ rulebook family airplaneSingle: 3,3,3,4,4,4,5,5 (0.0805ms)
+✔ rulebook family airplanePair: 3,3,3,4,4,4,6,6,9,9 (0.079083ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,9 (0.099917ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,3 (0.096042ms)
+✔ rulebook family fourPairs: 9,9,9,9,6,6,8,8 (0.0645ms)
+✔ rulebook family bomb: 15,15,15,15 (0.039875ms)
+✔ rulebook family rocket: 16,17 (0.028875ms)
+✔ illegal rank sequences, wings, double jokers and attached bomb are rejected (0.471875ms)
+✔ comparison requires same family/length; bombs and rocket override (0.177667ms)
+✔ complete legal-action set vs independent subset oracle 0 (2.537292ms)
+✔ complete legal-action set vs independent subset oracle 1 (1.459291ms)
+✔ complete legal-action set vs independent subset oracle 2 (7.091917ms)
+✔ complete legal-action set vs independent subset oracle 3 (5.914166ms)
+✔ complete legal-action set vs independent subset oracle 4 (4.691208ms)
+✔ complete legal-action set vs independent subset oracle 5 (9.296959ms)
+✔ complete legal-action set vs independent subset oracle 6 (11.687166ms)
+✔ complete legal-action set vs independent subset oracle 7 (3.242584ms)
+✔ complete legal-action set vs independent subset oracle 8 (5.049959ms)
+✔ twos are not consecutive with ace when used as non-pair wings (0.078875ms)
+ℹ tests 86
+ℹ suites 0
+ℹ pass 86
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 408.422625
+
+> bear-forge@0.3.0 check:boundaries
+> node --experimental-strip-types tools/check_boundaries.ts
+
+PASS: Core/Game contracts separated; no protocol factories; game imports only local implementation/public contracts/Zod
+LIMIT: source dependency audit, not a controlled compiler or runtime sandbox proof
+
+> bear-forge@0.3.0 check:schemas
+> node --experimental-strip-types tools/check_schema_admission.ts
+
+PASS: 53 public/game schemas satisfy the pinned value-preserving structural profile
+LIMIT: genuine admitted Zod instances and reviewed callback provenance are prerequisites; runtime must use value-equality validation, not arbitrary parse calls.

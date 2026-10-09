@@ -1,0 +1,10 @@
+{
+  "name": "@bear-forge/doudizhu",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@bear-forge/contracts": "0.3.0",
+    "zod": "4.6.5"
+  }
+}

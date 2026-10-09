@@ -1,0 +1,22 @@
+[
+  {
+    "command": [
+      "./node_modules/.bin/tsc",
+      "-p",
+      "evidence/C01/proof-audit/tsconfig.json"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "node",
+      "--experimental-strip-types",
+      "evidence/C01/proof-audit/normalization.ts"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"raw\":0,\"validated\":1,\"parsedAgain\":2,\"property\":\"parse(parse(x)) != parse(x)\"}\nPROVED: public schema types admit non-idempotent normalization. This fixture is not a production runtime trace.\n",
+    "stderr": ""
+  }
+]

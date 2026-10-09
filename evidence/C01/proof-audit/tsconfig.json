@@ -1,0 +1,7 @@
+{
+  "extends": "../../../tsconfig.json",
+  "include": [
+    "./counterexamples.ts",
+    "./normalization.ts"
+  ]
+}

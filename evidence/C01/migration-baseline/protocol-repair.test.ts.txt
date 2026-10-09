@@ -1,0 +1,160 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { z } from 'zod';
+import { CoreErrorSchema, CoreErrorCodeSchema, ErrorKindSchema, JsonValueSchema, GameRunOptionsSchema, GameSnapshotRefSchema } from '@bear-forge/contracts';
+import type { CoreError, CoreFault, GameContext, GameModule, InteractionReply, InteractionRequest, LoadedGame, GameRuntime, GameRef, BoundaryId, GameSnapshotRef, SnapshotRef, StateConstructionCapability, EvaluationCapability, RequestArgs, InteractionInputs } from '@bear-forge/contracts';
+
+// Deliberately incompatible contracts. All concrete fields come from schemas.
+const interactions={
+  choose:{request:z.strictObject({cards:z.array(z.string())}),input:z.strictObject({card:z.string()}),context:z.null(),description:z.never()},
+  amount:{request:z.strictObject({max:z.number().int()}),input:z.number().int(),context:z.null(),description:z.strictObject({maximum:z.number().int()})},
+};
+const domain={setup:z.null(),state:z.number(),event:z.string(),result:z.number()};
+type G = {[K in keyof typeof domain]:z.infer<(typeof domain)[K]>}&{interactions:{[K in keyof typeof interactions]:{[F in keyof (typeof interactions)[K]]:z.infer<(typeof interactions)[K][F]>}}};
+type Q = {count:{input:null;output:number};label:{input:string;output:string}};
+const definition:GameModule<G,Q>={
+  schemas:{...domain,interactions},
+  initialize:()=>0,
+  async run(ctx){
+    const card=await ctx.input.request('choose',{cards:['a']});
+    ctx.output.emit(card.card);
+    const amount=await ctx.input.request('amount',{max:3});
+    ctx.state.write(amount);return amount;
+  },
+  inputs:{
+    choose:{
+      options:z.strictObject({kind:z.literal('exact'),values:z.array(interactions.choose.input)}),
+      describe:({request})=>({kind:'exact',values:request.cards.map(card=>({card}))}),
+      validate:({request,input})=>request.cards.includes(input.card)?{valid:true}:{valid:false,reason:'unknown_card'},
+    },
+    amount:{
+      options:z.union([z.strictObject({kind:z.literal('exact'),values:z.array(interactions.amount.input)}),z.strictObject({kind:z.literal('construct'),description:interactions.amount.description})]),
+      describe:({request})=>({kind:'construct',description:{maximum:request.max}}),
+      validate:({request,input})=>input>=0&&input<=request.max?{valid:true}:{valid:false,reason:'outside_range'},
+    },
+  },
+  queries:{count:{input:z.null(),output:z.number(),run:v=>v.state},label:{input:z.string(),output:z.string(),run:(_v,s)=>s}},
+};
+
+// These statements are checked, never executed; an unused expectation fails tsc.
+export const negativeCalls=(ctx:GameContext<G>,loaded:LoadedGame<G,Q>,game:GameRef,boundaryId:BoundaryId)=>{
+  // @ts-expect-error request payload must belong to selected key
+  ctx.input.request('choose',{max:3});
+  // @ts-expect-error amount returns number, not a card
+  const wrong:Promise<{card:string}>=ctx.input.request('amount',{max:3});
+  // @ts-expect-error response discriminator and payload cannot cross contracts
+  const reply:InteractionReply<G['interactions']>={type:'choose',data:2};
+  // @ts-expect-error JSON-only input excludes native callbacks
+  const invalid:GameRuntime<null,()=>void,null,null,null>={};
+  // @ts-expect-error JSON-only contract input excludes Date
+  const invalidModule:GameModule<{setup:null;state:null;event:null;result:null;interactions:{x:{request:null;input:Date;context:null;description:never}}},{}>={};
+  // @ts-expect-error a compiled module does not imply optional persistence
+  loaded.persistence.save(game);
+  // @ts-expect-error per-instance options are mandatory for the loaded runtime
+  loaded.runtime.create(null);
+  // @ts-expect-error options context belongs to the selected key
+  loaded.inputs.describe({target:{kind:'instance',game},boundaryId,type:'amount',context:{anything:true}});
+  // @ts-expect-error validate keeps discriminant and input correlated
+  loaded.inputs.validate({target:{kind:'instance',game},boundaryId,reply:{type:'choose',data:3}});
+  // @ts-expect-error named query does not widen its argument using another key
+  loaded.queries.query({target:{kind:'instance',game},name:'count',args:'wrong'});
+  // @ts-expect-error a fault is never reported as a non-advancing rejection
+  const badError:CoreError={kind:'rejected',code:'program_failed',message:'bad'};
+  // @ts-expect-error fault boundaries cannot contain request conflicts
+  const badFault:CoreFault={kind:'conflict',code:'request_mismatch',message:'bad'};
+  const options=loaded.inputs.describe({target:{kind:'instance',game},boundaryId,type:'choose',context:null});
+  options.then(value=>{
+    // @ts-expect-error exact-only contract has no construct branch
+    const construct:typeof value={kind:'construct',description:null};
+    return construct;
+  });
+  return {wrong,reply,invalid,invalidModule,badError,badFault};
+};
+
+export const searchConsumer=async (loaded:LoadedGame<G,Q>,game:GameRef,input:InteractionReply<G['interactions']>,constructor:StateConstructionCapability<null,null,number,GameSnapshotRef>,evaluation:EvaluationCapability<GameSnapshotRef,null,number>)=>{
+  if(!loaded.simulation||!loaded.persistence)return;
+  const snapshot=await loaded.persistence.save(game);
+  const restored=await loaded.persistence.restore(snapshot);
+  await loaded.runtime.inspect(restored.game);
+  const root=await loaded.simulation.capture(restored.game);
+  const child=await loaded.simulation.transition({state:root,input});
+  await loaded.simulation.inspect(child.state);
+  await evaluation.evaluate({source:child.state,config:null});
+  // Constructor is a separately bound game adapter, explicitly returns this simulation's references.
+  const hypothesis=await constructor.construct({source:null,config:null,entropy:7});
+  await loaded.simulation.inspect(hypothesis);
+  await loaded.simulation.release([root,child.state,hypothesis]);
+  await loaded.persistence.release([snapshot]);
+  await loaded.runtime.close(restored.game);
+};
+export const incompatibleReferences=(core:SnapshotRef)=>{
+  // @ts-expect-error Core snapshot is not a Game snapshot
+  const game:GameSnapshotRef=core;return game;
+};
+
+test('every Core kind/code pair accepts exactly the documented combinations',()=>{
+  const allowed={rejected:['invalid_input','execution_not_found','snapshot_not_found'],conflict:['execution_busy','execution_closed','request_mismatch','snapshot_incompatible'],unsupported:['capability_unavailable'],fault:['invalid_output','budget_exceeded','program_failed']};
+  for(const kind of ErrorKindSchema.options)for(const code of CoreErrorCodeSchema.options){
+    assert.equal(CoreErrorSchema.safeParse({kind,code,message:'test'}).success,allowed[kind].includes(code),`${kind}/${code}`);
+  }
+});
+test('game schema table binds options and validation to the selected contract',()=>{
+  assert.deepEqual(definition.inputs.choose.describe({state:0,request:{cards:['a','b']},context:null}),{kind:'exact',values:[{card:'a'},{card:'b'}]});
+  assert.deepEqual(definition.inputs.amount.describe({state:0,request:{max:3},context:null}),{kind:'construct',description:{maximum:3}});
+  assert.equal(definition.inputs.choose.options.safeParse({kind:'construct',description:3}).success,false);
+  assert.equal(definition.inputs.amount.options.safeParse({kind:'construct',description:{maximum:'three'}}).success,false);
+  assert.equal(definition.inputs.choose.validate({state:0,request:{cards:['a']},input:{card:'b'}}).valid,false);
+});
+test('runtime contract dispatch rejects wrong key and wrong shape before domain validation',()=>{
+  const request:InteractionRequest<G['interactions']>={type:'choose',data:{cards:['a']}};
+  // Concrete dispatch fixture: illustrates mandated checks without a production loader.
+  const accept=(raw:unknown)=>{
+    const envelope=z.strictObject({type:z.literal(request.type),data:JsonValueSchema}).safeParse(raw);
+    if(!envelope.success)return false;
+    const input=interactions.choose.input.safeParse(envelope.data.data);
+    return input.success&&definition.inputs.choose.validate({state:0,request:request.data,input:input.data}).valid;
+  };
+  assert.equal(accept({type:'amount',data:1}),false);
+  assert.equal(accept({type:'choose',data:1}),false);
+  assert.equal(accept({type:'choose',data:{card:'b'}}),false);
+  assert.equal(accept({type:'choose',data:{card:'a'}}),true);
+  for(const value of [undefined,()=>0,1n,new Date(),NaN,Infinity])assert.equal(JsonValueSchema.safeParse(value).success,false);
+});
+test('two request types retain distinct native results in one game loop',async()=>{
+  let state=0;const events:string[]=[];
+  // Implement a generic capability with overload-compatible per-key result narrowing.
+  const replies:{[K in keyof G['interactions']]:G['interactions'][K]['input']}={choose:{card:'a'},amount:2};
+  const result=await definition.run({state:{read:()=>state,write:v=>{state=v;}},input:{request:async <const A extends RequestArgs<G['interactions']>>(...args:A):Promise<InteractionInputs<G['interactions']>[A[0]]>=>{const key:A[0]=args[0];return replies[key];}},output:{emit:event=>events.push(event)},random:{integer:async()=>0}});
+  assert.equal(result,2);assert.equal(state,2);assert.deepEqual(events,['a']);
+});
+test('per-run options and Game snapshot schemas reject invalid public data',()=>{
+  assert.equal(GameRunOptionsSchema.safeParse({}).success,false);
+  assert.equal(GameRunOptionsSchema.safeParse({randomSeed:'seed'}).success,false);
+  assert.equal(GameRunOptionsSchema.safeParse({randomSeed:new Uint8Array([1]),setup:null}).success,false);
+  assert.equal(GameSnapshotRefSchema.safeParse({snapshotId:'not-an-id'}).success,false);
+});
+
+// Removed public implementation details must not return as compatibility aliases.
+// @ts-expect-error runtime buffer storage is private
+import type { GameOwnedState } from '@bear-forge/contracts';
+// @ts-expect-error load no longer carries per-instance configuration
+import type { GameLoadOptions } from '@bear-forge/contracts';
+
+/** Game adapter on top of public ports. No fabricated references or private Core access. */
+export const bindGameTools=(loaded:LoadedGame<G,Q>)=>{
+  const {simulation}=loaded;
+  if(!simulation)throw new Error('simulation required');
+  const construction:StateConstructionCapability<null,null,Uint8Array,GameSnapshotRef>={
+    construct:async ({entropy})=>{
+      const created=await loaded.runtime.create(null,{randomSeed:new Uint8Array(entropy)});
+      try{return await simulation.capture(created.game);}
+      finally{await loaded.runtime.close(created.game);}
+    },
+  };
+  const evaluation:EvaluationCapability<GameSnapshotRef,null,number>={
+    evaluate:async ({source})=>{
+      return loaded.queries.query({target:{kind:'snapshot',snapshot:source},name:'count',args:null});
+    },
+  };
+  return {construction,evaluation};
+};

@@ -1,0 +1,48 @@
+✔ new author ports drive complete Dou Dizhu: 1/0 (22.309542ms)
+✔ new author ports drive complete Dou Dizhu: 7/1 (9.776125ms)
+✔ new author ports drive complete Dou Dizhu: 123/2 (11.483042ms)
+✔ all-pass redeals and ordinary three-bid auction remain unchanged (16.827167ms)
+✔ private simultaneous choices preserve the remaining endpoint and reveal bottom later (5.060417ms)
+✔ timeout signals drive a complete game without becoming fake action choices (5.802458ms)
+✔ all timeout defaults and two passes retain rule behavior (4.436375ms)
+✔ invalid choice, illegal action and equality deadline fail before rule mutation (4.257541ms)
+✔ concurrent native games reproduce sequential traces with independent service streams (47.196834ms)
+✔ every advertised legal payload prepares successfully with valid delivery data (10.368958ms)
+✔ all farmer multipliers and springs survive the protocol migration (3.5065ms)
+✔ terminal result has one authoritative source and canonical card encoding stays enforced (4.814667ms)
+✔ rulebook family single: 3 (0.779833ms)
+✔ rulebook family pair: 15,15 (0.068459ms)
+✔ rulebook family triple: 7,7,7 (0.048375ms)
+✔ rulebook family tripleSingle: 3,3,3,4 (0.058292ms)
+✔ rulebook family triplePair: 9,9,9,3,3 (0.04825ms)
+✔ rulebook family straight: 3,4,5,6,7 (0.048917ms)
+✔ rulebook family pairs: 3,3,4,4,5,5 (0.036958ms)
+✔ rulebook family airplane: 3,3,3,4,4,4 (0.032ms)
+✔ rulebook family airplaneSingle: 3,3,3,4,4,4,5,5 (0.079625ms)
+✔ rulebook family airplanePair: 3,3,3,4,4,4,6,6,9,9 (0.075875ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,9 (0.181958ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,3 (0.035083ms)
+✔ rulebook family fourPairs: 9,9,9,9,6,6,8,8 (0.032458ms)
+✔ rulebook family bomb: 15,15,15,15 (0.024834ms)
+✔ rulebook family rocket: 16,17 (0.020625ms)
+✔ illegal rank sequences, wings, double jokers and attached bomb are rejected (0.375917ms)
+✔ comparison requires same family/length; bombs and rocket override (0.143833ms)
+✔ complete legal-action set vs independent subset oracle 0 (1.950542ms)
+✔ complete legal-action set vs independent subset oracle 1 (0.785833ms)
+✔ complete legal-action set vs independent subset oracle 2 (6.709167ms)
+✔ complete legal-action set vs independent subset oracle 3 (4.183166ms)
+✔ complete legal-action set vs independent subset oracle 4 (3.376959ms)
+✔ complete legal-action set vs independent subset oracle 5 (5.723334ms)
+✔ complete legal-action set vs independent subset oracle 6 (4.323667ms)
+✔ complete legal-action set vs independent subset oracle 7 (1.412125ms)
+✔ complete legal-action set vs independent subset oracle 8 (3.416625ms)
+✔ twos are not consecutive with ace when used as non-pair wings (0.052125ms)
+✔ canonical play encoding preserves every rulebook family and rejects permutation duplicates (2.014667ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 266.963833

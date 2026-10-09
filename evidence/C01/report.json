@@ -1,0 +1,199 @@
+{
+  "checkpoint": "C01",
+  "kind": "design",
+  "summary": "Complete inner/outer control declarations: Instance bind/run/transfer, typed callbacks and cancellation; BaseGame decision/event/manual/run interfaces, policy projection and same-type fork. Native Dou Dizhu emits through SDK event port. 57 tests, 44 schemas and 101-export conditional coverage pass. No production executor or driver implemented.",
+  "replay_command": "npm ci --ignore-scripts && npm run check",
+  "artifacts": [
+    {
+      "path": "docs/doudizhu.md",
+      "sha256": "de90cde69cd06696d5429ab150a955209cb8d1383a8754c5aa77100d9d8315a4"
+    },
+    {
+      "path": "docs/protocol.md",
+      "sha256": "6613f9fe8a1dca8cbd26f684a5f41d5f962284702443a8a9e02d0e679804f584"
+    },
+    {
+      "path": "evidence/C01/acceptance.md",
+      "sha256": "be983c39c602aabd53055818292718dd110fb1fe099331bcb875421f8b32d0fe"
+    },
+    {
+      "path": "evidence/C01/boundary-migration-acceptance.md",
+      "sha256": "3123217c1509d30e315d60435e2a9353722788c91e38ad507e48d5909b11f411"
+    },
+    {
+      "path": "evidence/C01/boundary-migration-review.md",
+      "sha256": "8cf0754e30fb2eadc22c76d69e0e04e8528d893533a71d6514af7675cefc6980"
+    },
+    {
+      "path": "evidence/C01/protocol-proof-index.json",
+      "sha256": "9d71abc5f487535ae6708142657f5f7f3321aed720026e9951bc2e0a2fc1af9d"
+    },
+    {
+      "path": "games/doudizhu/package.json",
+      "sha256": "d9e5cab93bf9e2859f08991c90c125434950b157d85e3347ca367b6adeb2a162"
+    },
+    {
+      "path": "games/doudizhu/src/errors.ts",
+      "sha256": "ea83eb1cf201029cfd1b45ccdaea827023ba9ee2fb2197c1b82e9017ff1aff3a"
+    },
+    {
+      "path": "games/doudizhu/src/implementation.ts",
+      "sha256": "c01a6bd0c90ac8e8f8b3dcc61b5f22e391b772090750a6cb1a217beb70cadf76"
+    },
+    {
+      "path": "games/doudizhu/src/index.ts",
+      "sha256": "fb27ab0e21ddd647c5ae414c12020fb60651ef311887c3280aec1ece04f80371"
+    },
+    {
+      "path": "games/doudizhu/src/patterns.ts",
+      "sha256": "16f166c1a416be9d9f36dd08f1cbb446241657ccc258401d5bf8807b5557dbe0"
+    },
+    {
+      "path": "games/doudizhu/src/program.ts",
+      "sha256": "56059edd60fce2e02e3fb10b5cd115b0b16100b4d0a0d731d1b189a5c4f2713a"
+    },
+    {
+      "path": "games/doudizhu/src/rules.ts",
+      "sha256": "7a18f0ab2758c606968390c3edb7576ac476e6a0f20a4b70326b9f7f17509926"
+    },
+    {
+      "path": "games/doudizhu/src/schemas.ts",
+      "sha256": "69bdaa2a27aa92689448c380c9a64d832c09416d6e3c21ee8567ff284a2acab4"
+    },
+    {
+      "path": "games/doudizhu/src/sdk.ts",
+      "sha256": "f8ed1b3cf074e9a70defad44c588c72ddf3d5e8578926ed1e6261ae041a875d8"
+    },
+    {
+      "path": "games/doudizhu/src/types.ts",
+      "sha256": "f15c6c972f6cd1ab34db4cda78f04941f29bde08bcd97e623b454073441ede28"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "4deb4046d9ea710f5da3d7c3a5f91bb54f70f770e80623d79319604117b11be8"
+    },
+    {
+      "path": "package.json",
+      "sha256": "395eb5bab0b0a4189b20dd87f429302610d9ddb532c01a5eed1d90e6b9f09d14"
+    },
+    {
+      "path": "packages/contracts/package.json",
+      "sha256": "a2a10b93daa4f585ba2252c337accb30a03f9560d774266f82067beb28573237"
+    },
+    {
+      "path": "packages/contracts/src/authoring/types.ts",
+      "sha256": "714bea6d61b60a280fda523b63ff7dd6531067e9026fc7147460b1b6a60f5dde"
+    },
+    {
+      "path": "packages/contracts/src/core/schemas.ts",
+      "sha256": "46fe706135303f1c16b32897f358759d505e02c257390bc58fcc45117db5e109"
+    },
+    {
+      "path": "packages/contracts/src/core/types.ts",
+      "sha256": "ddff702da8882d824c4159db78a5f69e3972670f1db3f499b707273dcac66a77"
+    },
+    {
+      "path": "packages/contracts/src/game/schemas.ts",
+      "sha256": "392908c26b24ba432dcf847933ee40da7c310e38cdca951b53d6bad30e0df08e"
+    },
+    {
+      "path": "packages/contracts/src/game/types.ts",
+      "sha256": "31e1fe74aa7fbc857911e5db91a9dc32aed2475f7836832f714d67d1d38a26a6"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "b3583f8b335db1266daf185927626b48d23262d8fe37d337502b0b9758dd8539"
+    },
+    {
+      "path": "packages/contracts/src/runtime/schemas.ts",
+      "sha256": "e9a033ee25aea4cdd84c071bd76a774067982ba4436f688874ab5181bc7bdcb6"
+    },
+    {
+      "path": "packages/contracts/src/runtime/types.ts",
+      "sha256": "2038347029dccbd23afa9af60902d552f6da166ada5a66523e8defd1c424cf5d"
+    },
+    {
+      "path": "tests/contracts/basegame-types.ts",
+      "sha256": "18bd3346bbc8de2da4990605d6dc8170567611bbccad8b9a63b4d88aba41a111"
+    },
+    {
+      "path": "tests/contracts/instance-types.ts",
+      "sha256": "e6a732a312516556d95a2935dca983d5d05d3fe658a4f0d2889040597702b4ed"
+    },
+    {
+      "path": "tests/contracts/new-protocol.test.ts",
+      "sha256": "9596e6fbb3dde9ef38bb6989229dca2992a5fb61e9354aa0b29c1938e5931957"
+    },
+    {
+      "path": "tests/contracts/schema-admission.test.ts",
+      "sha256": "2a2113568655167968a2674f902c5e477b2ca377b8082e9485764d2325b13ae3"
+    },
+    {
+      "path": "tests/doudizhu/game.test.ts",
+      "sha256": "538a27bf2e7653c008cfb4a86aac1e5187f181f36a4abef7c572476c1c298cf9"
+    },
+    {
+      "path": "tests/doudizhu/oracle.ts",
+      "sha256": "d072010d42830a8eea4f73d42edc7a4c820a42931c40e4f9fbed45dd502c2a00"
+    },
+    {
+      "path": "tests/doudizhu/rules.test.ts",
+      "sha256": "38ff15570d250107ccb4eb647940f2cef91017fb30468f6faac7268a7c221df6"
+    },
+    {
+      "path": "tools/check_boundaries.ts",
+      "sha256": "d8cb61e2a87652b3d644ea94f7cbfe1b9d031e5191ca0a5a2bf0dab47fe4053f"
+    },
+    {
+      "path": "tools/check_protocol_coverage.ts",
+      "sha256": "b1ad23f6a7b6c27203d184b8b042e9c260dad42a58ef78aa1317efa7f30eeb15"
+    },
+    {
+      "path": "tools/check_schema_admission.ts",
+      "sha256": "ee866e1e0c82a509fad42454d5e3ca44363d7aa13d851589be798c9c5df0f647"
+    },
+    {
+      "path": "tools/schema_admission.ts",
+      "sha256": "6ec8366f9f38bc24d803d285b42db08fe38840df6e77a9e21ab86f8bbefb7ddb"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "ed7cc8c028a131097067dc430a5c29f703e1325755de3863363802930596331a"
+    },
+    {
+      "path": "evidence/C01/verify-migration.py",
+      "sha256": "394315abe001561b08a491e0ec0d150ecda8303c297f05584ce56923abc4a5d4"
+    }
+  ],
+  "checks": [
+    {
+      "id": "C01-01",
+      "status": "passed",
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "evidence/C01/boundary-migration-check.log"
+    },
+    {
+      "id": "C01-03",
+      "status": "passed",
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "evidence/C01/boundary-migration-check.log"
+    },
+    {
+      "id": "C01-05",
+      "status": "passed",
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "evidence/C01/boundary-migration-check.log"
+    }
+  ],
+  "supplemental_checks": [
+    {
+      "scope": "completion requirements and field/source correspondence",
+      "command": "python3 evidence/C01/verify-migration.py",
+      "exit_code": 0,
+      "log": "evidence/C01/boundary-completion-audit.log"
+    }
+  ]
+}

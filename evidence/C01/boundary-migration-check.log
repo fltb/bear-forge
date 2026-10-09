@@ -10,99 +10,106 @@
 > test
 > node --experimental-strip-types --test tests/contracts/*.test.ts tests/doudizhu/*.test.ts
 
-✔ fixed failure categories distinguish a rejected submission from execution failure (1.173833ms)
-✔ capture cursor permits initial and tail reads, not negative or fractional positions (0.3635ms)
-✔ input options retain exact payload lists and opaque JSON construction descriptions (1.2565ms)
-✔ decision credentials explicitly bind an Instance and its suspended call (0.360917ms)
-✔ control schemas close pause categories and require finite nonnegative run limits (0.53375ms)
-✔ same decision callback receives isolated player state and only its own actor offers (2.024375ms)
-✔ same event callback receives distinct projections and private events can be hidden (0.792083ms)
-✔ binding replaces only the same player; an empty binding removes that player (0.21625ms)
-✔ cross-player replies are rejected before the game responder runs (0.177875ms)
-✔ signal-only waits include observation and target only the declared signal players (0.299375ms)
-✔ one accepted reply cancels competing waits and late replies never enter the responder (0.249333ms)
-✔ external cancellation releases an unresolved decision callback (0.173375ms)
-✔ a malformed or refused reply does not suppress another player valid reply (0.341125ms)
-✔ event retry preserves source IDs and repeats earlier player acknowledgments (0.237667ms)
-✔ schema profile rejects value changes, stripping and unknown nested constructors (4.488041ms)
-✔ approved structural schemas preserve values over repeated validation (3.802292ms)
-✔ custom checks require explicit trusted approval; equality guard rejects mutation anyway (0.71425ms)
-✔ F4 original transform is rejected before parsing; parser edge cases cannot silently change data (0.248375ms)
-✔ module key registries reject symbols, accessors, inheritance and mismatched handlers (0.175917ms)
-✔ boundary copying does not invoke getters or silently strip host properties (0.196375ms)
-✔ schema inspection does not execute lazy or object-shape getters (0.119ms)
-✔ accepted boundary copies preserve aliases while isolating the caller (0.346083ms)
-✔ trusted approvals cannot override excluded transform and overwrite constructors (0.183375ms)
-✔ diagnostic callbacks are subject to admission too (0.142209ms)
-✔ byte boundary copies cannot retain shared mutable backing storage (0.261417ms)
-✔ new author ports drive complete Dou Dizhu: 1/0 (24.307542ms)
-✔ new author ports drive complete Dou Dizhu: 7/1 (11.368833ms)
-✔ new author ports drive complete Dou Dizhu: 123/2 (10.39575ms)
-✔ all-pass redeals and ordinary three-bid auction remain unchanged (17.584417ms)
-✔ private simultaneous choices preserve the remaining endpoint and reveal bottom later (4.851334ms)
-✔ timeout signals drive a complete game without becoming fake action choices (6.006708ms)
-✔ all timeout defaults and two passes retain rule behavior (4.792334ms)
-✔ invalid choice, illegal action and equality deadline fail before rule mutation (4.69575ms)
-✔ concurrent native games reproduce sequential traces with independent service streams (48.847916ms)
-✔ every advertised legal payload prepares successfully with valid delivery data (10.695292ms)
-✔ all farmer multipliers and springs survive the protocol migration (3.7005ms)
-✔ terminal result has one authoritative source and canonical card encoding stays enforced (4.929833ms)
-✔ native inner SDK uses decision and event ports; seed is explicit controlled setup (19.099ms)
-✔ player callbacks drive complete games from projected requests and events (37.775166ms)
-✔ another player cannot answer a choice or its timeout (4.34025ms)
-✔ rulebook family single: 3 (1.02625ms)
-✔ rulebook family pair: 15,15 (0.059542ms)
-✔ rulebook family triple: 7,7,7 (0.047916ms)
-✔ rulebook family tripleSingle: 3,3,3,4 (0.056375ms)
-✔ rulebook family triplePair: 9,9,9,3,3 (0.044792ms)
-✔ rulebook family straight: 3,4,5,6,7 (0.044ms)
-✔ rulebook family pairs: 3,3,4,4,5,5 (0.033375ms)
-✔ rulebook family airplane: 3,3,3,4,4,4 (0.029ms)
-✔ rulebook family airplaneSingle: 3,3,3,4,4,4,5,5 (0.089375ms)
-✔ rulebook family airplanePair: 3,3,3,4,4,4,6,6,9,9 (0.082291ms)
-✔ rulebook family fourSingles: 5,5,5,5,3,9 (0.049334ms)
-✔ rulebook family fourSingles: 5,5,5,5,3,3 (0.0405ms)
-✔ rulebook family fourPairs: 9,9,9,9,6,6,8,8 (0.0355ms)
-✔ rulebook family bomb: 15,15,15,15 (0.041291ms)
-✔ rulebook family rocket: 16,17 (0.024417ms)
-✔ illegal rank sequences, wings, double jokers and attached bomb are rejected (0.367667ms)
-✔ comparison requires same family/length; bombs and rocket override (0.157125ms)
-✔ complete legal-action set vs independent subset oracle 0 (2.401583ms)
-✔ complete legal-action set vs independent subset oracle 1 (1.020125ms)
-✔ complete legal-action set vs independent subset oracle 2 (7.386041ms)
-✔ complete legal-action set vs independent subset oracle 3 (5.458709ms)
-✔ complete legal-action set vs independent subset oracle 4 (3.864208ms)
-✔ complete legal-action set vs independent subset oracle 5 (5.260875ms)
-✔ complete legal-action set vs independent subset oracle 6 (4.444708ms)
-✔ complete legal-action set vs independent subset oracle 7 (1.440125ms)
-✔ complete legal-action set vs independent subset oracle 8 (3.667709ms)
-✔ twos are not consecutive with ace when used as non-pair wings (0.0715ms)
-✔ canonical play encoding preserves every rulebook family and rejects permutation duplicates (2.298542ms)
-ℹ tests 68
+✔ failure categories distinguish rejected input and execution fault (1.15375ms)
+✔ optional capture has initial and tail cursors with positive page size (0.373542ms)
+✔ input options describe action values or game-defined construction data (1.68425ms)
+✔ one request identity locates instance, call and input endpoint (0.543ms)
+✔ pause categories contain no input-count limit state (0.144875ms)
+✔ same callback gets each request directly with its own player and observation (3.12075ms)
+✔ a run accepts one action, drains events and returns the exact accepted request (1.01875ms)
+✔ event projection supports different data per player and hidden events (1.387375ms)
+✔ replacing and removing one player binding preserves the others (0.941ms)
+✔ wrong player, stale call and foreign instance cannot validate an action (0.950667ms)
+✔ session-only input uses a separate callback with no fake player action (0.495667ms)
+✔ malformed and illegal actions do not suppress another valid request (0.712958ms)
+✔ cancelled and losing callbacks cannot answer the next request (0.453417ms)
+✔ cancellation ends a pending callback with no accepted action (0.266625ms)
+✔ accepted action survives subsequent event pause, retry and program failure (1.126166ms)
+✔ accepted action survives cancellation during event delivery (0.323833ms)
+✔ mutating callback request metadata cannot change its accepted identity (0.260459ms)
+✔ a game with no session or optional storage capability runs through the basic interface (0.340292ms)
+✔ contract failure after accepting an action preserves that action and closes the game (0.537167ms)
+✔ malformed public validation input is rejected without closing or advancing the game (0.274167ms)
+✔ schema profile rejects value changes, stripping and unknown nested constructors (2.918ms)
+✔ approved structural schemas preserve values over repeated validation (3.085792ms)
+✔ custom checks require explicit trusted approval; equality guard rejects mutation anyway (0.499333ms)
+✔ F4 original transform is rejected before parsing; parser edge cases cannot silently change data (0.140917ms)
+✔ module key registries reject symbols, accessors, inheritance and mismatched handlers (0.1305ms)
+✔ boundary copying does not invoke getters or silently strip host properties (0.142417ms)
+✔ schema inspection does not execute lazy or object-shape getters (0.084ms)
+✔ accepted boundary copies preserve aliases while isolating the caller (0.216875ms)
+✔ trusted approvals cannot override excluded transform and overwrite constructors (0.116708ms)
+✔ diagnostic callbacks are subject to admission too (0.097166ms)
+✔ byte boundary copies cannot retain shared mutable backing storage (0.175334ms)
+✔ new author ports drive complete Dou Dizhu: 1/0 (26.149167ms)
+✔ new author ports drive complete Dou Dizhu: 7/1 (10.963417ms)
+✔ new author ports drive complete Dou Dizhu: 123/2 (12.82425ms)
+✔ all-pass redeals and ordinary three-bid auction remain unchanged (18.605334ms)
+✔ private simultaneous choices preserve the remaining endpoint and reveal bottom later (4.986875ms)
+✔ timeout signals drive a complete game without becoming fake action choices (5.641167ms)
+✔ all timeout defaults and two passes retain rule behavior (5.093ms)
+✔ invalid request, action and session deadline fail before rule mutation (7.054417ms)
+✔ concurrent native games reproduce sequential traces with independent service streams (51.701959ms)
+✔ every advertised legal payload prepares successfully without delivery metadata (10.625833ms)
+✔ all farmer multipliers and springs survive the protocol migration (4.306833ms)
+✔ terminal result has one authoritative source and canonical card encoding stays enforced (5.416375ms)
+✔ native inner SDK uses decision and event ports; seed is explicit controlled setup (21.40025ms)
+✔ complete games use pure action callbacks and independent optional timeout control (108.350708ms)
+✔ session clock advances independently and equality deadline rejects a pure action (0.935875ms)
+✔ action schema rejects session metadata and timeout is never an action option (5.273083ms)
+✔ rulebook family single: 3 (0.875584ms)
+✔ rulebook family pair: 15,15 (0.065167ms)
+✔ rulebook family triple: 7,7,7 (0.044666ms)
+✔ rulebook family tripleSingle: 3,3,3,4 (0.050708ms)
+✔ rulebook family triplePair: 9,9,9,3,3 (0.042833ms)
+✔ rulebook family straight: 3,4,5,6,7 (0.04375ms)
+✔ rulebook family pairs: 3,3,4,4,5,5 (0.033667ms)
+✔ rulebook family airplane: 3,3,3,4,4,4 (0.030084ms)
+✔ rulebook family airplaneSingle: 3,3,3,4,4,4,5,5 (0.080083ms)
+✔ rulebook family airplanePair: 3,3,3,4,4,4,6,6,9,9 (0.091458ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,9 (0.044667ms)
+✔ rulebook family fourSingles: 5,5,5,5,3,3 (0.037541ms)
+✔ rulebook family fourPairs: 9,9,9,9,6,6,8,8 (0.033417ms)
+✔ rulebook family bomb: 15,15,15,15 (0.040167ms)
+✔ rulebook family rocket: 16,17 (0.02025ms)
+✔ illegal rank sequences, wings, double jokers and attached bomb are rejected (0.370042ms)
+✔ comparison requires same family/length; bombs and rocket override (0.197209ms)
+✔ complete legal-action set vs independent subset oracle 0 (2.495125ms)
+✔ complete legal-action set vs independent subset oracle 1 (0.898416ms)
+✔ complete legal-action set vs independent subset oracle 2 (7.853917ms)
+✔ complete legal-action set vs independent subset oracle 3 (4.479042ms)
+✔ complete legal-action set vs independent subset oracle 4 (3.610125ms)
+✔ complete legal-action set vs independent subset oracle 5 (5.501958ms)
+✔ complete legal-action set vs independent subset oracle 6 (4.192375ms)
+✔ complete legal-action set vs independent subset oracle 7 (1.343542ms)
+✔ complete legal-action set vs independent subset oracle 8 (3.726208ms)
+✔ twos are not consecutive with ace when used as non-pair wings (0.172583ms)
+✔ canonical play encoding preserves every rulebook family and rejects permutation duplicates (2.261625ms)
+ℹ tests 75
 ℹ suites 0
-ℹ pass 68
+ℹ pass 75
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 327.254
+ℹ duration_ms 405.039542
 
 > check:boundaries
 > node --experimental-strip-types tools/check_boundaries.ts
 
-PASS: Core/Game contracts separated; no protocol factories; game imports only local implementation/public contracts/Zod
+PASS: three-layer and optional capability dependency graph; public declarations and game imports stay within their allowed paths
 LIMIT: source dependency audit, not a controlled compiler or runtime sandbox proof
 
 > check:schemas
 > node --experimental-strip-types tools/check_schema_admission.ts
 
-PASS: 44 public/game schemas satisfy the pinned value-preserving structural profile
+PASS: 41 public/game schemas satisfy the pinned value-preserving structural profile
 LIMIT: genuine admitted Zod instances and reviewed callback provenance are prerequisites; runtime must use value-equality validation, not arbitrary parse calls.
 
 > check:proof-coverage
 > node --experimental-strip-types tools/check_protocol_coverage.ts --self-test
 
-PASS: 100 public definitions covered by 4 named law groups
+PASS: 68 public definitions covered by 4 named law groups
 OPEN: 4 law groups retain outstanding obligations; coverage is not correctness proof
 PASS: reject missing export
 PASS: reject extra export
@@ -116,9 +123,8 @@ PASS: reject missing evidence
 > check:protocol
 > node evidence/C01/freeze-audit/check.mjs
 
-PASS: Instance and BaseGame each have one driving entrypoint.
-PASS: only event ports deliver notifications; terminal state has no pending delivery.
-PASS: capture is provider-scoped by identity and survives control transfer/close until release.
-SCOPE C01 declarations and consumers; C02/C03 provider conformance.
-PASS: exact method inventories and both loader failure outcomes match the freeze proof.
-PASS: player binding, observation, request ownership, signal recipients and projected events share one contract.
+PASS: ten default entrypoints; functional subpaths expose optional capabilities independently.
+PASS: direct player requests and pure actions; separate optional session callback.
+PASS: one-step Instance/Game run and concrete accepted input survive stop states.
+PASS: current public source and active specifications contain no removed interfaces.
+PASS: Core/Instance are game-neutral; basic modules do not import optional features.

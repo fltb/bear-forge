@@ -1,99 +1,47 @@
-import type { z } from 'zod';
-import type { FixedTable, TableKeys, Outcome, InstanceId, InstanceSnapshot, CallId, CallbackReply, CallbackControl, PauseReason } from '../core/types.ts';
-import type { DecisionIdSchema, ChoiceIdSchema, GameErrorSchema, JsonValueSchema, InputValidationSchema, GameRunLimitsSchema, EventDeliveryIdSchema } from './schemas.ts';
+import type {z} from 'zod';
+import type {FixedTable,TableKeys} from '../internal/types.ts';
+import type {Outcome,InstanceId,PauseReason,CallbackReply,CallbackControl,CallId} from '../instance/types.ts';
+import type {RequestIdSchema,GameErrorSchema,JsonValueSchema,InputValidationSchema,EventDeliveryIdSchema} from './schemas.ts';
 
-export type DecisionId = z.infer<typeof DecisionIdSchema>;
-export type ChoiceId = z.infer<typeof ChoiceIdSchema>;
-export type GameError = z.infer<typeof GameErrorSchema>;
-export type JsonValue = z.infer<typeof JsonValueSchema>;
-export type InputValidation = z.infer<typeof InputValidationSchema>;
-export type GameOutcome<T> = Outcome<T, GameError>;
-export type InputOptions<I extends JsonValue, D extends JsonValue = never> =
-  | { kind: 'exact'; values: I[] }
-  | ([D] extends [never] ? never : { kind: 'construct'; description: D });
-/** One interaction's payload contract. Delivery data and session signals are separate. */
-export type InteractionShape = { request: JsonValue; input: JsonValue; description: JsonValue };
-export type InteractionTable = Record<string, InteractionShape>;
-export type Choice<T extends InteractionTable, A> = {
-  [K in TableKeys<T>]: { id: ChoiceId; actor: A; type: K; request: T[K]['request'] };
+export type RequestId=z.infer<typeof RequestIdSchema>;
+export type GameError=z.infer<typeof GameErrorSchema>;
+export type JsonValue=z.infer<typeof JsonValueSchema>;
+export type InputOptions<A extends JsonValue,D extends JsonValue=never>=
+  | {kind:'exact';values:A[]}
+  | ([D] extends [never]?never:{kind:'construct';description:D});
+export type InputValidation=z.infer<typeof InputValidationSchema>;
+export type ActionTable=Record<string,{request:JsonValue;action:JsonValue;description:JsonValue}>;
+/** Each request names its player and one action type. */
+export type Request<T extends ActionTable,P extends string,V>={
+  [K in TableKeys<T>]:{id:RequestId;player:P;type:K;data:T[K]['request'];observation:V;options:InputOptions<T[K]['action'],T[K]['description']>}
 }[TableKeys<T>];
-export type ChoiceInput<T extends InteractionTable> = {
-  [K in TableKeys<T>]: { type: K; value: T[K]['input'] };
+export type ActionReply<T extends ActionTable>={
+  [K in TableKeys<T>]:{requestId:RequestId;type:K;action:T[K]['action']}
 }[TableKeys<T>];
-/** A pending choice is an actual game-declared input endpoint, not a query filter. */
-export type GameBoundary<T extends InteractionTable, A, R> =
-  | { kind: 'decision'; decisionId: DecisionId; choices: Choice<T, A>[] }
-  | { kind: 'event'; callId: CallId }
-  | { kind: 'ended'; result: R };
-/** Session signals remain domain data; games with none use never. */
-export type GameInput<T extends InteractionTable, D, S> =
-  | { kind: 'choice'; choiceId: ChoiceId; input: ChoiceInput<T>; delivery: D }
-  | ([S] extends [never] ? never : { kind: 'signal'; signal: S });
-export type DescribeChoice<T extends InteractionTable> = {
-  [K in TableKeys<T>]: { decisionId: DecisionId; choiceId: ChoiceId; type: K };
-}[TableKeys<T>];
-export type QueryShape = { input: unknown; output: unknown };
-export type QueryCall<Q extends { [K in keyof Q]: QueryShape }> = {
-  [K in TableKeys<Q>]: { name: K; args: Q[K]['input'] };
-}[TableKeys<Q>];
-/** An input endpoint and its complete payload options. */
-export type DecisionOffer<T extends InteractionTable, A> = {
-  [K in TableKeys<T>]: {
-    choice:{id:ChoiceId;actor:A;type:K;request:T[K]['request']};
-    options:InputOptions<T[K]['input'],T[K]['description']>;
-  };
-}[TableKeys<T>];
-/** A policy selects a payload using one offer and its player observation. */
-export type DecisionPolicy<T extends InteractionTable, A, V> = <const C extends DecisionOffer<T,A>>(
-  offer:C, observation:V, control:CallbackControl
-) => Promise<CallbackReply<T[C['choice']['type']]['input']>>;
-export type GameRequest<T extends InteractionTable, A, V> = {
-  decisionId:DecisionId;
-  observation:V;
-  offers:DecisionOffer<T,A>[];
-  acceptsSignal:boolean;
-};
-export type EventDeliveryId = z.infer<typeof EventDeliveryIdSchema>;
-export type EventDelivery<E> = {id:EventDeliveryId;event:E};
-/** Callbacks registered for one game-defined player key. */
-export type GameBindings<T extends InteractionTable, A, D, S, Player extends string, V, E> = {
-  player:Player;
-  onDecision?: (request:GameRequest<T,A,V>, control:CallbackControl & {player:Player}) => Promise<CallbackReply<GameInput<T,D,S>>>;
-  onEvent?: (delivery:EventDelivery<E>, control:CallbackControl & {player:Player}) => Promise<CallbackReply<null>>;
-};
-export type GameRunLimits = z.infer<typeof GameRunLimitsSchema>;
-export type GameRunOptions = {limits?:GameRunLimits;signal?:AbortSignal};
-export type GameRunStop<T extends InteractionTable, A, R> = {acceptedInputs:number} & (
-  | {kind:'paused';reason:PauseReason;boundary:Exclude<GameBoundary<T,A,R>,{kind:'ended'}>;message?:string}
+export type Accepted<T extends ActionTable,P extends string,C=never>=
+  | {kind:'action';player:P;reply:ActionReply<T>}
+  | ([C] extends [never]?never:{kind:'control';callId:CallId;input:C});
+export type GameState<T extends ActionTable,P extends string,V,R>=
+  | {kind:'request';requests:Request<T,P,V>[]}
+  | {kind:'event';callId:CallId}
   | {kind:'ended';result:R}
-  | {kind:'fault';error:Extract<GameError,{kind:'fault'}>});
-/** Exclusive outer facade of one Instance; no separate mutable game/service state. */
-export type BaseGame<T extends InteractionTable, A, D, S, Player extends string, V, E, R, Q extends { [K in keyof Q]: QueryShape }> = FixedTable<T> & FixedTable<Q> & {
-  readonly id: InstanceId;
-  bind: (bindings: GameBindings<T,A,D,S,Player,V,E> | null) => Promise<GameOutcome<void>>;
-  run: (options?: GameRunOptions) => Promise<GameOutcome<GameRunStop<T,A,R>>>;
-  inspect: () => Promise<GameOutcome<GameBoundary<T, A, R>>>;
-  observe: (input: { player: Player }) => Promise<GameOutcome<V>>;
-  describe: <const C extends DescribeChoice<T>>(input: C) => Promise<GameOutcome<InputOptions<T[C['type']]['input'], T[C['type']]['description']>>>;
-  validate: (input: { player: Player; decisionId: DecisionId; input: GameInput<T, D, S> }) => Promise<GameOutcome<InputValidation>>;
-  query: <const C extends QueryCall<Q>>(call: C) => Promise<GameOutcome<Q[C['name']]['output']>>;
-  fork?: () => Promise<GameOutcome<BaseGame<T, A, D, S, Player, V, E, R, Q>>>;
-  save?: () => Promise<GameOutcome<InstanceSnapshot>>;
-  close: () => Promise<GameOutcome<void>>;
+  | {kind:'fault';error:Extract<GameError,{kind:'fault'}>};
+export type EventDelivery<E>={id:z.infer<typeof EventDeliveryIdSchema>;event:E};
+export type GameBindings<T extends ActionTable,P extends string,V,E>={
+  player:P;
+  onRequest?:<K extends TableKeys<T>>(request:Extract<Request<T,P,V>,{type:K}>,control:CallbackControl)=>Promise<CallbackReply<T[K]['action']>>;
+  onEvent?:(delivery:EventDelivery<E>,control:CallbackControl&{player:P})=>Promise<CallbackReply<null>>;
 };
-/** Neutral search operations: the caller owns algorithms, actors and value meanings. */
-export type StateTransition<S, I, V> = {
-  inspect: (state: S) => Promise<V>;
-  transition: (input: { state: S; input: I }) => Promise<{ state: S; view: V }>;
-};
-export type StateResources<S> = { release: (states: S[]) => Promise<void> };
-export type StateConstruction<S, C, E, R> = { construct: (input: { source: S; config: C; entropy: E }) => Promise<R> };
-export type Evaluation<S, C, V> = { evaluate: (input: { source: S; config: C }) => Promise<V> };
-export type Encoding<S, E> = { encode: (source: S) => Promise<E> };
-export type FactExtraction<S, C, F> = { extract: (input: { source: S; config: C }) => Promise<F[]> };
-export type GameHistory<Setup, Configuration, Input, Update> = {
-  setup: Setup;
-  configuration: Configuration;
-  initial: Update;
-  transitions: { input: Input; output: Update }[];
+/** One rules input per call, followed by event delivery to the next request or end. */
+export type BaseGame<T extends ActionTable,P extends string,V,E,R,C=never>=FixedTable<T>&{
+  readonly id:InstanceId;
+  bind:(bindings:GameBindings<T,P,V,E>|null)=>Promise<Outcome<void,GameError>>;
+  run:(options?:{signal?:AbortSignal})=>Promise<Outcome<{
+    state:GameState<T,P,V,R>;accepted:Accepted<T,P,C>|null;pause:PauseReason|null;
+  },GameError>>;
+  inspect:()=>Promise<Outcome<GameState<T,P,V,R>,GameError>>;
+  observe:(input:{player:P})=>Promise<Outcome<V,GameError>>;
+  describe:<K extends TableKeys<T>>(input:{requestId:RequestId;type:K})=>Promise<Outcome<InputOptions<T[K]['action'],T[K]['description']>,GameError>>;
+  validate:(input:{player:P;reply:ActionReply<T>})=>Promise<Outcome<InputValidation,GameError>>;
+  close:()=>Promise<Outcome<void,GameError>>;
 };

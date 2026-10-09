@@ -1,10 +1,9 @@
-# 协议审计
+# 当前协议审核
 
-- Core/Instance 保持通用执行与端口；BaseGame/GameContract 负责玩家归属和投影。
-- Instance 与 BaseGame 各有 bind/run 这一控制路径；程序通知统一通过 event 端口。
-- 玩家绑定按字符串键独立替换/移除。同一函数绑定不同玩家时，control.player 与对应投影共同确定调用。
-- 输入请求包含自己的 observation/offers 和 acceptsSignal；纯信号等待有显式 signalPlayers。respond 接收 player 以验证领域目标。
-- event/playerEvent 分别声明，projectEvent 可以返回不同载荷或跳过。重试使用稳定事件身份，消费者按玩家去重。
-- 两个 loader 返回 Outcome。capture(id) 在 transfer 和 close 后保留读取路径，release 明确回收。
+三层依赖与功能路径已明确。默认入口十个类型；保存、分支、捕捉和会话控制按需导入。动作不含时间，请求直接指定 player，describe/validate 对应同一个 Action。
 
-命令：npm run check、python3 evidence/C01/verify-migration.py。原生消费者覆盖多人、信号、事件、竞争、取消和完整斗地主；生产提供者履约由 C02/C03 验收。完整证明见 [协议证明](../protocol-freeze-proof.md)。
+Instance 与 Game 都单步推进。Game 返回具体接受结果，后续事件暂停、取消、程序或契约故障均保留该结果。事件按玩家投影，游戏程序负责多方输入封存和结算。
+
+装载配对责任由调用方承担；绑定器只通过公开 Instance 接管控制。原生消费者按公开 IO/GameContract 实际运行。完整规则、异常路径、子路径依赖与导出清理分别由对应测试和审计覆盖。
+
+当前验收见 [convergence-acceptance.md](../convergence-acceptance.md)，证明见 [protocol-freeze-proof.md](../protocol-freeze-proof.md)。

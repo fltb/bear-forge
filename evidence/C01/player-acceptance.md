@@ -1,3 +1,5 @@
+> Historical acceptance evidence. Current requirements: convergence-acceptance.md.
+
 # Player 协议验收
 
 1. `npm run typecheck`：按 player 绑定/替换/移除；observe、validate 使用 player；请求只有本玩家入口和观察；可见事件独立类型；纯信号接收玩家有声明。拒绝缺失 player、错误 player、错误可见事件类型。

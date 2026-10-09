@@ -1,4 +1,6 @@
-import type { Core, IO, PortCall, PortReturn, ProgramModule, InstancePersistence, InstanceCapture } from '../../packages/contracts/src/core/types.ts';
+import type { Core, IO, PortCall, PortReturn, ProgramModule } from '../../packages/contracts/src/core/types.ts';
+import type {InstancePersistence} from '@bear-forge/contracts/persistence';
+import type {InstanceCapture} from '@bear-forge/contracts/capture';
 import { z } from 'zod';
 
 type Ports = {
@@ -92,8 +94,8 @@ export async function boundExecution(core:Core<string,Ports,number>) {
       return {kind:'reply',value:null};
     },
   });
-  const result=await instance.run({limits:{maxReplies:2}});
-  if(result.ok&&result.value.kind==='paused')await instance.inspect();
+  const result=await instance.run();
+  if(result.ok&&result.value.pause!==null)await instance.inspect();
   // @ts-expect-error handler return must match its port
   await instance.bind({read:async()=>({kind:'reply',value:null})});
   // @ts-expect-error callbacks must explicitly reply or pause

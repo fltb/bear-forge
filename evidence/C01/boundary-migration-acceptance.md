@@ -1,3 +1,5 @@
+> Historical acceptance evidence. Current requirements: convergence-acceptance.md.
+
 # Core / Instance / BaseGame migration acceptance
 
 User scope: replace the old boundary, preserve equivalent capabilities, migrate the complete Dou Dizhu author package, prove the declarations, and report exact fields and dataflow. Production execution and binding are accepted in C02/C03.

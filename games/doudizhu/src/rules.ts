@@ -38,15 +38,15 @@ export function validAction(s: State, actor: Seat, a: Action): boolean {
   if (a.kind !== 'play' || !contained(a.cards, s.hands[actor]) || !classify(a.cards).some(p => key(p) === key(a.pattern))) return false;
   return !s.last || beats(a.pattern, s.last.play.pattern);
 }
-export function validateInput(s: State, input: Input): { actor: Seat; action: Action; at: number; slotId: string } {
+export function validateInput(s: State, input: Exclude<Input,{kind:'clock'}>): { actor: Seat; action: Action; at: number; slotId: string } {
   const pending = s.stage;
   if (!pending || s.phase === 'ended') throw new RuleViolation('no decision pending');
   if (input.kind === 'action') {
     const slot = pending.slots.find(x => x.slotId === input.slotId && x.actor === input.actor);
-    if (!slot || input.stageId !== pending.stageId || input.receivedAtGameTime < s.now || input.receivedAtGameTime >= slot.deadline!.atGameTime) throw new RuleViolation('stale, unauthorized or expired decision');
+    if (!slot || input.stageId !== pending.stageId || s.now >= slot.deadline!.atGameTime) throw new RuleViolation('stale, unauthorized or expired decision');
     const actor = slot.actor as Seat, action = input.action;
     if (!validAction(s, actor, action)) throw new RuleViolation('illegal action');
-    return { actor, action, at: input.receivedAtGameTime, slotId: slot.slotId };
+    return { actor, action, at: s.now, slotId: slot.slotId };
   }
   if (input.inputType !== 'timeout' || input.boundaryKey !== pending.boundaryKey) throw new RuleViolation('invalid host input');
   const timeout = input.payload, slot = pending.slots.find(x => x.slotId === timeout.slotId);
@@ -57,6 +57,10 @@ export function validateInput(s: State, input: Input): { actor: Seat; action: Ac
 }
 /** Mutates only this program's owned game state, after complete validation. */
 export function apply(s: State, input: Input) {
+  if(input.kind==='clock'){
+    if(!Number.isSafeInteger(input.at)||input.at<s.now)throw new RuleViolation('clock moved backwards');
+    s.now=input.at;return;
+  }
   const { actor, action: a, at, slotId } = validateInput(s, input);
   s.now = at; s.boundarySequence++; s.delta = { consumed: [slotId], invalidated: [] };
   s.stage!.slots = s.stage!.slots.filter(x => x.slotId !== slotId); s.stage!.boundaryKey = `boundary${s.boundarySequence}`;

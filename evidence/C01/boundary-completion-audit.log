@@ -1,9 +1,8 @@
-PASS unchanged rule baseline: games/doudizhu/src/rules.ts
-PASS unchanged rule baseline: games/doudizhu/src/patterns.ts
-PASS unchanged rule baseline: tests/doudizhu/oracle.ts
-PASS unchanged rule baseline: tests/doudizhu/rules.test.ts
-PASS every public declaration file reproduced exactly in the field report
-PASS old boundaries removed and replacement capabilities exported
-PASS no compatibility entrypoints in active source
-PASS final full check counts and no skipped tests
-SCOPE C01 declarations, player consumers and native game author source; C02/C03 verify production execution, binding and persistence
+PASS unchanged domain/oracle baseline: games/doudizhu/src/patterns.ts
+PASS unchanged domain/oracle baseline: tests/doudizhu/oracle.ts
+PASS unchanged domain/oracle baseline: tests/doudizhu/rules.test.ts
+PASS original rules unchanged after normalizing the explicit session-clock migration
+PASS declaration appendix reproduces every current contract and internal type file
+PASS simplified interfaces and optional capability entrypoints replace old public surfaces
+PASS final full check: 75 tests, 41 admitted schemas, 68 definitions across capability subpaths
+SCOPE C01 public protocols, author game and executable native consumers; C02/C03 production providers

@@ -1,7 +1,4 @@
-export * from './core/schemas.ts';
-export * from './core/types.ts';
-export * from './game/schemas.ts';
-export * from './game/types.ts';
-export * from './authoring/types.ts';
-export * from './runtime/schemas.ts';
-export * from './runtime/types.ts';
+export type {Core,Program,ProgramModule,IO} from './core/types.ts';
+export type {Instance} from './instance/types.ts';
+export type {BaseGame,Request,InputOptions} from './game/types.ts';
+export type {GameModule,GameSDK} from './authoring/types.ts';

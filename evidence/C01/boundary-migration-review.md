@@ -1,53 +1,39 @@
-# Instance 两侧协议：字段与需求映射
+# 三层与横向能力：当前字段报告
 
-C01 交付公共协议、斗地主作者程序及 SDK、类型消费者、逐玩家原生消费者与测试。协议构造和归纳证明见 [协议证明](protocol-freeze-proof.md)。C02/C03 验收生产执行、绑定与完整保存分支。
+默认包入口公开十个日常类型。完整功能按 core/instance/game/authoring/session/persistence/branching/capture/loading 子路径导入；内部类型工具不作为包入口导出。
 
-## 边界与数据流
+## 审核矩阵
 
-| 部分 | 持有状态 | 公开约定 |
+| 层 | 必需能力 | 可选能力 |
 | --- | --- | --- |
-| Core | 执行提供者资源 | start；装载器提供 persistence/capture |
-| Instance | 程序、栈、堆、闭包、SDK 状态、待决调用、记录 | bind/run/inspect/fork?/transfer/close |
-| GameSDK | Instance 内的领域局部 | 声明端口的类型化库函数 |
-| GameContract | 纯定义 | schemas/ports/finish/playerFor/observe/projectEvent/inputs/queries |
-| BaseGame | Instance 控制权、玩家绑定及活动驱动 | bind/run 和边界读取；fork?/save?/close |
-| 用户/脚本/模型 | 对应 player 的策略或界面状态 | observation/offers/playerEvent；回调返回 GameInput |
-| 会话/训练/搜索 | 时钟、策略记忆、搜索树、实验配置 | 控制句柄、可选分析能力与同类型子游戏 |
+| Core | 程序、端口、创建 | 装载时提供保存与捕捉资源 |
+| Instance | bind/run/inspect/close，单次端口接受 | fork、保存、记录；transfer 用于接线 |
+| BaseGame | 玩家请求、纯动作、合法动作、事件与接受反馈 | 会话控制、同类型分支、实例保存 |
 
-路径：ProgramModule → loader → Core.start → Instance → binder → BaseGame。游戏内部 program → SDK → IO.call；外侧按 contract 投影到已绑定 player；合法回复经 respond 编码后回到同一个 Instance。
+程序与 SDK 在 Instance 内；纯 GameContract、玩家/会话回调在外侧。规则状态与随机流由程序持有，外侧只持有驱动和可重建投影。
 
-## 玩家协议
+## 主要变化与业务依据
 
-player 是游戏 schema 定义的字符串键；actor 是行动主体。playerFor(actor) 明确归属，多个 actor 可以由一个 player 控制。BaseGame.bind({player,onDecision?,onEvent?}) 替换该玩家项；只传 player 删除该项，null 清空全部。绑定函数引用可以复用。
+| 内容 | 当前表达 | 验证 |
+| --- | --- | --- |
+| 输入入口 | Request{id,player,type,data,observation,options} | 多玩家与多请求测试 |
+| 请求身份 | id={instanceId,callId,key} | 错玩家、过期、跨实例拒绝 |
+| 玩家回复 | onRequest 返回纯 Action | ActionSchema 拒绝时间字段 |
+| 选项和检查 | exact/construct 对应同一动作类型 | 斗地主完整合法动作 oracle |
+| 时间与超时 | 独立 SessionControl.bindControl | 完整超时对局和截止点测试 |
+| 一步推进 | 接受一个规则输入，交付随后事件，到下一请求 | 原生 Game.run 实际测试 |
+| 接受反馈 | 具体请求、玩家、动作或控制输入 | 后续暂停、取消、程序/契约故障保留 |
+| 基本运行 | 无保存、分支、会话能力仍可运行 | basic interface 测试 |
+| 原生差分入口 | 同一 ProgramModule.run + IO | 实际游戏与消费者 |
+| 模块隔离 | 基础模块不依赖可选目录 | 源码依赖图检查 |
 
-输入请求为 {decisionId,observation,offers,acceptsSignal}。observation=observe(view,player)，offers 仅来自归属该玩家的 choices；signalPlayers 指定可回答信号的玩家。respond(view,input,player) 检查完整游戏输入并转换为端口返回。DecisionPolicy(offer,observation,control) 选择载荷，绑定函数补充交付数据。
+训练、搜索、分析的业务类型由各上层模块按自身输入输出声明；基础包只提供它们实际消费的游戏和执行协议。
 
-event 是原始事件，playerEvent 是玩家可见事件。projectEvent(event,player) 返回 {event:playerEvent} 或 null。同一源事件可以对不同玩家产生不同载荷。事件去重按 (player,instanceId,callId,index)，原始事件和玩家字符串序决定交付顺序。
+## 斗地主
 
-首个合法回复接受后撤销其余租约；非法回复保持规则现场。每次 run 的驱动状态和绑定表属于外部控制，fork/restore 后重新绑定。规则状态始终在 Instance。
+纯动作保持 bid/double/redouble/pass/play。内部动作输入去掉接收时间，规则校验读取 state.now。可选控制 clock 单调推进 now；timeout 校验期限并执行既有默认行为。原有叫分、加倍、出牌、牌型与计分路径保留；规则文件中只调整时间接入，验证脚本反向归一化后核对原基线哈希。
 
-## 斗地主真实路径
-
-ProgramSetup={game:Setup,seed:uint32}。program.ts 创建 SDK；随机局部、规则 state、事件发布位置 published 均在程序现场。SDK.decision 通过声明端口请求 Frame→Input；SDK.event 发布 AuditEvent[]→null。确认后推进 published，结束前完成全部事件交付。
-
-GameContract.receive 从 Frame 投影边界；playerFor 将 Seat 映射到同一 Seat；observe 投影本人手牌和可见历史；projectEvent 按原始 audience 投影 Event，历史与主动通知使用同一函数。respond 校验当前 player 对应 slot，将 Action 与 delivery 编码为 Input；timeout 用 slot/deadline 构造，内部 boundaryKey 从当前 Frame 补出。
-
-原生消费者把同一个 onDecision/onEvent 分别绑定到三个席位，使用玩家请求完成正常及超时对局；每席位事件与最终可见历史逐条一致。跨玩家动作和超时被拒绝。rules.ts、patterns.ts、独立 oracle.ts、rules.test.ts 保持迁移基线哈希。
-
-## 表达与组合证明索引
-
-| 命题 | 构造 |
-| --- | --- |
-| 计算与交互表达 | 受控 TS 内部计算，await IO.call 表达输入/输出等待，return 表达终局 |
-| 唯一规则状态 | 外侧纯投影来自 InstanceStop；清空缓存后可重建 |
-| 玩家数据分离 | choices 按 playerFor 分组，observe 和 projectEvent 使用当前绑定键 |
-| 输入归属与一次接受 | 当前租约、choice 归属或 signalPlayers、schema 和 respond 检查先于 Accept |
-| 保存/分支充分 | 复制完整现场并隔离对象；相同未来输入下按归约步数证明轨迹等价 |
-| 搜索闭合 | 同类型 fork/read/bind/run/close 可递归组合任意有限树 |
-| 原生/受控路径 | 相同程序和显式回复，在语义保持前提下得到相同调用与结果轨迹 |
-| 捕捉生命周期 | 提供者 capture 用稳定 id 读取，关闭后显式释放引用 |
-
-详细前提、状态转换和不变量见 protocol-freeze-proof.md；所有导出与法则关联保存在 protocol-proof-index.json。
+原生消费者以公开 IO 启动真实程序，并实现对应 BaseGame 接线用于协议验收。三个席位共享函数而分别收到自己的数据；正常和超时对局均完成，主动事件与最终玩家历史一致。生产受控执行和完整保存分支由 C02/C03 验收。
 
 ## 15 个压力场景
 
@@ -59,8 +45,8 @@ GameContract.receive 从 Frame 投影边界；playerFor 将 Seat 映射到同一
 | 恢复后再分支 | restore→Instance→bind→fork |
 | 私密选择分支 | 内侧封存，外侧纯可见投影 |
 | 死亡目标 | respond/apply 同一规则拒绝 |
-| 错人、错类型、非法数量 | player 归属检查、关联输入类型与内侧规则 |
-| 重复或过期请求 | 当前 InstanceId/callId 校验 |
+| 错人、错类型、非法数量 | 请求 player、请求身份及内侧动作规则 |
+| 重复或过期请求 | 当前 instanceId/callId/key 校验 |
 | 错分支凭证 | fork 新 InstanceId；旧凭证不匹配 |
 | 同名对象重新进场 | 内侧实例 ID 与卡名分离 |
 | 相同场面不同控制流 | 保存完整现场，不由 view 猜 PC |
@@ -70,109 +56,203 @@ GameContract.receive 从 Frame 投影边界；playerFor 将 Seat 映射到同一
 | 条件尾部跳过 | 普通内侧分支，不加 Core 领域规则 |
 
 
-## 全部公共声明逐字段附录
+## 声明与内部类型工具原文
 
 ### packages/contracts/src/authoring/types.ts
 
 ```ts
-import type { z } from 'zod';
-import type { FixedTable, ReadView, PortShape, ProgramModule } from '../core/types.ts';
-import type { InteractionTable, Choice, GameInput, InputOptions, QueryShape } from '../game/types.ts';
-
-/** Domain types are supplied by the game; execution locals are not schema slots. */
-export type GameTypes = {
-  setup: unknown;
-  ports: Record<string, PortShape>;
-  programResult: unknown;
-  view: unknown;
-  interactions: InteractionTable;
-  actor: unknown;
-  delivery: unknown;
-  signal: unknown;
-  player: string;
-  observation: unknown;
-  event: unknown;
-  playerEvent: unknown;
-  result: unknown;
+import type {z} from 'zod';
+import type {FixedTable,ReadView,TableKeys} from '../internal/types.ts';
+import type {PortShape,ProgramModule} from '../core/types.ts';
+import type {ActionTable,InputOptions} from '../game/types.ts';
+export type GameTypes={
+  setup:unknown;ports:Record<string,PortShape>;programResult:unknown;view:unknown;
+  actions:ActionTable;player:string;observation:unknown;event:unknown;playerEvent:unknown;result:unknown;
+  control:never|{request:unknown;input:unknown};
 };
-export type Submission<G extends GameTypes> = GameInput<G['interactions'], G['delivery'], G['signal']>;
-export type DecisionData<G extends GameTypes> = {
-  view: G['view'];
-  choices: Choice<G['interactions'], G['actor']>[];
-  signalPlayers: G['player'][];
-};
-export type TerminalData<G extends GameTypes> = {
-  view: G['view'];
-  result: G['result'];
-};
-export type PreparedReturn<T> = { valid: false; reason: string } | { valid: true; output: T };
-/** External ports have one game protocol role. Stateful services execute inside the program. */
-export type GamePorts<G extends GameTypes> = FixedTable<G['ports']> & {
-  [K in keyof G['ports']]:
-    | {
-        kind: 'event';
-        receive: (input: ReadView<G['ports'][K]['input']>) => { events: G['event'][]; output: G['ports'][K]['output'] };
+export type RequestData<G extends GameTypes>={
+  [K in TableKeys<G['actions']>]:{key:string;player:G['player'];type:K;data:G['actions'][K]['request']}
+}[TableKeys<G['actions']>];
+export type Prepared<T>={valid:false;reason:string}|{valid:true;output:T};
+export type GameContract<G extends GameTypes>={
+  schemas:FixedTable<G['actions']>&{[K in 'view'|'player'|'observation'|'event'|'playerEvent'|'result']:z.ZodType<G[K]>}&{
+    actions:{[K in keyof G['actions']]:{[F in keyof G['actions'][K]]:z.ZodType<G['actions'][K][F]>}};
+  };
+  ports:FixedTable<G['ports']>&{[K in keyof G['ports']]:
+    | {kind:'event';receive:(input:ReadView<G['ports'][K]['input']>)=>{events:G['event'][];output:G['ports'][K]['output']}}
+    | {kind:'request';receive:(input:ReadView<G['ports'][K]['input']>)=>{view:G['view'];requests:RequestData<G>[]};
+       respond:<A extends TableKeys<G['actions']>>(view:ReadView<G['view']>,request:ReadView<Extract<RequestData<G>,{type:A}>>,action:ReadView<G['actions'][A]['action']>)=>Prepared<G['ports'][K]['output']>;
+       session?:[G['control']] extends [never]?never:{
+         requestSchema:z.ZodType<G['control']['request']>;inputSchema:z.ZodType<G['control']['input']>;
+         request:(view:ReadView<G['view']>)=>G['control']['request'];
+         respond:(view:ReadView<G['view']>,input:ReadView<G['control']['input']>)=>Prepared<G['ports'][K]['output']>;
+       };
       }
-    | {
-        kind: 'decision';
-        receive: (input: ReadView<G['ports'][K]['input']>) => DecisionData<G>;
-        respond: (view: ReadView<G['view']>, input: ReadView<Submission<G>>, player: G['player']) => PreparedReturn<G['ports'][K]['output']>;
-      };
-};
-export type GameSchemas<G extends GameTypes> = FixedTable<G['interactions']> & {
-  [K in 'view' | 'actor' | 'delivery' | 'signal' | 'player' | 'observation' | 'event' | 'playerEvent' | 'result']: z.ZodType<G[K]>;
-} & {
-  interactions: {
-    [K in keyof G['interactions']]: {
-      [F in keyof G['interactions'][K]]: z.ZodType<G['interactions'][K][F]>;
-    };
   };
+  finish:(result:ReadView<G['programResult']>)=>{view:G['view'];result:G['result']};
+  observe:(view:ReadView<G['view']>,player:G['player'])=>G['observation'];
+  projectEvent:(event:ReadView<G['event']>,player:G['player'])=>{event:G['playerEvent']}|null;
+  inputs:{[K in keyof G['actions']]:{
+    options:z.ZodType<InputOptions<G['actions'][K]['action'],G['actions'][K]['description']>>;
+    describe:(view:ReadView<G['view']>,request:ReadView<Extract<RequestData<G>,{type:K}>>)=>InputOptions<G['actions'][K]['action'],G['actions'][K]['description']>;
+  }};
 };
-export type GameInputDefinitions<G extends GameTypes> = {
-  [K in keyof G['interactions']]: {
-    options: z.ZodType<InputOptions<G['interactions'][K]['input'], G['interactions'][K]['description']>>;
-    describe: (view: ReadView<G['view']>, choice: ReadView<{
-      id: string; actor: G['actor']; type: K; request: G['interactions'][K]['request'];
-    }>) => InputOptions<G['interactions'][K]['input'], G['interactions'][K]['description']>;
-  };
-};
-export type GameQueryDefinition<G extends GameTypes, Q extends QueryShape> = {
-  input: z.ZodType<Q['input']>;
-  output: z.ZodType<Q['output']>;
-  run: (view: ReadView<G['view']>, input: ReadView<Q['input']>) => Q['output'];
-};
-/** run executes the game; all adapter handlers are pure projections/conversions. */
-export type GameContract<G extends GameTypes, Q extends { [K in keyof Q]: QueryShape }> = {
-  schemas: GameSchemas<G>;
-  ports: GamePorts<G>;
-  finish: (result: ReadView<G['programResult']>) => TerminalData<G>;
-  playerFor: (actor: ReadView<G['actor']>) => G['player'];
-  observe: (view: ReadView<G['view']>, player: G['player']) => G['observation'];
-  projectEvent: (event: ReadView<G['event']>, player: G['player']) => { event: G['playerEvent'] } | null;
-  inputs: GameInputDefinitions<G>;
-  queries: { [K in keyof Q]: GameQueryDefinition<G, Q[K]> } & FixedTable<Q>;
-};
-/** Author package joins one program with the shared inner/outer contract. */
-export type GameModule<G extends GameTypes, Q extends { [K in keyof Q]: QueryShape }> = {
-  program: ProgramModule<G['setup'], G['ports'], G['programResult']>;
-  contract: GameContract<G, Q>;
-};
-/** Inner library signature: typed functions over the exact declared IO ports. */
-export type GameSDK<P extends { [K in keyof P]: PortShape }> = FixedTable<P> & {
-  [K in keyof P]: (input: P[K]['input']) => Promise<P[K]['output']>;
+export type GameModule<G extends GameTypes>={program:ProgramModule<G['setup'],G['ports'],G['programResult']>;contract:GameContract<G>};
+export type GameSDK<P extends {[K in keyof P]:PortShape}>=FixedTable<P>&{[K in keyof P]:(input:P[K]['input'])=>Promise<P[K]['output']>};
+```
+
+### packages/contracts/src/branching/types.ts
+
+```ts
+import type {Outcome,InstanceError} from '../instance/types.ts';
+export type Branching<S,E=InstanceError>={fork:()=>Promise<Outcome<S,E>>};
+```
+
+### packages/contracts/src/capture/schemas.ts
+
+```ts
+import {z} from 'zod';
+export const RecordCursorSchema=z.number().safe().nonnegative();
+export const RecordReadSchema=z.strictObject({after:RecordCursorSchema.nullable(),limit:z.number().safe().positive()});
+```
+
+### packages/contracts/src/capture/types.ts
+
+```ts
+import type {z} from 'zod';
+import type {RecordReadSchema} from './schemas.ts';
+import type {PortShape,PortCall,PortReturn} from '../core/types.ts';
+import type {InstanceId,CallId,Outcome,InstanceFault} from '../instance/types.ts';
+export type RecordRead = z.infer<typeof RecordReadSchema>;
+export type InstanceRecord<S, P extends { [K in keyof P]: PortShape }, R> =
+  | { sequence: number; kind: 'started'; setup: S }
+  | { sequence: number; kind: 'called'; callId: CallId; call: PortCall<P> }
+  | { sequence: number; kind: 'returned'; callId: CallId; reply: PortReturn<P> }
+  | { sequence: number; kind: 'completed'; result: R }
+  | { sequence: number; kind: 'faulted'; error: InstanceFault };
+export type InstanceCapture<S, P extends { [K in keyof P]: PortShape }, R> = {
+  read: (instanceId: InstanceId, input: RecordRead) => Promise<Outcome<{
+    records: InstanceRecord<S, P, R>[];
+    next: number | null;
+  }>>;
+  release: (instanceId: InstanceId) => Promise<Outcome<void>>;
 };
 ```
 
-### packages/contracts/src/core/schemas.ts
+### packages/contracts/src/core/types.ts
+
+```ts
+import type { z } from 'zod';
+import type { FixedTable, TableKeys } from '../internal/types.ts';
+import type { Instance, Outcome } from '../instance/types.ts';
+export type PortShape = { input: unknown; output: unknown };
+export type PortCall<P extends { [K in keyof P]: PortShape }> = {
+  [K in TableKeys<P>]: { port: K; input: P[K]['input'] };
+}[TableKeys<P>];
+export type PortReturn<P extends { [K in keyof P]: PortShape }> = {
+  [K in TableKeys<P>]: { port: K; output: P[K]['output'] };
+}[TableKeys<P>];
+export type IO<P extends { [K in keyof P]: PortShape }> = {
+  call: <const A extends PortCall<P>>(call: A) => Promise<P[A['port']]['output']>;
+};
+export type Program<S, P extends { [K in keyof P]: PortShape }, R> =
+  (setup: S, io: IO<P>) => Promise<R>;
+export type ProgramSchemas<S, P extends { [K in keyof P]: PortShape }, R> = FixedTable<P> & {
+  setup: z.ZodType<S>;
+  result: z.ZodType<R>;
+  ports: { [K in keyof P]: { input: z.ZodType<P[K]['input']>; output: z.ZodType<P[K]['output']> } };
+};
+export type ProgramModule<S, P extends { [K in keyof P]: PortShape }, R> = {
+  schemas: ProgramSchemas<S, P, R>;
+  run: Program<S, P, R>;
+};
+export type Core<S, P extends { [K in keyof P]: PortShape }, R> = {
+  start: (setup: S) => Promise<Outcome<Instance<P, R>>>;
+};
+```
+
+### packages/contracts/src/game/schemas.ts
+
+```ts
+import {z} from 'zod';
+import {InstanceIdSchema,CallIdSchema} from '../instance/schemas.ts';
+export const RequestIdSchema=z.strictObject({instanceId:InstanceIdSchema,callId:CallIdSchema,key:z.string()});
+export const JsonValueSchema=z.json();
+export const InputValidationSchema=z.discriminatedUnion('valid',[
+  z.strictObject({valid:z.literal(true)}),z.strictObject({valid:z.literal(false),reason:z.string()}),
+]);
+export const InputOptionsSchema=z.discriminatedUnion('kind',[
+  z.strictObject({kind:z.literal('exact'),values:z.array(JsonValueSchema)}),
+  z.strictObject({kind:z.literal('construct'),description:JsonValueSchema}),
+]);
+export const GameErrorSchema=z.discriminatedUnion('kind',[
+  z.strictObject({kind:z.literal('rejected'),code:z.enum(['invalid_input','invalid_argument','request_mismatch','snapshot_incompatible']),message:z.string()}),
+  z.strictObject({kind:z.literal('conflict'),code:z.enum(['game_busy','game_closed','game_ended','view_unavailable']),message:z.string()}),
+  z.strictObject({kind:z.literal('unsupported'),code:z.literal('capability_unavailable'),message:z.string()}),
+  z.strictObject({kind:z.literal('fault'),code:z.enum(['invalid_output','program_failed','budget_exceeded']),message:z.string()}),
+]);
+export const EventDeliveryIdSchema=z.strictObject({instanceId:InstanceIdSchema,callId:CallIdSchema,index:z.number().safe().nonnegative()});
+```
+
+### packages/contracts/src/game/types.ts
+
+```ts
+import type {z} from 'zod';
+import type {FixedTable,TableKeys} from '../internal/types.ts';
+import type {Outcome,InstanceId,PauseReason,CallbackReply,CallbackControl,CallId} from '../instance/types.ts';
+import type {RequestIdSchema,GameErrorSchema,JsonValueSchema,InputValidationSchema,EventDeliveryIdSchema} from './schemas.ts';
+
+export type RequestId=z.infer<typeof RequestIdSchema>;
+export type GameError=z.infer<typeof GameErrorSchema>;
+export type JsonValue=z.infer<typeof JsonValueSchema>;
+export type InputOptions<A extends JsonValue,D extends JsonValue=never>=
+  | {kind:'exact';values:A[]}
+  | ([D] extends [never]?never:{kind:'construct';description:D});
+export type InputValidation=z.infer<typeof InputValidationSchema>;
+export type ActionTable=Record<string,{request:JsonValue;action:JsonValue;description:JsonValue}>;
+/** Each request names its player and one action type. */
+export type Request<T extends ActionTable,P extends string,V>={
+  [K in TableKeys<T>]:{id:RequestId;player:P;type:K;data:T[K]['request'];observation:V;options:InputOptions<T[K]['action'],T[K]['description']>}
+}[TableKeys<T>];
+export type ActionReply<T extends ActionTable>={
+  [K in TableKeys<T>]:{requestId:RequestId;type:K;action:T[K]['action']}
+}[TableKeys<T>];
+export type Accepted<T extends ActionTable,P extends string,C=never>=
+  | {kind:'action';player:P;reply:ActionReply<T>}
+  | ([C] extends [never]?never:{kind:'control';callId:CallId;input:C});
+export type GameState<T extends ActionTable,P extends string,V,R>=
+  | {kind:'request';requests:Request<T,P,V>[]}
+  | {kind:'event';callId:CallId}
+  | {kind:'ended';result:R}
+  | {kind:'fault';error:Extract<GameError,{kind:'fault'}>};
+export type EventDelivery<E>={id:z.infer<typeof EventDeliveryIdSchema>;event:E};
+export type GameBindings<T extends ActionTable,P extends string,V,E>={
+  player:P;
+  onRequest?:<K extends TableKeys<T>>(request:Extract<Request<T,P,V>,{type:K}>,control:CallbackControl)=>Promise<CallbackReply<T[K]['action']>>;
+  onEvent?:(delivery:EventDelivery<E>,control:CallbackControl&{player:P})=>Promise<CallbackReply<null>>;
+};
+/** One rules input per call, followed by event delivery to the next request or end. */
+export type BaseGame<T extends ActionTable,P extends string,V,E,R,C=never>=FixedTable<T>&{
+  readonly id:InstanceId;
+  bind:(bindings:GameBindings<T,P,V,E>|null)=>Promise<Outcome<void,GameError>>;
+  run:(options?:{signal?:AbortSignal})=>Promise<Outcome<{
+    state:GameState<T,P,V,R>;accepted:Accepted<T,P,C>|null;pause:PauseReason|null;
+  },GameError>>;
+  inspect:()=>Promise<Outcome<GameState<T,P,V,R>,GameError>>;
+  observe:(input:{player:P})=>Promise<Outcome<V,GameError>>;
+  describe:<K extends TableKeys<T>>(input:{requestId:RequestId;type:K})=>Promise<Outcome<InputOptions<T[K]['action'],T[K]['description']>,GameError>>;
+  validate:(input:{player:P;reply:ActionReply<T>})=>Promise<Outcome<InputValidation,GameError>>;
+  close:()=>Promise<Outcome<void,GameError>>;
+};
+```
+
+### packages/contracts/src/instance/schemas.ts
 
 ```ts
 import { z } from 'zod';
 
 export const InstanceIdSchema = z.uuid().brand<'InstanceId'>();
 export const CallIdSchema = z.uuid().brand<'CallId'>();
-export const InstanceSnapshotSchema = z.strictObject({
-  snapshotId: z.uuid().brand<'InstanceSnapshotId'>(),
-});
 export const InstanceErrorSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('rejected'),
@@ -195,36 +275,50 @@ export const InstanceErrorSchema = z.discriminatedUnion('kind', [
     message: z.string(),
   }),
 ]);
-export const RecordCursorSchema = z.number().safe().nonnegative();
-export const RecordReadSchema = z.strictObject({
-  after: RecordCursorSchema.nullable(),
-  limit: z.number().safe().positive(),
-});
-
-export const PauseReasonSchema = z.enum(['requested', 'unbound', 'limit', 'cancelled', 'handler_failed', 'invalid_reply']);
-export const InstanceRunLimitsSchema = z.strictObject({maxReplies:z.number().safe().nonnegative().optional()});
+export const PauseReasonSchema = z.enum(['requested', 'unbound', 'cancelled', 'handler_failed', 'invalid_reply']);
 export const CallbackPauseSchema = z.strictObject({kind:z.literal('pause')});
 ```
 
-### packages/contracts/src/core/types.ts
+### packages/contracts/src/instance/types.ts
 
 ```ts
 import type { z } from 'zod';
-import type {
-  InstanceIdSchema, CallIdSchema, InstanceSnapshotSchema,
-  InstanceErrorSchema, RecordReadSchema, PauseReasonSchema, InstanceRunLimitsSchema, CallbackPauseSchema,
-} from './schemas.ts';
-
+import type { PortShape, PortCall } from '../core/types.ts';
+import type { FixedTable } from '../internal/types.ts';
+import type { InstanceIdSchema, CallIdSchema, InstanceErrorSchema, PauseReasonSchema, CallbackPauseSchema } from './schemas.ts';
 export type InstanceId = z.infer<typeof InstanceIdSchema>;
 export type CallId = z.infer<typeof CallIdSchema>;
-export type InstanceSnapshot = z.infer<typeof InstanceSnapshotSchema>;
 export type InstanceError = z.infer<typeof InstanceErrorSchema>;
 export type InstanceFault = Extract<InstanceError, { kind: 'fault' }>;
-export type RecordRead = z.infer<typeof RecordReadSchema>;
 export type Outcome<T, E = InstanceError> =
   | { ok: true; value: T }
   | { ok: false; error: E };
+export type PauseReason = z.infer<typeof PauseReasonSchema>;
+export type CallbackPause = z.infer<typeof CallbackPauseSchema>;
+export type CallbackReply<T> = {kind:'reply';value:T} | CallbackPause;
+export type CallbackControl = {signal:AbortSignal};
+export type PortBindings<P extends { [K in keyof P]: PortShape }> = FixedTable<P> & {
+  [K in keyof P]?: (request:{instanceId:InstanceId;callId:CallId;input:P[K]['input']}, control:CallbackControl) => Promise<CallbackReply<P[K]['output']>>;
+};
+export type InstanceStop<P extends { [K in keyof P]: PortShape }, R> =
+  | { kind: 'call'; callId: CallId; call: PortCall<P> }
+  | { kind: 'done'; result: R }
+  | { kind: 'fault'; error: InstanceFault };
+export type InstanceRunStop<P extends {[K in keyof P]:PortShape},R> = {accepted:boolean;state:InstanceStop<P,R>;pause:PauseReason|null};
+export type Instance<P extends { [K in keyof P]: PortShape }, R> = {
+  readonly id: InstanceId;
+  transfer: () => Promise<Outcome<Instance<P, R>>>;
+  bind: (bindings: PortBindings<P> | null) => Promise<Outcome<void>>;
+  run: (options?: {signal?:AbortSignal}) => Promise<Outcome<InstanceRunStop<P, R>>>;
+  inspect: () => Promise<Outcome<InstanceStop<P, R>>>;
+  fork?: () => Promise<Outcome<Instance<P, R>>>;
+  close: () => Promise<Outcome<void>>;
+};
+```
 
+### packages/contracts/src/internal/types.ts
+
+```ts
 export type ReadView<T> = T extends object
   ? { readonly [K in keyof T]: ReadView<T[K]> }
   : T;
@@ -240,221 +334,9 @@ export type FixedTable<T> = true extends IsUnion<T> ? never
     ? [OptionalKeys<T>] extends [never] ? unknown : never
     : never;
 export type TableKeys<T> = FixedTable<T> extends never ? never : keyof T & string;
-
-export type PortShape = { input: unknown; output: unknown };
-export type PortCall<P extends { [K in keyof P]: PortShape }> = {
-  [K in TableKeys<P>]: { port: K; input: P[K]['input'] };
-}[TableKeys<P>];
-export type PortReturn<P extends { [K in keyof P]: PortShape }> = {
-  [K in TableKeys<P>]: { port: K; output: P[K]['output'] };
-}[TableKeys<P>];
-/** Correlate the entire argument, including when the port key is a union. */
-export type IO<P extends { [K in keyof P]: PortShape }> = {
-  call: <const A extends PortCall<P>>(call: A) => Promise<P[A['port']]['output']>;
-};
-export type PauseReason = z.infer<typeof PauseReasonSchema>;
-export type CallbackPause = z.infer<typeof CallbackPauseSchema>;
-export type CallbackReply<T> = {kind:'reply';value:T} | CallbackPause;
-/** Host control only: never serialized into an Instance or sent to its program. */
-export type CallbackControl = {signal:AbortSignal};
-export type InstanceRunLimits = z.infer<typeof InstanceRunLimitsSchema>;
-export type InstanceRunOptions = {limits?:InstanceRunLimits;signal?:AbortSignal};
-export type PortBindings<P extends { [K in keyof P]: PortShape }> = FixedTable<P> & {
-  [K in keyof P]?: (request:{instanceId:InstanceId;callId:CallId;input:P[K]['input']}, control:CallbackControl) => Promise<CallbackReply<P[K]['output']>>;
-};
-export type InstanceRunStop<P extends { [K in keyof P]: PortShape }, R> = {acceptedReplies:number} & (
-  | {kind:'paused';reason:PauseReason;call:Extract<InstanceStop<P,R>,{kind:'call'}>;message?:string}
-  | Extract<InstanceStop<P,R>,{kind:'done'|'fault'}>);
-export type Program<S, P extends { [K in keyof P]: PortShape }, R> =
-  (setup: S, io: IO<P>) => Promise<R>;
-export type ProgramSchemas<S, P extends { [K in keyof P]: PortShape }, R> = FixedTable<P> & {
-  setup: z.ZodType<S>;
-  result: z.ZodType<R>;
-  ports: { [K in keyof P]: { input: z.ZodType<P[K]['input']>; output: z.ZodType<P[K]['output']> } };
-};
-export type ProgramModule<S, P extends { [K in keyof P]: PortShape }, R> = {
-  schemas: ProgramSchemas<S, P, R>;
-  run: Program<S, P, R>;
-};
-export type InstanceStop<P extends { [K in keyof P]: PortShape }, R> =
-  | { kind: 'call'; callId: CallId; call: PortCall<P> }
-  | { kind: 'done'; result: R }
-  | { kind: 'fault'; error: InstanceFault };
-/** A handle to one complete execution; no mutable heap or stack is exported. */
-export type Instance<P extends { [K in keyof P]: PortShape }, R> = {
-  readonly id: InstanceId;
-  transfer: () => Promise<Outcome<Instance<P, R>>>;
-  bind: (bindings: PortBindings<P> | null) => Promise<Outcome<void>>;
-  run: (options?: InstanceRunOptions) => Promise<Outcome<InstanceRunStop<P, R>>>;
-  inspect: () => Promise<Outcome<InstanceStop<P, R>>>;
-  fork?: () => Promise<Outcome<Instance<P, R>>>;
-  close: () => Promise<Outcome<void>>;
-};
-/** Bound to one admitted program; start runs to a stable stop before returning. */
-export type Core<S, P extends { [K in keyof P]: PortShape }, R> = {
-  start: (setup: S) => Promise<Outcome<Instance<P, R>>>;
-};
-/** Saves the complete execution including controlled SDK/device locals; no opaque host state. */
-export type InstancePersistence<P extends { [K in keyof P]: PortShape }, R> = {
-  save: (instance: Instance<P, R>) => Promise<Outcome<InstanceSnapshot>>;
-  restore: (snapshot: InstanceSnapshot) => Promise<Outcome<Instance<P, R>>>;
-  release: (snapshot: InstanceSnapshot) => Promise<Outcome<void>>;
-};
-export type InstanceRecord<S, P extends { [K in keyof P]: PortShape }, R> =
-  | { sequence: number; kind: 'started'; setup: S }
-  | { sequence: number; kind: 'called'; callId: CallId; call: PortCall<P> }
-  | { sequence: number; kind: 'returned'; callId: CallId; reply: PortReturn<P> }
-  | { sequence: number; kind: 'completed'; result: R }
-  | { sequence: number; kind: 'faulted'; error: InstanceFault };
-/** Provider-scoped audit authority, independent of transferable execution handles. */
-export type InstanceCapture<S, P extends { [K in keyof P]: PortShape }, R> = {
-  read: (instanceId: InstanceId, input: RecordRead) => Promise<Outcome<{
-    records: InstanceRecord<S, P, R>[];
-    next: number | null;
-  }>>;
-  release: (instanceId: InstanceId) => Promise<Outcome<void>>;
-};
 ```
 
-### packages/contracts/src/game/schemas.ts
-
-```ts
-import { z } from 'zod';
-
-import { InstanceIdSchema, CallIdSchema } from '../core/schemas.ts';
-
-export const DecisionIdSchema = z.strictObject({ instanceId: InstanceIdSchema, callId: CallIdSchema });
-export const ChoiceIdSchema = z.string();
-export const JsonValueSchema = z.json();
-export const InputValidationSchema = z.discriminatedUnion('valid', [
-  z.strictObject({ valid: z.literal(true) }),
-  z.strictObject({ valid: z.literal(false), reason: z.string() }),
-]);
-export const InputOptionsSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('exact'), values: z.array(JsonValueSchema) }),
-  z.strictObject({ kind: z.literal('construct'), description: JsonValueSchema }),
-]);
-export const GameErrorSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('rejected'), code: z.enum(['invalid_input', 'invalid_argument', 'decision_mismatch', 'choice_not_found', 'snapshot_incompatible']), message: z.string() }),
-  z.strictObject({ kind: z.literal('conflict'), code: z.enum(['game_busy', 'game_closed', 'game_ended', 'view_unavailable']), message: z.string() }),
-  z.strictObject({ kind: z.literal('unsupported'), code: z.literal('capability_unavailable'), message: z.string() }),
-  z.strictObject({ kind: z.literal('fault'), code: z.enum(['invalid_output', 'program_failed', 'budget_exceeded']), message: z.string() }),
-]);
-
-
-export const GameRunLimitsSchema = z.strictObject({maxInputs:z.number().safe().nonnegative().optional()});
-export const EventDeliveryIdSchema = z.strictObject({
-  instanceId:InstanceIdSchema,
-  callId:CallIdSchema,
-  index:z.number().safe().nonnegative(),
-});
-```
-
-### packages/contracts/src/game/types.ts
-
-```ts
-import type { z } from 'zod';
-import type { FixedTable, TableKeys, Outcome, InstanceId, InstanceSnapshot, CallId, CallbackReply, CallbackControl, PauseReason } from '../core/types.ts';
-import type { DecisionIdSchema, ChoiceIdSchema, GameErrorSchema, JsonValueSchema, InputValidationSchema, GameRunLimitsSchema, EventDeliveryIdSchema } from './schemas.ts';
-
-export type DecisionId = z.infer<typeof DecisionIdSchema>;
-export type ChoiceId = z.infer<typeof ChoiceIdSchema>;
-export type GameError = z.infer<typeof GameErrorSchema>;
-export type JsonValue = z.infer<typeof JsonValueSchema>;
-export type InputValidation = z.infer<typeof InputValidationSchema>;
-export type GameOutcome<T> = Outcome<T, GameError>;
-export type InputOptions<I extends JsonValue, D extends JsonValue = never> =
-  | { kind: 'exact'; values: I[] }
-  | ([D] extends [never] ? never : { kind: 'construct'; description: D });
-/** One interaction's payload contract. Delivery data and session signals are separate. */
-export type InteractionShape = { request: JsonValue; input: JsonValue; description: JsonValue };
-export type InteractionTable = Record<string, InteractionShape>;
-export type Choice<T extends InteractionTable, A> = {
-  [K in TableKeys<T>]: { id: ChoiceId; actor: A; type: K; request: T[K]['request'] };
-}[TableKeys<T>];
-export type ChoiceInput<T extends InteractionTable> = {
-  [K in TableKeys<T>]: { type: K; value: T[K]['input'] };
-}[TableKeys<T>];
-/** A pending choice is an actual game-declared input endpoint, not a query filter. */
-export type GameBoundary<T extends InteractionTable, A, R> =
-  | { kind: 'decision'; decisionId: DecisionId; choices: Choice<T, A>[] }
-  | { kind: 'event'; callId: CallId }
-  | { kind: 'ended'; result: R };
-/** Session signals remain domain data; games with none use never. */
-export type GameInput<T extends InteractionTable, D, S> =
-  | { kind: 'choice'; choiceId: ChoiceId; input: ChoiceInput<T>; delivery: D }
-  | ([S] extends [never] ? never : { kind: 'signal'; signal: S });
-export type DescribeChoice<T extends InteractionTable> = {
-  [K in TableKeys<T>]: { decisionId: DecisionId; choiceId: ChoiceId; type: K };
-}[TableKeys<T>];
-export type QueryShape = { input: unknown; output: unknown };
-export type QueryCall<Q extends { [K in keyof Q]: QueryShape }> = {
-  [K in TableKeys<Q>]: { name: K; args: Q[K]['input'] };
-}[TableKeys<Q>];
-/** An input endpoint and its complete payload options. */
-export type DecisionOffer<T extends InteractionTable, A> = {
-  [K in TableKeys<T>]: {
-    choice:{id:ChoiceId;actor:A;type:K;request:T[K]['request']};
-    options:InputOptions<T[K]['input'],T[K]['description']>;
-  };
-}[TableKeys<T>];
-/** A policy selects a payload using one offer and its player observation. */
-export type DecisionPolicy<T extends InteractionTable, A, V> = <const C extends DecisionOffer<T,A>>(
-  offer:C, observation:V, control:CallbackControl
-) => Promise<CallbackReply<T[C['choice']['type']]['input']>>;
-export type GameRequest<T extends InteractionTable, A, V> = {
-  decisionId:DecisionId;
-  observation:V;
-  offers:DecisionOffer<T,A>[];
-  acceptsSignal:boolean;
-};
-export type EventDeliveryId = z.infer<typeof EventDeliveryIdSchema>;
-export type EventDelivery<E> = {id:EventDeliveryId;event:E};
-/** Callbacks registered for one game-defined player key. */
-export type GameBindings<T extends InteractionTable, A, D, S, Player extends string, V, E> = {
-  player:Player;
-  onDecision?: (request:GameRequest<T,A,V>, control:CallbackControl & {player:Player}) => Promise<CallbackReply<GameInput<T,D,S>>>;
-  onEvent?: (delivery:EventDelivery<E>, control:CallbackControl & {player:Player}) => Promise<CallbackReply<null>>;
-};
-export type GameRunLimits = z.infer<typeof GameRunLimitsSchema>;
-export type GameRunOptions = {limits?:GameRunLimits;signal?:AbortSignal};
-export type GameRunStop<T extends InteractionTable, A, R> = {acceptedInputs:number} & (
-  | {kind:'paused';reason:PauseReason;boundary:Exclude<GameBoundary<T,A,R>,{kind:'ended'}>;message?:string}
-  | {kind:'ended';result:R}
-  | {kind:'fault';error:Extract<GameError,{kind:'fault'}>});
-/** Exclusive outer facade of one Instance; no separate mutable game/service state. */
-export type BaseGame<T extends InteractionTable, A, D, S, Player extends string, V, E, R, Q extends { [K in keyof Q]: QueryShape }> = FixedTable<T> & FixedTable<Q> & {
-  readonly id: InstanceId;
-  bind: (bindings: GameBindings<T,A,D,S,Player,V,E> | null) => Promise<GameOutcome<void>>;
-  run: (options?: GameRunOptions) => Promise<GameOutcome<GameRunStop<T,A,R>>>;
-  inspect: () => Promise<GameOutcome<GameBoundary<T, A, R>>>;
-  observe: (input: { player: Player }) => Promise<GameOutcome<V>>;
-  describe: <const C extends DescribeChoice<T>>(input: C) => Promise<GameOutcome<InputOptions<T[C['type']]['input'], T[C['type']]['description']>>>;
-  validate: (input: { player: Player; decisionId: DecisionId; input: GameInput<T, D, S> }) => Promise<GameOutcome<InputValidation>>;
-  query: <const C extends QueryCall<Q>>(call: C) => Promise<GameOutcome<Q[C['name']]['output']>>;
-  fork?: () => Promise<GameOutcome<BaseGame<T, A, D, S, Player, V, E, R, Q>>>;
-  save?: () => Promise<GameOutcome<InstanceSnapshot>>;
-  close: () => Promise<GameOutcome<void>>;
-};
-/** Neutral search operations: the caller owns algorithms, actors and value meanings. */
-export type StateTransition<S, I, V> = {
-  inspect: (state: S) => Promise<V>;
-  transition: (input: { state: S; input: I }) => Promise<{ state: S; view: V }>;
-};
-export type StateResources<S> = { release: (states: S[]) => Promise<void> };
-export type StateConstruction<S, C, E, R> = { construct: (input: { source: S; config: C; entropy: E }) => Promise<R> };
-export type Evaluation<S, C, V> = { evaluate: (input: { source: S; config: C }) => Promise<V> };
-export type Encoding<S, E> = { encode: (source: S) => Promise<E> };
-export type FactExtraction<S, C, F> = { extract: (input: { source: S; config: C }) => Promise<F[]> };
-export type GameHistory<Setup, Configuration, Input, Update> = {
-  setup: Setup;
-  configuration: Configuration;
-  initial: Update;
-  transitions: { input: Input; output: Update }[];
-};
-```
-
-### packages/contracts/src/runtime/schemas.ts
+### packages/contracts/src/loading/schemas.ts
 
 ```ts
 import { z } from 'zod';
@@ -464,41 +346,63 @@ export const CompiledProgramDataSchema = z.strictObject({
 });
 ```
 
-### packages/contracts/src/runtime/types.ts
+### packages/contracts/src/loading/types.ts
 
 ```ts
-import type { z } from 'zod';
-import type { Core, ProgramModule, PortShape, FixedTable, InstancePersistence, InstanceCapture, Instance, Outcome } from '../core/types.ts';
-import type { BaseGame, QueryShape, GameOutcome } from '../game/types.ts';
-import type { GameContract, GameTypes } from '../authoring/types.ts';
-import type { CompiledProgramDataSchema } from './schemas.ts';
+import type {z} from 'zod';
+import type {Core,ProgramModule,PortShape} from '../core/types.ts';
+import type {FixedTable} from '../internal/types.ts';
+import type {Instance,Outcome} from '../instance/types.ts';
+import type {InstancePersistence,InstanceSnapshot} from '../persistence/types.ts';
+import type {InstanceCapture} from '../capture/types.ts';
+import type {BaseGame,GameError} from '../game/types.ts';
+import type {GameContract,GameTypes} from '../authoring/types.ts';
+import type {SessionControl} from '../session/types.ts';
+import type {CompiledProgramDataSchema} from './schemas.ts';
+declare const programWitness:unique symbol;
+export type CompiledProgram<S,P extends {[K in keyof P]:PortShape},R>=z.infer<typeof CompiledProgramDataSchema>&FixedTable<P>&{
+ readonly [programWitness]:(types:{setup:S;ports:P;result:R})=>{setup:S;ports:P;result:R};
+};
+export type LoadedCore<S,P extends {[K in keyof P]:PortShape},R>={core:Core<S,P,R>;persistence?:InstancePersistence<P,R>;capture?:InstanceCapture<S,P,R>};
+export type NativeCoreLoader={load:<S,P extends {[K in keyof P]:PortShape},R>(program:ProgramModule<S,P,R>)=>Promise<Outcome<LoadedCore<S,P,R>>>};
+export type ControlledCoreLoader={load:<S,P extends {[K in keyof P]:PortShape},R>(program:CompiledProgram<S,P,R>)=>Promise<Outcome<LoadedCore<S,P,R>>>};
+export type GameHandle<G extends GameTypes>=BaseGame<G['actions'],G['player'],G['observation'],G['playerEvent'],G['result'],G['control']['input']>&{
+ fork?:()=>Promise<Outcome<GameHandle<G>,GameError>>;
+ save?:()=>Promise<Outcome<InstanceSnapshot,GameError>>;
+}&([G['control']] extends [never]?{}:Partial<SessionControl<G['control']['request'],G['control']['input']>>);
+/** The caller supplies the matching author contract for the loaded program. */
+export type BaseGameBinder={bind:<G extends GameTypes>(input:{instance:Instance<G['ports'],G['programResult']>;contract:GameContract<G>;persistence?:InstancePersistence<G['ports'],G['programResult']>})=>Promise<Outcome<GameHandle<G>,GameError>>};
+```
 
-declare const programWitness: unique symbol;
-export type CompiledProgram<S, P extends { [K in keyof P]: PortShape }, R> =
-  z.infer<typeof CompiledProgramDataSchema> & FixedTable<P> & {
-    readonly [programWitness]: (types: { setup: S; ports: P; result: R }) => { setup: S; ports: P; result: R };
-  };
-export type LoadedCore<S, P extends { [K in keyof P]: PortShape }, R> = {
-  core: Core<S, P, R>;
-  persistence?: InstancePersistence<P, R>;
-  capture?: InstanceCapture<S, P, R>;
+### packages/contracts/src/persistence/schemas.ts
+
+```ts
+import {z} from 'zod';
+export const InstanceSnapshotSchema=z.strictObject({snapshotId:z.uuid().brand<'InstanceSnapshotId'>()});
+```
+
+### packages/contracts/src/persistence/types.ts
+
+```ts
+import type {z} from 'zod';
+import type {InstanceSnapshotSchema} from './schemas.ts';
+import type {PortShape} from '../core/types.ts';
+import type {Instance,Outcome} from '../instance/types.ts';
+export type InstanceSnapshot = z.infer<typeof InstanceSnapshotSchema>;
+export type InstancePersistence<P extends { [K in keyof P]: PortShape }, R> = {
+  save: (instance: Instance<P, R>) => Promise<Outcome<InstanceSnapshot>>;
+  restore: (snapshot: InstanceSnapshot) => Promise<Outcome<Instance<P, R>>>;
+  release: (snapshot: InstanceSnapshot) => Promise<Outcome<void>>;
 };
-export type ControlledCoreLoader = {
-  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: CompiledProgram<S, P, R>) => Promise<Outcome<LoadedCore<S, P, R>>>;
-};
-/** Differential execution uses the same author source, without claiming continuation snapshots. */
-export type NativeCoreLoader = {
-  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: ProgramModule<S, P, R>) => Promise<Outcome<LoadedCore<S, P, R>>>;
-};
-export type GameHandle<G extends GameTypes, Q extends { [K in keyof Q]: QueryShape }> = BaseGame<
-  G['interactions'], G['actor'], G['delivery'], G['signal'], G['player'], G['observation'], G['playerEvent'], G['result'], Q
->;
-/** Transfers exclusive driving authority; does not start another program or own services. */
-export type BaseGameBinder = {
-  bind: <G extends GameTypes, Q extends { [K in keyof Q]: QueryShape }>(input: {
-    instance: Instance<G['ports'], G['programResult']>;
-    contract: GameContract<G, Q>;
-    persistence?: InstancePersistence<G['ports'], G['programResult']>;
-  }) => Promise<GameOutcome<GameHandle<G, Q>>>;
+```
+
+### packages/contracts/src/session/types.ts
+
+```ts
+import type {CallbackReply,CallbackControl,CallId,InstanceId,Outcome} from '../instance/types.ts';
+import type {GameError} from '../game/types.ts';
+/** Optional host/session input, separate from all player actions. */
+export type SessionControl<Q,I>={
+  bindControl:(handler:((request:{instanceId:InstanceId;callId:CallId;data:Q},control:CallbackControl)=>Promise<CallbackReply<I>>)|null)=>Promise<Outcome<void,GameError>>;
 };
 ```

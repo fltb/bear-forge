@@ -28,7 +28,8 @@ export const SlotSchema = z.strictObject({
 });
 export const StageSchema = z.strictObject({stageId:StageIdSchema,boundaryKey:BoundaryKeySchema,hostInputs:z.array(z.literal('timeout')),slots:z.array(SlotSchema).min(1)}).refine(v=>new Set(v.slots.map(s=>s.slotId)).size===v.slots.length);
 export const InputSchema = z.discriminatedUnion('kind',[
-  z.strictObject({kind:z.literal('action'),stageId:StageIdSchema,slotId:SlotIdSchema,actor:SeatSchema,receivedAtGameTime:CounterSchema,action:ActionSchema}),
+  z.strictObject({kind:z.literal('clock'),at:CounterSchema}),
+  z.strictObject({kind:z.literal('action'),stageId:StageIdSchema,slotId:SlotIdSchema,actor:SeatSchema,action:ActionSchema}),
   z.strictObject({kind:z.literal('host'),boundaryKey:BoundaryKeySchema,inputType:z.literal('timeout'),gameTime:CounterSchema,payload:TimeoutPayloadSchema}),
 ]);
 const nums = z.strictObject({ '0': CounterSchema, '1': CounterSchema, '2': CounterSchema });
@@ -86,17 +87,17 @@ export type Frame = z.infer<typeof FrameSchema>;
 export type Pending = z.infer<typeof PendingSchema>;
 export type Observed = z.infer<typeof ObservedSchema>;
 
-export const DeliverySchema = z.strictObject({receivedAtGameTime:CounterSchema});
-export const SignalSchema = InputSchema.options[1].omit({boundaryKey:true});
+export const SessionInputSchema = z.discriminatedUnion('kind',[
+  z.strictObject({kind:z.literal('clock'),at:CounterSchema}),
+  z.strictObject({kind:z.literal('timeout'),slotId:SlotIdSchema,at:CounterSchema}),
+]);
+export const SessionRequestSchema=z.strictObject({now:CounterSchema,deadlines:z.array(z.strictObject({slotId:SlotIdSchema,at:CounterSchema}))});
+export type SessionInput=z.infer<typeof SessionInputSchema>;
+export type SessionRequest=z.infer<typeof SessionRequestSchema>;
 export const ProgramSetupSchema = z.strictObject({game:SetupSchema,seed:z.number().int().min(0).max(4294967295)});
 export type ProgramSetup = z.infer<typeof ProgramSetupSchema>;
 export const programSchemas = {
   setup:ProgramSetupSchema, result:FrameSchema,
-  ports:{
-    decision:{input:FrameSchema,output:InputSchema},
-    event:{input:z.array(AuditEventSchema),output:z.null()},
-  },
+  ports:{decision:{input:FrameSchema,output:InputSchema},event:{input:z.array(AuditEventSchema),output:z.null()}},
 };
-export type Delivery = z.infer<typeof DeliverySchema>;
-export type Signal = z.infer<typeof SignalSchema>;
 export type Slot = z.infer<typeof SlotSchema>;

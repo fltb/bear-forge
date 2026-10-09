@@ -1,12 +1,12 @@
 {
   "checkpoint": "C00",
   "kind": "documentation",
-  "summary": "Player-scoped architecture, requirements and protocol documentation audited; archived originals preserved. State ownership, player projection and checkpoint acceptance synchronized.",
+  "summary": "Current three-layer and horizontal-capability documentation audited; actions are independent from session time; source, checklist, proof references and archive integrity synchronized.",
   "replay_command": "python3 tools/audit_c00.py && python3 tools/check_project.py && python3 tools/check_project.py --self-test",
   "artifacts": [
     {
       "path": "README.md",
-      "sha256": "73603e170a1cbc2fcbf24e6224885e1b216b95313e07cdcff5da61662e71f974"
+      "sha256": "b9ac20bd1b1a2629587e942941f9faa94c0bb857ff03c8f6bd32e79211c6fd71"
     },
     {
       "path": "AGENTS.md",
@@ -14,11 +14,11 @@
     },
     {
       "path": "docs/requirements.md",
-      "sha256": "146dd9b56f199970e336c395b3058eb6ef82f61c561397523233a56f06ff50d8"
+      "sha256": "15d8a95bb889d0e652ae684b4ff9e21300c2ec905d2e74b31930b2296fd74932"
     },
     {
       "path": "docs/architecture.md",
-      "sha256": "e0e345b44d374e196b3f82c5db6cc5e4aa5a7e78ce574ce723450fbc08960f70"
+      "sha256": "823f1f0dec7f3fea7a8c494b8804889f0f5b2e67e005e007a0fdaa0acdc89be9"
     },
     {
       "path": "docs/workflow.md",
@@ -46,19 +46,19 @@
     },
     {
       "path": "docs/protocol.md",
-      "sha256": "2fc23f80930aa5353b17a26d2b9fc98779798d6ae7d09b447da0d9d0c7a5ce7a"
+      "sha256": "db23a7d899a51a4386831fc1421843986fdcaae63e02940a73faf712f250f430"
     },
     {
       "path": "docs/doudizhu.md",
-      "sha256": "21a35f85195d6db7cfdf2178896e995b3ec6d8b2f0339b2d60c19f2e7afd1b5c"
+      "sha256": "b6102b1099f7403544da2ee6c3c127e94c33ccdf094f98e36c10f968bcc6ca30"
     },
     {
       "path": "docs/plan.md",
-      "sha256": "6c38e6d07d1f2d63c020447d7cdda0efdc9c2c7a06e8fb73a549b3cdc8d1746a"
+      "sha256": "15b1a08209064da0c5e09f4dad66a9a64ddbb827092b254b79fc60d245aff127"
     },
     {
       "path": "docs/controlled-program-spec.md",
-      "sha256": "d56c4b4c06bafd0fe1a5f8dda3df1dd1a02fcf0772a0c62717dcc1d61404ceaa"
+      "sha256": "03b66dab0a9f36f22f8c519155990d6bc51368b083012e4d17dfa4a9b5386bf5"
     }
   ],
   "checks": [

@@ -35,7 +35,7 @@
       },
       "evidence": "evidence/C01/report.json",
       "blocker": null,
-      "next_action": "Player protocol and native consumer migration accepted. Continue C01-02 module reuse review and C01-04 implementation acceptance planning under the fixed player protocol."
+      "next_action": "Three-layer convergence accepted: pure actions, optional session control, single-step acceptance feedback and complete native Dou Dizhu. C01-02/04 remain module-reuse and production acceptance planning."
     },
     "C02": {
       "status": "pending",
@@ -338,6 +338,11 @@
       "date": "2026-10-09",
       "source": "用户要求完整实施 player 方案并清除混合状态和防御性表达",
       "change": "Player-scoped binding, observation, requests and event projection; explicit signal recipients; migrate author contracts, Dou Dizhu, consumers, proofs and active docs. C01 declarations and author package scope."
+    },
+    {
+      "date": "2026-10-09",
+      "source": "User accepted horizontal capability split, then clarified actions contain no time; active goal implements the new boundary.",
+      "change": "Reopen C01-03/05. Simplify requests, direct player assignment and one-step run; separate optional session input and persistence/branch/capture; move policy/analysis helpers out of base public surface. Verify complete native game and update all current documents."
     }
   ]
 }

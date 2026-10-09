@@ -9,10 +9,11 @@ const root=resolve('.'),base=resolve('packages/contracts/src'),entry=resolve(bas
 const config=ts.readConfigFile('tsconfig.json',ts.sys.readFile);
 if(config.error)throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText,'\n'));
 const options=ts.parseJsonConfigFileContent(config.config,ts.sys,root).options;
-const program=ts.createProgram([entry],options),checker=program.getTypeChecker();
-const source=program.getSourceFile(entry);assert.ok(source);
-const moduleSymbol=checker.getSymbolAtLocation(source);assert.ok(moduleSymbol);
-const definitions=checker.getExportsOfModule(moduleSymbol).map(symbol=>{
+const pkg=JSON.parse(readFileSync('packages/contracts/package.json','utf8'));
+const entries:string[]=[...new Set<string>(Object.values(pkg.exports) as string[])].map(path=>resolve('packages/contracts',path));
+const program=ts.createProgram(entries,options),checker=program.getTypeChecker();
+const symbols=entries.flatMap(entry=>{const source=program.getSourceFile(entry);assert.ok(source);const symbol=checker.getSymbolAtLocation(source);assert.ok(symbol);return checker.getExportsOfModule(symbol);});
+const definitions=[...new Map(symbols.map(symbol=>[symbol.name,symbol])).values()].map(symbol=>{
   const target=symbol.flags&ts.SymbolFlags.Alias?checker.getAliasedSymbol(symbol):symbol;
   const decl=target.declarations?.[0];assert.ok(decl);
   const file=resolve(decl.getSourceFile().fileName);assert.ok(file.startsWith(base+'/'));

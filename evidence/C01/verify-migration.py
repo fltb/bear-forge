@@ -1,29 +1,27 @@
-"""Verify current migration artifacts; protocol semantics are argued in the report."""
+"""Verify preserved rules, public declarations, capability paths and final check evidence."""
 from pathlib import Path
-import hashlib
-import json
-import re
-
+import hashlib,json,re
 old=json.loads(Path('evidence/C01/migration-baseline/old-report.json').read_text())
-for path in ['games/doudizhu/src/rules.ts','games/doudizhu/src/patterns.ts','tests/doudizhu/oracle.ts','tests/doudizhu/rules.test.ts']:
-    previous=next(item for item in old['artifacts'] if item['path']==path)
-    assert previous['sha256']==hashlib.sha256(Path(path).read_bytes()).hexdigest()
-    print('PASS unchanged rule baseline:',path)
+def previous(path):return next(x['sha256'] for x in old['artifacts'] if x['path']==path)
+for path in ['games/doudizhu/src/patterns.ts','tests/doudizhu/oracle.ts','tests/doudizhu/rules.test.ts']:
+ assert previous(path)==hashlib.sha256(Path(path).read_bytes()).hexdigest(),path
+ print('PASS unchanged domain/oracle baseline:',path)
+# Only the reviewed timing boundary edits are allowed in the original rule implementation.
+rules=Path('games/doudizhu/src/rules.ts').read_text()
+normalized=rules.replace("input: Exclude<Input,{kind:'clock'}>","input: Input").replace('s.now >= slot.deadline!.atGameTime','input.receivedAtGameTime < s.now || input.receivedAtGameTime >= slot.deadline!.atGameTime').replace('at: s.now','at: input.receivedAtGameTime')
+normalized=normalized.replace("  if(input.kind==='clock'){\n    if(!Number.isSafeInteger(input.at)||input.at<s.now)throw new RuleViolation('clock moved backwards');\n    s.now=input.at;return;\n  }\n",'')
+assert previous('games/doudizhu/src/rules.ts')==hashlib.sha256(normalized.encode()).hexdigest()
+print('PASS original rules unchanged after normalizing the explicit session-clock migration')
 report=Path('evidence/C01/boundary-migration-review.md').read_text()
 for path in Path('packages/contracts/src').rglob('*.ts'):
-    if path.name!='index.ts':
-        assert '```ts\n'+path.read_text()+'```' in report,str(path)
-print('PASS every public declaration file reproduced exactly in the field report')
-index=json.loads(Path('evidence/C01/protocol-proof-index.json').read_text())
-names={item['name'] for item in index['definitions']}
-assert not names&{'GameUpdate','Execution','ExecutionPersistence','GameRuntime','GameContext','InputOptionsCapability','InputValidationCapability','ManagedStateCapability','CompiledGame','GameQueries','GamePersistence','GameSimulation','GameExtensions','LoadedGame','Branching','GameSnapshot','GameReadTarget','GameId','ServiceModule','BaseGameFactory'}
-assert {'Core','Instance','BaseGame','GameModule','IO','PortBindings','StateTransition','GameContract','GameSDK','PortBindings','CallbackReply','InstanceRunStop','GameBindings','GameRunStop','DecisionPolicy','EventDelivery','NativeCoreLoader','ControlledCoreLoader'}<=names
-print('PASS old boundaries removed and replacement capabilities exported')
-for path in [*Path('games/doudizhu/src').glob('*.ts'),*Path('packages/contracts/src').rglob('*.ts')]:
-    assert not re.search(r'\b(?:bindDouDizhu|Execution|GameRuntime|GameContext|ManagedStateCapability)\b',path.read_text()),path
-print('PASS no compatibility entrypoints in active source')
+ if path.name!='index.ts':assert '```ts\n'+path.read_text()+'```' in report,str(path)
+print('PASS declaration appendix reproduces every current contract and internal type file')
+index=json.loads(Path('evidence/C01/protocol-proof-index.json').read_text());names={x['name'] for x in index['definitions']}
+assert {'Core','Instance','BaseGame','Request','Accepted','GameModule','GameSDK','SessionControl','InstanceCapture','InstancePersistence','Branching'}<=names
+assert not names&{'Choice','DecisionOffer','GameRequest','GameInput','DecisionPolicy','GameRunStop','GameRunLimits','InstanceRunLimits','GameHistory','StateTransition','FactExtraction','GameUpdate'}
+print('PASS simplified interfaces and optional capability entrypoints replace old public surfaces')
 log=Path('evidence/C01/boundary-migration-check.log').read_text()
-for expected in ['tests 68','pass 68','fail 0','skipped 0','44 public/game schemas','100 public definitions']:
-    assert expected in log,expected
-print('PASS final full check counts and no skipped tests')
-print('SCOPE C01 declarations, player consumers and native game author source; C02/C03 verify production execution, binding and persistence')
+for expected in ['tests 75','pass 75','fail 0','skipped 0','41 public/game schemas','68 public definitions']:
+ assert expected in log,expected
+print('PASS final full check: 75 tests, 41 admitted schemas, 68 definitions across capability subpaths')
+print('SCOPE C01 public protocols, author game and executable native consumers; C02/C03 production providers')

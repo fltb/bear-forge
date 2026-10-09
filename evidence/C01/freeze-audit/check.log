@@ -1,6 +1,5 @@
-PASS: Instance and BaseGame each have one driving entrypoint.
-PASS: only event ports deliver notifications; terminal state has no pending delivery.
-PASS: capture is provider-scoped by identity and survives control transfer/close until release.
-SCOPE C01 declarations and consumers; C02/C03 provider conformance.
-PASS: exact method inventories and both loader failure outcomes match the freeze proof.
-PASS: player binding, observation, request ownership, signal recipients and projected events share one contract.
+PASS: ten default entrypoints; functional subpaths expose optional capabilities independently.
+PASS: direct player requests and pure actions; separate optional session callback.
+PASS: one-step Instance/Game run and concrete accepted input survive stop states.
+PASS: current public source and active specifications contain no removed interfaces.
+PASS: Core/Instance are game-neutral; basic modules do not import optional features.

@@ -17,43 +17,43 @@
 
 ## 公共契约消费
 
-program.ts 是唯一完整循环，类型 Program<ProgramSetup,DouDizhuPorts,Frame>。ProgramSetup={game:Setup,seed:uint32}。程序内部创建 SDK，随机状态在 SDK 闭包内驱动洗牌；decision 端口发布 Frame 并等待 Input；event 端口发布尚未交付的 AuditEvent[] 并等待 null 确认。published 在事件确认后推进，决策/终局 Frame.events 清空以避免重复发布。局部 state 与 published 位于程序现场，完整恢复由 Instance 的实现承担。
+ProgramSetup={game:Setup,seed:uint32}。program.ts 创建 SDK；SDK 内局部随机流驱动发牌；decision 端口发布 Frame 并等待 Input，event 端口发布 AuditEvent[] 并等待 null。state、随机局部和 published 事件位置由 Instance 保存。
 
-implementation.ts 导出 GameModule={program,contract} 声明 game。decision.receive 从 Frame 投影 view/choices/signalPlayers；respond(view,input,player) 检查该玩家对应的 slot，使用同一 validateInput 规则检查并编码 Input。finish 从 state.result 提取唯一终局结果。
+implementation.ts 声明 GameModule。request.receive 从 Frame 产生 {view,requests}；每个请求 key=slotId、player=席位、type='action'、data={actionSpec}。请求不含截止时间。GameContract 的 observe/projectEvent 分别生成玩家状态和可见事件。
 
-## 字段与数据流
+## 动作与会话控制
 
-- setup：profile/firstBidder/initialGameTime。
-- ports.event：AuditEvent[] → null，角色 event；确认接收不等待动画。
-- seed：显式程序启动参数；伪随机流由受控 SDK 局部持有。
-- ports.decision：Frame{state,events} → Input，角色 decision。
-- view：Frame，只供可信游戏适配处理器读取。
-- interaction action：request 为 Slot，input 为 Action，description 为 never，options 只能 exact。
-- choice.id=slot.slotId，actor=slot.actor，type='action'，request=slot。
-- delivery：{receivedAtGameTime}，由会话提供可信接收时间。
-- signal：{kind:'host',inputType:'timeout',gameTime,payload:{slotId}}。respond 从当前 stage 补出内部 boundaryKey；外部请求由 decisionId 定位。
-- player：Seat；playerFor(actor)=actor；observation：{observation,events}。
-- event：AuditEvent{audience,event}；playerEvent：Event；projectEvent 按 audience 返回 {event} 或 null；result：Result。
+玩家动作只有 bid、double、redouble、pass、play。ActionSchema 与 exact 列表均不含时间。onRequest 直接返回 Action。prepareAction 根据当前请求定位席位与阶段，用领域 validateInput 校验；程序收到的 action 输入也不含交付时间。
 
-模型/玩家只选择 Action。BaseGame 提交为 choice{choiceId,input:{type:'action',value:Action},delivery}。respond 根据当前真实 slot 补出 actor/stageId/slotId，与接收时间组合为程序 Input。超时经 signal 转成程序的 host Input。两者共用 validateInput 和 apply。
+会话通过独立 bindControl 接收 {now,deadlines:[{slotId,at}]}，可以返回：
 
-农民同时加倍表现为同一 decision 下两个 choices。接受其中一个后，剩余 choiceId 保持；游戏边界身份更新，已有玩家绑定接收新的请求。其他农民的私有加倍事件不进入其观察。
+- {kind:'clock',at}：单调推进游戏时钟；不消耗玩家动作、不修改牌型或轮次。
+- {kind:'timeout',slotId,at}：要求处理指定入口的超时；游戏验证期限并选择原规则默认动作。
 
-## 数据与隐私
+时间由会话提供。真实会话按到达顺序先提交需要的时钟推进，再交付玩家动作；训练会话可使用虚拟时间。截止点采用 timeoutFirst，当前时钟达到期限后该入口 exact=[]，普通动作拒绝，超时控制可继续游戏。
 
-Frame 含完整领域状态。observe 返回本人手牌、公开信息及该席位可见事件；终局延续相同可见性规则。GameContract.projectEvent 统一用于观察中的历史和主动事件交付，玩家回调收到 Event。三个席位可绑定同一函数，通过 control.player 区分所属玩家。
+合法动作描述完整列出当前状态下的 Action。叫分升序、布尔 false/true、出牌先过牌再按牌型/高点/长度/排序点数串。Play.cards 为非降序多重集，保留每种合法牌型解释。
 
-describe 当前 choice 得到完整 Action 列表。时间和会话信号使用各自输入字段。动作顺序为叫分升序、布尔 false/true、出牌先过牌再按牌型/高点/长度/排序点数串。该顺序仅规定枚举顺序。Play.cards 为非降序点数，多重集对应唯一编码；pattern 保留每种合法牌型解释。客户端需提交规范编码，不由 schema 静默重排。
+## 多玩家和事件
+
+农民同时加倍产生两个请求，直接分别指定 player。一个输入被接受后，游戏封存其选择，发布剩余请求；新的 callId 使旧回复失效。玩家仅看到自己的加倍记录，全部完成后游戏公开结果。
+
+原始 AuditEvent={audience,event}，玩家接收 Event。projectEvent 同时用于观察历史和主动事件交付。相同函数可绑定三个席位，onRequest 从 request.player 区分席位，onEvent 从 control.player 区分席位。
+
+一次 BaseGame.run 最多接受一个动作或会话控制，再交付事件，停在下一请求或结束。返回 accepted 包含具体身份与输入。后续事件暂停、取消或故障保留该接受结果。
 
 ## 验收追踪
 
-| 条款 | 实现 | 验收 |
-| --- | --- | --- |
-| 第5条 | sdk、program | 54张守恒、17/17/17+3、底牌公开时点 |
-| 第6条 | rules、program | 单轮叫分、叫3、全不叫重发、独立农民加倍、再加倍 |
-| 第7条 | rules | 顺序、过牌、重新引牌、报单、各阶段超时 |
-| 第8/9条 | patterns | 全部牌型、比较、动作生成与独立子集核对 |
-| 第10/11条、附录一 | settle | 胜负、春天反春、逐玩家得分、零和与附录算例 |
-| 协议 | GameModule、IO、纯处理器 | 三席位完整对局、隐私、非法/到期输入、完整动作列表、输入转换、隔离的原生对局 |
+| 内容 | 证据 |
+| --- | --- |
+| 发牌、完整叫分、全不叫重发、加倍再加倍 | 原生完整规则循环测试 |
+| 全部牌型与比较 | 独立子集 oracle 和牌型测试 |
+| 春天、反春、逐席位得分、零和 | 领域规则测试 |
+| 私密同时选择 | 封存及剩余请求测试 |
+| 普通对局 | 三席位同一动作回调，无时间字段 |
+| 超时对局 | 独立会话回调，原规则超时默认 |
+| 时钟与期限 | 独立推进、时间倒退拒绝、截止点动作拒绝及 exact=[] |
+| 玩家请求身份 | 错玩家、旧调用、其他实例拒绝 |
+| 事件 | 玩家投影与最终可见历史逐条一致 |
 
-运行 `npm run check`。原生消费者以公共 IO、GameContract 和 GameBindings 驱动完整程序，覆盖逐玩家正常出牌、超时、私有事件、跨玩家拒绝。独立规则 oracle 核对合法动作；保存、执行生命周期与生产绑定器由 C02/C03 验收。
+运行 npm run check。C01 原生消费者执行真实 program/IO/GameContract；C02/C03 验收生产受控执行、完整续延保存和正式绑定器。

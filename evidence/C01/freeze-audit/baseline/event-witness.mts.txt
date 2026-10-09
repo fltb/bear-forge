@@ -1,0 +1,15 @@
+import type {DecisionId, GameUpdate, EventDelivery} from '../../../packages/contracts/src/game/types.ts';
+import type {DecisionData} from '../../../packages/contracts/src/authoring/types.ts';
+
+type T={act:{request:null;input:null;description:never}};
+type G={setup:null;ports:{ask:{input:null;output:null}};programResult:null;view:null;interactions:T;actor:'p';delivery:null;signal:never;observer:'p';observation:null;event:string;result:null};
+
+// A legal pure projection. No execution provider or mock BaseGame is implemented.
+export function allowedNextDecision(id:DecisionId) {
+  const projection:DecisionData<G>={view:null,choices:[{id:'choice',actor:'p',type:'act',request:null}],events:['e']};
+  // submit reaches this next decision and returns its new event.
+  const manual:GameUpdate<T,'p',string,null>={boundary:{kind:'decision',decisionId:id,choices:projection.choices},events:projection.events};
+  // run starts on that unchanged pending decision: protocol requires projection events first.
+  const callback:EventDelivery<string>={id:{instanceId:id.instanceId,origin:{kind:'call',callId:id.callId},index:0},event:projection.events[0]!};
+  return {manual,callback};
+}

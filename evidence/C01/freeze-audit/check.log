@@ -1,0 +1,3 @@
+PASS F2 removed: one BaseGame driving API, direct binder result, callback-only event delivery.
+OPEN F1: capture access after transfer is still not closed; protocol freeze remains pending.
+SCOPE declaration regression checks, not production execution evidence.

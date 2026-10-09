@@ -16,7 +16,7 @@
 
 ## 当前结构
 
-Core 提供通用执行机制，Instance 承载完整现场。游戏只通过声明端口进行外部调用。Instance.bind/run 负责通用端口回调与驱动；BaseGame.bind/run 提供游戏请求、事件、暂停与继续，另支持手动提交及读取；具体游戏以 GameModule={program,contract} 提供真实规则程序和共享游戏约定。搜索、训练、会话与分析在上层。
+Core 提供通用执行机制，Instance 承载完整现场。游戏只通过声明端口进行外部调用。Instance.bind/run 负责通用端口回调与驱动；BaseGame.bind/run 提供游戏请求、事件、暂停与继续，并提供只读查询；具体游戏以 GameModule={program,contract} 提供真实规则程序和共享游戏约定。搜索、训练、会话与分析在上层。
 
 游戏入口：[game / program](games/doudizhu/src/index.ts)。[SDK](games/doudizhu/src/sdk.ts) 在 Instance 内持有显式 seed 驱动的随机流并发牌，[主循环](games/doudizhu/src/program.ts) 通过 decision 端口请求输入、event 端口主动发布事件。没有第二份规则状态或旧接口兼容层。
 

@@ -51,7 +51,7 @@ GameContract 字段：
 
 InteractionShape={request,input,description}。Choice={id,actor,type,request}，type 关联载荷。choices 是真实待决入口，id 唯一，没有 context 过滤字段。
 
-DecisionId={instanceId,callId}，由当前 Instance 身份及挂起调用直接构成，无需外侧维护额外签发状态。GameBoundary 为 decision{decisionId,choices}、event{callId} 或 ended{result}。event 表示当前在输出端口等待确认，并非玩家行动。GameUpdate={boundary,events}。
+DecisionId={instanceId,callId}，由当前 Instance 身份及挂起调用直接构成，无需外侧维护额外签发状态。GameBoundary 为 decision{decisionId,choices}、event{callId} 或 ended{result}。event 表示当前在输出端口等待确认，并非玩家行动。边界通过 inspect 读取；事件统一通过 run 驱动 onEvent 交付。
 
 GameInput 为 choice{choiceId,input:{type,value},delivery} 或 signal{signal}。游戏无信号时使用 never。动作、交付元数据与会话信号分开，可信时间由会话提供。InputOptions 为 exact{values} 或 construct{description}；exact 完整描述指定入口的合法动作载荷，不枚举交付时间或信号；construct 由游戏上层解释，不内置通用枚举、采样或前缀引擎。
 
@@ -65,24 +65,23 @@ BaseGame：
 - describe({decisionId,choiceId,type})：当前真实入口的选项；身份/type 不匹配必须拒绝。
 - validate({decisionId,input})：只读预检。
 - query({name,args})：当前边界的类型化查询。
-- submit({decisionId,input})：重新验证当前凭证和输入，使用对应 respond 转换后 resume 同一 Instance，处理 event 端口直到下一 decision/done。
 - fork?()：底层 Instance.fork 后用同一 contract 绑定新 Instance，返回同类型 BaseGame。
 - save?()：委托兼容 InstancePersistence.save(所持 Instance)，直接返回 InstanceSnapshot。
 - close()：关闭所持 Instance。
 
-不存在 GameSnapshot、GameReadTarget、branching.step 或第二个模拟执行入口。搜索使用 child=game.fork()，然后调用 child.inspect/submit/observe；提交必须使用子实例的 DecisionId。父实例凭证不能提交给子实例，即使其 Choice 内容相同。
+不存在 GameSnapshot、GameReadTarget、branching.step 或第二个模拟执行入口。搜索使用 child=game.fork()，然后调用 child.inspect/bind/run/observe；回调请求携带子实例的 DecisionId。父实例凭证不能提交给子实例，即使其 Choice 内容相同。
 
-终局可观察、查询、分支、保存，不能提交/描述输入；内部执行时拒绝 game_busy，关闭后拒绝 game_closed。event 边界可 inspect/fork/save/run；observe/query 拒绝 view_unavailable，因为事件端口没有声明可读 view；describe/validate/submit 同样不能把它当作决策。回调等待时只读与 fork/save 可用，手动推进仍受驱动租约保护。validate 不替代 submit 的再次检查。非法输入不调用 resume。处理器输出不合约或程序执行失败为 fault，不伪装成普通非法输入；失败驱动的实例须关闭或由 Instance 标记故障，不保留一个隐藏的外侧可恢复故障状态。
+终局可观察、查询、分支、保存，不能提交/描述输入；内部执行时拒绝 game_busy，关闭后拒绝 game_closed。event 边界可 inspect/fork/save/run；observe/query 拒绝 view_unavailable，因为事件端口没有声明可读 view；describe/validate 同样不能把它当作决策。回调等待时只读与 fork/save 可用，推进受驱动租约保护。validate 不替代 run 对回调输入的再次检查。非法输入不调用 resume。处理器输出不合约或程序执行失败为 fault，不伪装成普通非法输入；失败驱动的实例须关闭或由 Instance 标记故障，不保留一个隐藏的外侧可恢复故障状态。
 
 ## 装载、绑定及恢复
 
 NativeCoreLoader.load(ProgramModule) 与 ControlledCoreLoader.load(CompiledProgram) 返回 LoadedCore{core,persistence?,capture?}。CompiledProgram 为受控产物及 invariant 类型见证；loader 仍须检验程序准入、schema 与兼容身份。
 
-Core.start(setup) → Instance → BaseGameBinder.bind({instance,contract,persistence?}) → {game,initial}。bind 不启动第二份规则程序，先通过 Instance.transfer 接管独占驱动权，仅投影当前 call/done；初始边界可以是 event。绑定失败关闭被接管的实例。transfer 在未被活动驱动占用的稳定状态原子地返回同一 InstanceId 的新句柄，使旧句柄及其别名的操作返回 instance_owned；新句柄保留原现场与底层可选能力，清空宿主绑定。它不是 fork，不复制运行态。BaseGameBinder 只持有新句柄，不向外暴露它；重复使用旧句柄绑定被拒绝。TS 无线性类型，运行器必须落实这项通用所有权操作。
+Core.start(setup) → Instance → BaseGameBinder.bind({instance,contract,persistence?}) → BaseGame。bind 不启动第二份规则程序，先通过 Instance.transfer 接管独占驱动权，仅投影当前 call/done；初始边界可以是 event。绑定失败关闭被接管的实例。transfer 在未被活动驱动占用的稳定状态原子地返回同一 InstanceId 的新句柄，使旧句柄及其别名的操作返回 instance_owned；新句柄保留原现场与底层可选能力，清空宿主绑定。它不是 fork，不复制运行态。BaseGameBinder 只持有新句柄，不向外暴露它；重复使用旧句柄绑定被拒绝。TS 无线性类型，运行器必须落实这项通用所有权操作。
 
 外侧 fork 当且仅当底层实际支持 fork 才暴露，save 当且仅当绑定了兼容 persistence 才暴露。普通直接运行不要求两者。子 BaseGame 保留同一 contract 与可用能力，但外部回调未绑定；子绑定失败清理子实例，父实例不受影响。
 
-恢复路径：persistence.restore(snapshot) → Instance → binder.bind({instance,contract,persistence})。不需要游戏级 restore 或额外补存状态。恢复/分支后的决策凭证使用新 InstanceId。initial.events 是当前现场的纯投影数据；既有等待边界的数据可以再次读取，但绑定、恢复和 inspect 本身不向外发送通知。消费者若需要恰好一次交付，使用记录身份和自己的游标去重。submit.events 只含该次真实推进的事件，历史前缀不作为新事件重发。
+恢复路径：persistence.restore(snapshot) → Instance → binder.bind({instance,contract,persistence})。不需要游戏级 restore 或额外补存状态。恢复/分支后的决策凭证使用新 InstanceId。binder 直接返回游戏句柄，初始边界通过 inspect 读取。绑定、恢复和 inspect 不发送事件；事件只在 run 中通过 onEvent 交付，并使用 EventDeliveryId 去重。
 
 ## Instance 外部控制与回调生命周期
 
@@ -120,15 +119,15 @@ onEvent 接收 EventDelivery={id,event}。id={instanceId,origin,index}；origin 
 
 BaseGame.run options={limits?:{maxInputs?},signal?}。maxInputs 只数本次接受的 GameInput，包括 signal，不数事件确认；0 处理当前事件后停在下一个 decision。它是适配回调的调用方预算，不是游戏现场。run 返回带 acceptedInputs 的 paused{reason,boundary,message?}、ended{result} 或 fault{error}。宿主失败/非法回答走 paused，程序/契约故障走 fault。
 
-决策/终局投影自带的 events 先按顺序交付，再调用 onDecision 或返回 ended。事件端口的 events 交付确认后才返回该端口 output。取消先于启动任何新回调；达到输入限额时可以处理产生的事件，但不再调用下一个输入回调。回调等待期间允许 inspect/observe（有 view 时）/fork/save，禁止 bind/submit/第二个 run/close；取消活动 run 后可手动控制。
+决策/终局投影自带的 events 先按顺序交付，再调用 onDecision 或返回 ended。事件端口的 events 交付确认后才返回该端口 output。取消先于启动任何新回调；达到输入限额时可以处理产生的事件，但不再调用下一个输入回调。回调等待期间允许 inspect/observe（有 view 时）/fork/save，禁止 bind/第二个 run/close；取消活动 run 后可重新绑定并继续 run。
 
-submit 是明确的手动输入模式：只在未被驱动占用的 decision 接受输入，委托同一 Instance 的返回接受与驱动机制，运行到下一个 decision/done；中间事件经相同纯投影收集进 GameUpdate.events。submit 不调用用户绑定的 onDecision/onEvent，事件由这次返回交给调用方。这样手动控制与回调驱动共享执行轨迹，不重复交付。两者可以在稳定边界交替使用。
+BaseGame 的唯一推进入口是 run。bind 只配置回调；输入由当前 onDecision 调用返回，事件由 onEvent 接收。单步调用使用 maxInputs:1，搜索在每个同类型子实例上使用相同入口。
 
 ## 操作状态表
 
-| 稳定状态 | 读取/分支/保存 | bind | 手动回复 | run | close |
+| 稳定状态 | 读取/分支/保存 | bind | 底层回复 | run | close |
 | --- | --- | --- | --- | --- | --- |
-| 未驱动的 call | 允许；游戏 event 无 view | 允许 | Instance.resume；BaseGame 仅 decision 可 submit | 允许 | 允许 |
+| 未驱动的 call | 允许；游戏 event 无 view | 允许 | 仅 Instance.resume；BaseGame 使用 run | 允许 | 允许 |
 | 回调等待中的 call | 允许；读取线性化到该等待点 | busy | busy | busy | busy，先取消驱动 |
 | 内部计算中 | busy | busy | busy | busy | busy |
 | done | 允许 | 允许 | finished/ended | 返回结果；游戏可完成终局事件交付 | 允许 |
@@ -139,7 +138,7 @@ transfer 仅在无活动驱动的 call/done/fault 上允许，内部计算和回
 
 ## 搜索、训练和分析
 
-同类型 fork/read/submit 已闭合搜索节点操作。DFS、alpha-beta、MCTS 由调用方决定遍历、候选、评价和回传；协议不预设多人、零和或随机节点算法。保存是暂停节点的资源策略，不是另一种规则步。隐藏信息假设世界由授权的游戏构造逻辑提供，普通策略不得直接拿真实 Instance/快照。
+同类型 fork/read/bind/run 已闭合搜索节点操作。DFS、alpha-beta、MCTS 由调用方决定遍历、候选、评价和回传；协议不预设多人、零和或随机节点算法。保存是暂停节点的资源策略，不是另一种规则步。隐藏信息假设世界由授权的游戏构造逻辑提供，普通策略不得直接拿真实 Instance/快照。
 
 StateTransition、StateResources、StateConstruction、Evaluation、Encoding、FactExtraction 是上层可选结构类型，不是 BaseGame 的第二个必经执行层。GameHistory 保留 setup/configuration/initial/transitions{input,output}；configuration 是实验元数据，凡影响规则的配置必须进入实际程序 setup 或受控输入，不能仅存在历史字段里。
 

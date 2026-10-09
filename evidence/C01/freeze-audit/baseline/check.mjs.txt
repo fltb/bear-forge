@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
+const text=readFileSync('docs/protocol.md','utf8');
+for(const premise of ['新句柄','旧句柄及其别名的操作返回 instance_owned','BaseGameBinder 只持有新句柄，不向外暴露它','决策/终局投影自带的 events 先按顺序交付','事件由这次返回交给调用方','两者可以在稳定边界交替使用'])assert.ok(text.includes(premise),premise);
+const source=ts.createSourceFile('game/types.ts',readFileSync('packages/contracts/src/game/types.ts','utf8'),ts.ScriptTarget.Latest,true);
+const aliases=new Map(source.statements.filter(ts.isTypeAliasDeclaration).map(x=>[x.name.text,x]));
+const base=aliases.get('BaseGame').getText(source);
+assert.ok(!/\bcapture\??:|\breadRecords\??:|\binstance\??:/.test(base));
+assert.ok(/events:\s*E\[\]/.test(aliases.get('GameUpdate').getText(source)));
+console.log('CONFIRMED F1 premises: ownership transfer invalidates old aliases; facade exposes no live Instance/capture path.');
+console.log('CONFIRMED F2 premises: manual events are E[]; unchanged next decision events are delivered again by run.');
+console.log('This checks declarations and textual premises, not a production execution implementation.');

@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import type { Core, ProgramModule, PortShape, FixedTable, InstancePersistence, InstanceCapture, Instance } from '../core/types.ts';
-import type { BaseGame, QueryShape, GameOutcome, GameUpdate } from '../game/types.ts';
+import type { BaseGame, QueryShape, GameOutcome } from '../game/types.ts';
 import type { GameContract, GameTypes } from '../authoring/types.ts';
 import type { CompiledProgramDataSchema } from './schemas.ts';
 
@@ -30,8 +30,5 @@ export type BaseGameBinder = {
     instance: Instance<G['ports'], G['programResult']>;
     contract: GameContract<G, Q>;
     persistence?: InstancePersistence<G['ports'], G['programResult']>;
-  }) => Promise<GameOutcome<{
-    game: GameHandle<G, Q>;
-    initial: GameUpdate<G['interactions'], G['actor'], G['event'], G['result']>;
-  }>>;
+  }) => Promise<GameOutcome<GameHandle<G, Q>>>;
 };

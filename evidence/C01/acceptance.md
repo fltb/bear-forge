@@ -37,7 +37,7 @@ Initial check: python3 tools/check_project.py failed on five stale artifact entr
 
 ## BaseGame branching convergence (current request)
 
-- One BaseGame facade keeps inspect/observe/describe/validate/query and current submit/close; no separate reader or search service layer.
+- One BaseGame facade keeps inspect/observe/describe/validate/query and bind/run/close; no separate reader or search service layer.
 - Replace game persistence/simulation and loaded-game wrappers with optional branching.save/step/restore/release directly on BaseGame. No compatibility aliases.
 - All reads accept current/snapshot; child reads require neither restore nor duplicate inspect. Parent and current instance remain unchanged by step. restore returns an independent BaseGame.
 - Factory returns game and initial update directly. Keep Core persistence/capture and neutral upper-level capabilities.
@@ -60,10 +60,16 @@ Current two-sided migration verification: 56 native/schema tests, 39 admitted sc
 ## Complete inner/outer control protocol and publish (current request)
 
 - Specify Instance bind/run, correlated callbacks, explicit reply/pause, manual resume, limits/cancellation, callback errors, lease/late-return rules, and unbound fork/restore.
-- Specify BaseGame callback binding/run, typed decision offers (actor-visible observations and options), event delivery identity, manual submit, event/decision/terminal boundaries and multiplayer routing. BaseGame adapts Instance callbacks without a second executor.
+- Specify BaseGame callback binding/run, typed decision offers (actor-visible observations and options), event delivery identity, callback-only advancement, event/decision/terminal boundaries and multiplayer routing. BaseGame adapts Instance callbacks without a second executor.
 - Preserve internal IO/GameSDK and single Instance state. Update types, fixed schemas, pure game contract, all consumers and proofs. Protocol phase only; no production driver.
 - Validate positive and negative type consumers for raw Instance callbacks, game callbacks and manual/search use, complete native Dou Dizhu and explicit emitted-event SDK use.
 - Acceptance commands: npm run check; python3 evidence/C01/verify-migration.py; python3 tools/check_project.py and --self-test; git diff --check. Update proof inventory/field appendix and all active documents.
 - Finally commit the reviewed project worktree, push to fltb/bear-forge without force, and verify remote branch commit equals local HEAD.
 
-Final callback/control verification: npm run check passed (57 tests, 44 schemas, 101 public definitions); full field/source correspondence and unchanged rule baseline audit passed. Public transfer supplies the ownership primitive required by BaseGameBinder. Commit/push verification is reported from actual Git results after these checks.
+Historical callback/control verification before removal: npm run check passed (57 tests, 44 schemas, 101 public definitions); full field/source correspondence and unchanged rule baseline audit passed. Public transfer supplies the ownership primitive required by BaseGameBinder. Commit/push verification is reported from actual Git results after these checks.
+
+## 删除重复的 BaseGame 推进入口
+
+- `npm run check`：公共类型不再提供 submit/GameUpdate；binder 直接返回 GameHandle；搜索消费者使用 bind/run(maxInputs:1)，负向类型检查拒绝 submit。现有游戏/schema 测试全部通过。
+- `node evidence/C01/freeze-audit/check.mjs`：检查当前声明与规范无第二条游戏推进/批量事件返回路径；F1 保持开放。
+- `python3 evidence/C01/verify-migration.py` 与 `python3 tools/check_project.py`：公共声明附录、证据与账本一致。不启动生产运行器实现。

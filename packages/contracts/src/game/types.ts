@@ -25,10 +25,6 @@ export type GameBoundary<T extends InteractionTable, A, R> =
   | { kind: 'decision'; decisionId: DecisionId; choices: Choice<T, A>[] }
   | { kind: 'event'; callId: CallId }
   | { kind: 'ended'; result: R };
-export type GameUpdate<T extends InteractionTable, A, E, R> = {
-  boundary: GameBoundary<T, A, R>;
-  events: E[];
-};
 /** Session signals remain domain data; games with none use never. */
 export type GameInput<T extends InteractionTable, D, S> =
   | { kind: 'choice'; choiceId: ChoiceId; input: ChoiceInput<T>; delivery: D }
@@ -72,7 +68,6 @@ export type BaseGame<T extends InteractionTable, A, D, S, O, V, E, R, Q extends 
   bind: (bindings: GameBindings<T,A,D,S,V,E> | null) => Promise<GameOutcome<void>>;
   run: (options?: GameRunOptions) => Promise<GameOutcome<GameRunStop<T,A,R>>>;
   inspect: () => Promise<GameOutcome<GameBoundary<T, A, R>>>;
-  submit: (input: { decisionId: DecisionId; input: GameInput<T, D, S> }) => Promise<GameOutcome<GameUpdate<T, A, E, R>>>;
   observe: (input: { observer: O }) => Promise<GameOutcome<V>>;
   describe: <const C extends DescribeChoice<T>>(input: C) => Promise<GameOutcome<InputOptions<T[C['type']]['input'], T[C['type']]['description']>>>;
   validate: (input: { decisionId: DecisionId; input: GameInput<T, D, S> }) => Promise<GameOutcome<InputValidation>>;

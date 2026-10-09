@@ -1,0 +1,3 @@
+CONFIRMED F1 premises: ownership transfer invalidates old aliases; facade exposes no live Instance/capture path.
+CONFIRMED F2 premises: manual events are E[]; unchanged next decision events are delivered again by run.
+This checks declarations and textual premises, not a production execution implementation.

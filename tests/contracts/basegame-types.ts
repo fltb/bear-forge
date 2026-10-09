@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type {
-  BaseGame, GameModule, DecisionPolicy, QueryCall, GameInput, DescribeChoice,
+  BaseGame, DecisionId, GameModule, DecisionPolicy, QueryCall, GameInput, DescribeChoice,
   CompiledProgram, StateTransition, StateConstruction, Evaluation,
   Encoding, FactExtraction, StateResources, PortBindings,
 } from '@bear-forge/contracts';
@@ -13,7 +13,7 @@ type Interactions = {
 };
 type Queries = { count: { input: null; output: number }; label: { input: number; output: string } };
 type B = BaseGame<Interactions, string, { at: number }, { timeout: string }, string, { hand: number[] }, string, number, Queries>;
-export async function consume(base:B, decisionId:Parameters<B['submit']>[0]['decisionId']) {
+export async function consume(base:B, decisionId:DecisionId) {
   const options=await base.describe({decisionId,choiceId:'bidder',type:'bid'});
   if(options.ok){ const amount:number=options.value.values[0]!.amount;void amount; }
   const expression=await base.describe({decisionId,choiceId:'expression',type:'text'});
@@ -22,13 +22,14 @@ export async function consume(base:B, decisionId:Parameters<B['submit']>[0]['dec
   }
   const count=await base.query({name:'count',args:null});
   if(count.ok){const n:number=count.value;void n;}
-  await base.submit({decisionId,input:{kind:'choice',choiceId:'bidder',input:{type:'bid',value:{amount:2}},delivery:{at:0}}});
-  await base.submit({decisionId,input:{kind:'signal',signal:{timeout:'bidder'}}});
+  await base.bind({onDecision:async()=>({kind:'reply',value:{kind:'choice',choiceId:'bidder',input:{type:'bid',value:{amount:2}},delivery:{at:0}}})});
+  await base.bind({onDecision:async()=>({kind:'reply',value:{kind:'signal',signal:{timeout:'bidder'}}})});
+  await base.run({limits:{maxInputs:1}});
   // @ts-expect-error no generic context filter
   const badDescribe:DescribeChoice<Interactions>={decisionId,choiceId:'bidder',type:'bid',context:{actor:'x'}};
   void badDescribe;
   // @ts-expect-error input template and payload remain correlated
-  await base.submit({decisionId,input:{kind:'choice',choiceId:'bidder',input:{type:'text',value:{amount:2}},delivery:{at:0}}});
+  await base.bind({onDecision:async()=>({kind:'reply',value:{kind:'choice',choiceId:'bidder',input:{type:'text',value:{amount:2}},delivery:{at:0}}})});
   // @ts-expect-error query payload cannot be swapped
   await base.query({name:'count',args:3});
 }
@@ -82,7 +83,7 @@ export async function actualBinding(
   if(!started.ok)return;
   const bound=await binder.bind({instance:started.value,contract:game.contract,...(core.persistence?{persistence:core.persistence}:{})});
   if(!bound.ok)return;
-  const base:DDZ=bound.value.game;
+  const base:DDZ=bound.value;
   try {
     if(base.fork){
       const child=await base.fork();
@@ -99,7 +100,7 @@ export async function actualBinding(
           const instance=await core.persistence.restore(saved.value);
           if(instance.ok){
             const restored=await binder.bind({instance:instance.value,contract:game.contract,persistence:core.persistence});
-            if(restored.ok)await restored.value.game.close();
+            if(restored.ok)await restored.value.close();
           }
         }finally{await core.persistence.release(saved.value);}
       }
@@ -112,6 +113,8 @@ export async function actualBinding(
 }
 export function directPlay(base:Omit<B,'fork'|'save'>):B { return base; }
 export async function removedSurfaces(base:B) {
+  // @ts-expect-error BaseGame has exactly one driving entrypoint: run
+  base.submit;
   // @ts-expect-error no separate state-transition facade
   base.branching;
   // @ts-expect-error queries are on the same facade
@@ -144,7 +147,14 @@ export async function walk(base:DDZ,depth:number,receivedAtGameTime:number):Prom
         const accepted=await child.validate({decisionId:boundary.value.decisionId,input});
         if(!accepted.ok)throw accepted.error;
         if(!accepted.value.valid)continue;
-        const update=await child.submit({decisionId:boundary.value.decisionId,input});if(!update.ok)throw update.error;
+        const expected=boundary.value.decisionId;
+        const bound=await child.bind({onDecision:async(request)=>{
+          if(request.decisionId.instanceId!==expected.instanceId||request.decisionId.callId!==expected.callId)return {kind:'pause'};
+          return {kind:'reply',value:input};
+        }});if(!bound.ok)throw bound.error;
+        const stopped=await child.run({limits:{maxInputs:1}});if(!stopped.ok)throw stopped.error;
+        if(stopped.value.kind==='fault')throw stopped.value.error;
+        if(stopped.value.acceptedInputs!==1)throw new Error('search input was not accepted');
         await walk(child,depth-1,receivedAtGameTime);
       } finally { const closed=await child.close();if(!closed.ok)throw closed.error; }
     }

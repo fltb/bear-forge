@@ -1,5 +1,7 @@
 # Instance 两侧游戏协议：迁移与条件证明
 
+冻结审计结论：当前不能冻结。F1 捕捉访问缺口见 freeze-audit/review.md；下文保留的条件论证不构成协议已完整冻结的证明。
+
 本轮交付公共协议、内侧斗地主 SDK/程序、类型消费与原生测试。没有生产执行器、保存/分支实现或搜索器。以下证明针对协议表达和组合；运行实现必须满足列明的前提，不能由导出数量或 TS 编译通过推出。
 
 ## 固定边界与字段映射
@@ -16,7 +18,7 @@
 | 多席位与同时等待 | 多 Choice；内侧保存尚未完成的阶段 | 斗地主私有加倍及剩余入口测试 |
 | 合法动作 | exact 或 construct；delivery/signal 单列 | 全对局合法载荷测试、关联类型反例 |
 | 内侧随机状态 | ProgramSetup.seed→program 内 createSDK 的闭包 | 并行/顺序完整轨迹一致及独立 seed 用例 |
-| 搜索 | fork/read/submit/close，调用方拥有遍历/评价 | walk 递归类型消费者；不引入运行实现 |
+| 搜索 | fork/read/bind/run/close，调用方拥有遍历/评价 | walk 递归类型消费者；不引入运行实现 |
 | 数据与训练 | 真实边界/事件/结果，策略与分析在调用方 | R05–R08 保留；无第二套规则 |
 
 ## P1：表达力不因边界收敛而减少
@@ -33,7 +35,7 @@
 
 因此外侧所需数据可以从 x 与静态 contract 重建。删除全部缓存后重新绑定，观察、合法选项和输入转换不变。若某实现还必须恢复一个宿主随机游标、已提交玩家列表或隐藏事件计数才能继续，它就是这一条的反例，不能声称符合协议。
 
-submit 的唯一状态推进是 Instance.resume：先匹配凭证与 choice，调用纯 respond，拒绝时不 resume；成功时将唯一 reply 送入原实例。后续 event 的 receive/output 也是静态纯函数，持续驱动到下一游戏边界。因此一个游戏步是原程序轨迹的一个片段，并非第二个 transition 实现。
+BaseGame.run 的状态推进委托 Instance 的端口返回接受路径：先匹配凭证与 choice，调用纯 respond，拒绝时不 resume；成功时将唯一 reply 送入原实例。后续 event 的 receive/output 也是静态纯函数，持续驱动到下一游戏边界。因此一个游戏步是原程序轨迹的一个片段，并非第二个 transition 实现。
 
 前提：contract 纯且输入/输出隔离；绑定独占驱动权。TS 的 readonly 与类型兼容性不证明纯性或所有权，后端和准入检查必须落实。
 
@@ -43,7 +45,7 @@ submit 的唯一状态推进是 Instance.resume：先匹配凭证与 choice，�
 
 多个玩家的等待通过 choices 表达；每次被接受的部分输入进入 Instance，程序发布剩余 choices。封存及先后顺序属于内侧状态；外侧不得先把输入藏在宿主变量中。有限合法载荷使用 exact；无法有限列举的载荷使用 construct 描述，由游戏调用方解释。不宣称存在自动解任意约束的通用生成器。
 
-校验和动作选择不同：exact 不承诺任何 delivery 都有效；validate/submit 检验完整输入。Choice.type、request、input.value 与 query.name/args 的关联由映射联合类型维持。内侧规则重新校验返回，不把外侧预检作为可信规则状态。
+校验和动作选择不同：exact 不承诺任何 delivery 都有效；validate/run 检验完整输入。Choice.type、request、input.value 与 query.name/args 的关联由映射联合类型维持。内侧规则重新校验返回，不把外侧预检作为可信规则状态。
 
 ## P4：分支双模拟与恢复充分性
 
@@ -51,7 +53,7 @@ submit 的唯一状态推进是 Instance.resume：先匹配凭证与 choice，�
 
 基础步：内部计算在等价堆和环境上产生等价后继。外部步：相同声明调用参数与相同未来回复产生等价后继。按步数归纳得到相同领域轨迹；输入身份字段按新 InstanceId 重命名。父凭证因 instanceId 不匹配被拒绝。
 
-结合 P2，π(C) 与 π(C') 的领域观察、合法动作和结果一致；外侧 fork 只需要给 C' 绑定相同 contract。故 child.submit 与 parent.submit 使用相同规则，分支不是另一种游戏对象。分支失败仅清理子资源。
+结合 P2，π(C) 与 π(C') 的领域观察、合法动作和结果一致；外侧 fork 只需要给 C' 绑定相同 contract。故 child.run 与 parent.run 使用相同规则，分支不是另一种游戏对象。分支失败仅清理子资源。
 
 保存序列化同一个 C，恢复重建满足 ≈ 的 C'，因此不需要 BaseGame 补存状态。保存包含原等待点，恢复不重放已执行的输入/效果。IO 能力、程序身份和快照引用由提供者验证，不把任意宿主指针当可恢复对象。
 
@@ -59,11 +61,11 @@ submit 的唯一状态推进是 Instance.resume：先匹配凭证与 choice，�
 
 ## P5：搜索接口闭合
 
-节点 N 是普通 BaseGame。读取 N 得到边界、观察和候选；N.fork 得到同类型 N'；N'.submit 后 N' 仍为同类型；close 释放分支。归纳得任意有限深度的树遍历无需新节点运行类型或不同的游戏转移函数。
+节点 N 是普通 BaseGame。读取 N 得到边界、观察和候选；N.fork 得到同类型 N'；N'.bind 配置回调、N'.run 推进后 N' 仍为同类型；close 释放分支。归纳得任意有限深度的树遍历无需新节点运行类型或不同的游戏转移函数。
 
 DFS 改变访问顺序；alpha-beta 另外提供满足算法条件的对抗价值与界；MCTS 另外提供选择/评估/回传和随机策略。协议只证明这些算法可以控制相同执行操作，不保证所有游戏都满足 alpha-beta 的博弈假设，也不把克隆同一随机流误当独立采样。隐藏世界构造、chance 分布、独立试验种子属于显式游戏/搜索配置，不能穿透 Instance 修改私有状态。
 
-walk 类型示例确实在 fork 后读取子凭证，再 validate/submit/递归/close。它是可编译调用方，不是生产搜索效果证据。directPlay 验证没有分支能力也可运行。
+walk 类型示例确实在 fork 后读取子凭证，再 validate/run/递归/close。它是可编译调用方，不是生产搜索效果证据。directPlay 验证没有分支能力也可运行。
 
 ## P6：原生、受控、训练与实战路径一致
 
@@ -111,7 +113,7 @@ implementation.ts 导出 {program,contract}。receive 投影 Frame；respond 从
 
 ## P8：回调控制与手动驱动等价
 
-Instance.bind 只注册外部回调；run 在当前 call 查表，将参数复制给对应回调，接受 reply.value 时调用与 resume 相同的原子返回操作。因此去掉宿主等待时长后，给定相同被接受的回复序列，回调驱动与手动 resume 的程序轨迹相同。BaseGame 回调只额外进行纯请求投影、输入验证/编码和事件交付；同样的 GameInput 经 submit 与 onDecision 得到同一个底层 reply。
+Instance.bind 只注册外部回调；run 在当前 call 查表，将参数复制给对应回调，接受 reply.value 时调用与 resume 相同的原子返回操作。因此去掉宿主等待时长后，给定相同被接受的回复序列，回调驱动与手动 resume 的程序轨迹相同。BaseGame 回调只额外进行纯请求投影、输入验证/编码和事件交付；GameInput 仅经 onDecision 输入，经过 respond 编码为底层 reply。
 
 活动驱动持有租约，回调结果携带隐含的 (Instance.id,callId,驱动代次) 归属。返回接受、取消撤销和新驱动登记按一个串行顺序提交；只有仍拥有当前租约且匹配当前 call 的返回能够生效。因此即使旧 Promise 不响应取消、在新 run 或 fork 后才完成，也不能推进其他现场。绑定表与租约属于宿主控制，不是必须保存的游戏数据；fork/restore 丢弃它们并保留受控待决调用。
 
@@ -121,7 +123,7 @@ Instance.bind 只注册外部回调；run 在当前 call 查表，将参数复�
 
 每次外部调用只有两类游戏角色：decision 或 event；程序结束为 ended。加入 event 边界后，回调抛错、主动 pause、取消发生于输出确认处也有合法可表达状态，不再强迫协议虚构一个玩家决策。事件没有 view 时，observe/query 明确拒绝 view_unavailable，而非读取一份外侧隐含旧状态。
 
-回调在稳定等待时允许只读、fork/save，所以搜索可在 onDecision 内建立子实例，重新绑定搜索回调，使用 run 限额或手动 submit 控制深度。父回调的驱动租约继续保护父现场，子驱动互不影响。run(maxInputs:0) 可经过事件确认停在决策；单次输入或任意有限输入预算均不必调用底层端口。
+回调在稳定等待时允许只读、fork/save，所以搜索可在 onDecision 内建立子实例，重新绑定搜索回调，使用 run 的 maxInputs 限额控制深度。父回调的驱动租约继续保护父现场，子驱动互不影响。run(maxInputs:0) 可经过事件确认停在决策；单次输入或任意有限输入预算均不必调用底层端口。
 
 事件 delivery id 从 Instance 身份、当前 call/done 和纯事件数组下标计算，不依赖外侧隐藏游标。部分交付后失败允许以同 id 重投，消费方去重；这明确是可重试协议，不假装实现网络恰好一次。前端动画或慢消费者不得成为游戏规则时钟。Core 捕捉实际调用与被接受的确认，原生斗地主测试验证全部事件通过 event 端口传出且与规则事件序列完全一致。
 
@@ -143,7 +145,7 @@ GameRequest 的 offers 从当前真实 choices 构造。每个 offer.observation
 | onDecision 内搜索必须穿透 Core | callbackPlay + walk 类型消费，BaseGame.run 输入限额 |
 | 真人/模型拿到其他玩家观察 | DecisionPolicy 单 offer 边界；可信路由器分发，原生观察隐私测试 |
 | 主动 emit 从未实际经过协议 | 斗地主 SDK.event 与全部原生完整对局事件序列测试 |
-| submit 和回调运行两份规则 | 两者均委托 Instance 返回接受路径；协议证明，生产驱动仍待实现 |
+| 游戏推进发生在外侧另一套规则 | run 委托 Instance 返回接受路径，外侧处理器仅作纯投影/编码；生产驱动仍待实现 |
 
 ## P11：适配器所有权可由公开协议实现
 
@@ -460,10 +462,6 @@ export type GameBoundary<T extends InteractionTable, A, R> =
   | { kind: 'decision'; decisionId: DecisionId; choices: Choice<T, A>[] }
   | { kind: 'event'; callId: CallId }
   | { kind: 'ended'; result: R };
-export type GameUpdate<T extends InteractionTable, A, E, R> = {
-  boundary: GameBoundary<T, A, R>;
-  events: E[];
-};
 /** Session signals remain domain data; games with none use never. */
 export type GameInput<T extends InteractionTable, D, S> =
   | { kind: 'choice'; choiceId: ChoiceId; input: ChoiceInput<T>; delivery: D }
@@ -507,7 +505,6 @@ export type BaseGame<T extends InteractionTable, A, D, S, O, V, E, R, Q extends 
   bind: (bindings: GameBindings<T,A,D,S,V,E> | null) => Promise<GameOutcome<void>>;
   run: (options?: GameRunOptions) => Promise<GameOutcome<GameRunStop<T,A,R>>>;
   inspect: () => Promise<GameOutcome<GameBoundary<T, A, R>>>;
-  submit: (input: { decisionId: DecisionId; input: GameInput<T, D, S> }) => Promise<GameOutcome<GameUpdate<T, A, E, R>>>;
   observe: (input: { observer: O }) => Promise<GameOutcome<V>>;
   describe: <const C extends DescribeChoice<T>>(input: C) => Promise<GameOutcome<InputOptions<T[C['type']]['input'], T[C['type']]['description']>>>;
   validate: (input: { decisionId: DecisionId; input: GameInput<T, D, S> }) => Promise<GameOutcome<InputValidation>>;
@@ -549,7 +546,7 @@ export const CompiledProgramDataSchema = z.strictObject({
 ```ts
 import type { z } from 'zod';
 import type { Core, ProgramModule, PortShape, FixedTable, InstancePersistence, InstanceCapture, Instance } from '../core/types.ts';
-import type { BaseGame, QueryShape, GameOutcome, GameUpdate } from '../game/types.ts';
+import type { BaseGame, QueryShape, GameOutcome } from '../game/types.ts';
 import type { GameContract, GameTypes } from '../authoring/types.ts';
 import type { CompiledProgramDataSchema } from './schemas.ts';
 
@@ -579,9 +576,6 @@ export type BaseGameBinder = {
     instance: Instance<G['ports'], G['programResult']>;
     contract: GameContract<G, Q>;
     persistence?: InstancePersistence<G['ports'], G['programResult']>;
-  }) => Promise<GameOutcome<{
-    game: GameHandle<G, Q>;
-    initial: GameUpdate<G['interactions'], G['actor'], G['event'], G['result']>;
-  }>>;
+  }) => Promise<GameOutcome<GameHandle<G, Q>>>;
 };
 ```

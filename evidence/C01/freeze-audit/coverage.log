@@ -1,0 +1,14 @@
+
+> check:proof-coverage
+> node --experimental-strip-types tools/check_protocol_coverage.ts --self-test
+
+PASS: 100 public definitions covered by 4 named law groups
+OPEN: 4 law groups retain outstanding obligations; coverage is not correctness proof
+PASS: reject missing export
+PASS: reject extra export
+PASS: reject duplicate export
+PASS: reject uncovered export
+PASS: reject unknown law
+PASS: reject stale source
+PASS: reject unsupported completion label
+PASS: reject missing evidence

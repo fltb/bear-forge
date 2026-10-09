@@ -29,13 +29,13 @@
       "items": {
         "C01-01": "passed",
         "C01-02": "pending",
-        "C01-03": "passed",
+        "C01-03": "pending",
         "C01-04": "pending",
         "C01-05": "passed"
       },
       "evidence": "evidence/C01/report.json",
       "blocker": null,
-      "next_action": "Authorized inner/outer protocol scope verified for publication. C01-02/04 remain future module-selection and execution-acceptance preparation; production runtime belongs to C02."
+      "next_action": "Complete removal regression checks; F1 capture access remains open before protocol freeze."
     },
     "C02": {
       "status": "pending",
@@ -313,6 +313,16 @@
       "date": "2026-10-09",
       "source": "User requires all inner and outer protocol design, followed by commit/push",
       "change": "Add generic Instance bind/run and callback lifecycle; BaseGame adapts them into complete game decision/event/control APIs. No production runtime; reverify C01-03/05 and publish after evidence passes."
+    },
+    {
+      "date": "2026-10-09",
+      "source": "User asks for strict proof before permanently freezing protocol",
+      "change": "Freeze audit rejects completion claim: capture capability access is not closed after transfer; manual/callback event delivery composition is inconsistent/underspecified. Reopen C01-03 without editing public protocol."
+    },
+    {
+      "date": "2026-10-09",
+      "source": "用户要求将 submit 删除干净",
+      "change": "Remove BaseGame submit and GameUpdate, migrate binder return and all consumers to bind/run; preserve Core resume. F1 capture obligation remains open."
     }
   ]
 }

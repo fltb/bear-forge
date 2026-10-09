@@ -1,7 +1,7 @@
 {
   "checkpoint": "C01",
   "kind": "design",
-  "summary": "Complete inner/outer control declarations: Instance bind/run/transfer, typed callbacks and cancellation; BaseGame decision/event/manual/run interfaces, policy projection and same-type fork. Native Dou Dizhu emits through SDK event port. 57 tests, 44 schemas and 101-export conditional coverage pass. No production executor or driver implemented.",
+  "summary": "Removed BaseGame submit, GameUpdate and binder initial wrapper; migrated public consumers, search and active documentation to bind/run. 57 native/schema tests pass, 44 schemas and 100 public definitions checked. F2 competing delivery path removed; F1 capture access remains open and C01-03 pending. No production runtime implemented.",
   "replay_command": "npm ci --ignore-scripts && npm run check",
   "artifacts": [
     {
@@ -10,11 +10,11 @@
     },
     {
       "path": "docs/protocol.md",
-      "sha256": "6613f9fe8a1dca8cbd26f684a5f41d5f962284702443a8a9e02d0e679804f584"
+      "sha256": "a27a7596f71452d43ba2e3087738f3d5d95ad935a1f01956a5d865c3526eb488"
     },
     {
       "path": "evidence/C01/acceptance.md",
-      "sha256": "be983c39c602aabd53055818292718dd110fb1fe099331bcb875421f8b32d0fe"
+      "sha256": "78ee0b75518784b07de340ccb1ee5567bf2b365f7dcbe25275f3b3d36c1d9add"
     },
     {
       "path": "evidence/C01/boundary-migration-acceptance.md",
@@ -22,11 +22,55 @@
     },
     {
       "path": "evidence/C01/boundary-migration-review.md",
-      "sha256": "8cf0754e30fb2eadc22c76d69e0e04e8528d893533a71d6514af7675cefc6980"
+      "sha256": "58e5f57258fe35ccaf520b59d0adaca53cd3126c0e2cc35cc184e32d1b7c5d88"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/baseline/check.log",
+      "sha256": "43ff5f382b32a73e500c969c9dff95e84d89a645522cd57fb9b085125d7bf82e"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/baseline/check.mjs.txt",
+      "sha256": "6495b8216f7151a9d226121e0854d7c38ff877c03bfc4bee5b7f7206d5e6a716"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/baseline/coverage.log",
+      "sha256": "f63731b79bfcef67cd085c6f914a713db9ef0b08d18b014a3d7e61c78004065d"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/baseline/event-witness.mts.txt",
+      "sha256": "654f583b673b4c00f890268cd45c9b8e85fe535f78ad632fe89ee94e3c51833e"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/baseline/review.md",
+      "sha256": "d98763e877311f723024b69a5b08d331811ca712fd8a4d6d8d4da8946d21241a"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/baseline/typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/check.log",
+      "sha256": "3d4e7b1f78ac36e0758133cd490bddde79968d6087bdb0eb4db88d691c2e431f"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/check.mjs",
+      "sha256": "3aa9356e97a80221236052c221fd10ed86d189ef2d7dde8359eafcc7dba78e40"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/coverage.log",
+      "sha256": "111f0c269b1981b1990b9c9d2822c9509d9deee11039dfdf3f2feb480e996d91"
+    },
+    {
+      "path": "evidence/C01/freeze-audit/review.md",
+      "sha256": "1ef19b5f80926082dd88fc0c9c22b03ed54ad6011cd8bb7546df85f457ff0962"
     },
     {
       "path": "evidence/C01/protocol-proof-index.json",
-      "sha256": "9d71abc5f487535ae6708142657f5f7f3321aed720026e9951bc2e0a2fc1af9d"
+      "sha256": "a3865791bdf355b766105c407136a83b2d1a02348a414a443b3de8bf4824c6c6"
+    },
+    {
+      "path": "evidence/C01/verify-migration.py",
+      "sha256": "86c90ffce5cb35d8f30530bb9498185a153603316a3da5d30c20fce0a71fe057"
     },
     {
       "path": "games/doudizhu/package.json",
@@ -98,7 +142,7 @@
     },
     {
       "path": "packages/contracts/src/game/types.ts",
-      "sha256": "31e1fe74aa7fbc857911e5db91a9dc32aed2475f7836832f714d67d1d38a26a6"
+      "sha256": "17669d42143b7cf901a502d77bd1a21cef11cafb400141693c7da4d572f03c4a"
     },
     {
       "path": "packages/contracts/src/index.ts",
@@ -110,11 +154,11 @@
     },
     {
       "path": "packages/contracts/src/runtime/types.ts",
-      "sha256": "2038347029dccbd23afa9af60902d552f6da166ada5a66523e8defd1c424cf5d"
+      "sha256": "778521466f4248e26cb6daf7689070870f83ab4fafb7379e8ceb776bf67fe9a9"
     },
     {
       "path": "tests/contracts/basegame-types.ts",
-      "sha256": "18bd3346bbc8de2da4990605d6dc8170567611bbccad8b9a63b4d88aba41a111"
+      "sha256": "3e6429a0760fb424a71121073429f2fa85906fb8b77c5fe25ad6efa5542676c9"
     },
     {
       "path": "tests/contracts/instance-types.ts",
@@ -159,22 +203,11 @@
     {
       "path": "tsconfig.json",
       "sha256": "ed7cc8c028a131097067dc430a5c29f703e1325755de3863363802930596331a"
-    },
-    {
-      "path": "evidence/C01/verify-migration.py",
-      "sha256": "394315abe001561b08a491e0ec0d150ecda8303c297f05584ce56923abc4a5d4"
     }
   ],
   "checks": [
     {
       "id": "C01-01",
-      "status": "passed",
-      "command": "npm run check",
-      "exit_code": 0,
-      "log": "evidence/C01/boundary-migration-check.log"
-    },
-    {
-      "id": "C01-03",
       "status": "passed",
       "command": "npm run check",
       "exit_code": 0,
@@ -194,6 +227,18 @@
       "command": "python3 evidence/C01/verify-migration.py",
       "exit_code": 0,
       "log": "evidence/C01/boundary-completion-audit.log"
+    },
+    {
+      "scope": "duplicate driving surface removal regression; F1 remains open",
+      "command": "node evidence/C01/freeze-audit/check.mjs",
+      "exit_code": 0,
+      "log": "evidence/C01/freeze-audit/check.log"
+    },
+    {
+      "scope": "proof coverage with explicit open freeze obligations",
+      "command": "npm run check:proof-coverage",
+      "exit_code": 0,
+      "log": "evidence/C01/freeze-audit/coverage.log"
     }
   ]
 }

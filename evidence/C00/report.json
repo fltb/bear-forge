@@ -6,7 +6,7 @@
   "artifacts": [
     {
       "path": "README.md",
-      "sha256": "d143946de846c94daa1298c1af9c5bb949ed3fb27f38eb6e1bb7657b0e1a73cb"
+      "sha256": "c17fdc5a7670357b34a82b0faba25445506f601c096d36b8b4324ecee2fafcde"
     },
     {
       "path": "AGENTS.md",
@@ -14,11 +14,11 @@
     },
     {
       "path": "docs/requirements.md",
-      "sha256": "db5ffb677ef4727476d87359ffe72f355840efcd36640c2e8b10c24b110a6108"
+      "sha256": "aa374c7ee4d44a1fe24df580c08937b3971f8504f68990d6dea149428cf310ca"
     },
     {
       "path": "docs/architecture.md",
-      "sha256": "270bca871d956ae15188afbab81ffd4cca677b1ff57b88282b24dd60d9e96300"
+      "sha256": "4c58cad37e4094fecdf29c866d65748975d41afc5f65d462d81fa595f29961ff"
     },
     {
       "path": "docs/workflow.md",
@@ -46,7 +46,7 @@
     },
     {
       "path": "docs/protocol.md",
-      "sha256": "6613f9fe8a1dca8cbd26f684a5f41d5f962284702443a8a9e02d0e679804f584"
+      "sha256": "a27a7596f71452d43ba2e3087738f3d5d95ad935a1f01956a5d865c3526eb488"
     },
     {
       "path": "docs/doudizhu.md",
@@ -54,7 +54,7 @@
     },
     {
       "path": "docs/plan.md",
-      "sha256": "dbf3eb1c00ec9f7757c0fdb6caaa815b15ff27f61e59164782464db17db30d33"
+      "sha256": "3312deaf1a656136c523fb37fc908d1d1aad3ea6ec4dd0e9c82bbc5e3c5bbd2d"
     },
     {
       "path": "docs/controlled-program-spec.md",

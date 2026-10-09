@@ -21,7 +21,7 @@ flowchart TB
 | Instance | 控制栈、局部值、闭包、对象图、SDK/服务状态、待决调用和记录 | bind/run/inspect/resume/fork?/transfer/close |
 | 内侧 SDK | 在受控程序内创建，封装端口与领域组合；可变状态属于 Instance | GameSDK 的端口函数及领域扩展 |
 | GameContract | 无可变状态；类型/schema 与纯投影、转换 | ports/finish/observe/inputs/queries |
-| 外侧 BaseGame | 独占驱动一个 Instance；缓存仅为可重建数据 | bind/run/inspect/submit/observe/describe/validate/query/fork?/save?/close |
+| 外侧 BaseGame | 独占驱动一个 Instance；缓存仅为可重建数据 | bind/run/inspect/observe/describe/validate/query/fork?/save?/close |
 | 会话 | 身份权限、交付时刻、回执和重试 | 消费 BaseGame |
 | 策略/搜索 | 策略记忆、候选、搜索树与评估 | 同一 BaseGame 接口 |
 | 训练/分析 | 轨迹编码、奖励、实验条件与关系证据 | 消费观察、事件与结果 |
@@ -32,7 +32,7 @@ flowchart TB
 2. program.run 内创建 SDK；游戏局部状态、随机流、输入封存及事件发布位置全部留在 Instance。
 3. SDK 通过 IO.call 发布声明端口。Instance 在外部输入等待处挂起。
 4. BaseGameBinder.bind(instance,contract) 通过 Instance.transfer 接管驱动权，只投影当前边界。BaseGame.bind 注册游戏回调，包装为 Instance.bind 的通用端口回调。
-5. BaseGame.run 委托 Instance.run；输入回调收到参与方可见观察及合法选项，回答经纯 respond 编码。手动 submit 使用同一回复接受路径；驱动租约禁止两者竞争。
+5. BaseGame.run 委托 Instance.run；输入回调收到参与方可见观察及合法选项，回答经纯 respond 编码。驱动租约禁止重入推进。
 6. 内侧程序验证返回并结算，继续自己的循环；外侧不调用另一份 apply。
 7. event 端口经纯处理器投影后由外侧 onEvent 确认；它可以暂停，但不等待动画。decision 可回调回答或保持暂停；done 用 finish 提取结果及终局事件。
 
@@ -42,7 +42,7 @@ Instance.fork → 新 Instance；BaseGame.fork → 给新 Instance 绑定同一 
 
 保存只有 InstanceSnapshot：BaseGame.save 委托底层保存，恢复走 persistence.restore → binder.bind。程序内 SDK/设备闭包一并恢复；外侧不补装随机状态或等待输入缓存。真实外部输入源属于调用方，确定性以相同显式回复为条件。
 
-搜索直接 fork/inspect/submit/close；没有搜索运行层。普通游戏运行可以没有 fork/save。隐藏信息安全构造不等于复制真实 Instance，假设世界和访问权限仍由游戏及调用方规定。
+搜索直接 fork/inspect/bind/run/close；没有搜索运行层。普通游戏运行可以没有 fork/save。隐藏信息安全构造不等于复制真实 Instance，假设世界和访问权限仍由游戏及调用方规定。
 
 ## 文件树
 

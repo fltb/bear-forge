@@ -14,7 +14,7 @@
 
 ## R03 执行边界
 
-Core 提供通用受控执行机制；Instance 是一个程序的完整运行态，只有声明端口调用、返回、结束与执行故障，没有游戏语义。BaseGame 位于 Instance 上层，落实游戏交互约定并提供跨游戏可训练接口。具体游戏提供领域类型、规则、循环、SDK、端口声明和适配处理器。BaseGame 不复制规则状态，不另写结算。外部调用参数及返回由声明 schema 校验，禁止绕过端口取得宿主状态。Instance.bind/run 负责通用回调和控制，BaseGame.bind/run 提供游戏语义回调及边界控制；手动回复与回调驱动共用唯一执行路径。直接运行不依赖存档、训练或搜索。
+Core 提供通用受控执行机制；Instance 是一个程序的完整运行态，只有声明端口调用、返回、结束与执行故障，没有游戏语义。BaseGame 位于 Instance 上层，落实游戏交互约定并提供跨游戏可训练接口。具体游戏提供领域类型、规则、循环、SDK、端口声明和适配处理器。BaseGame 不复制规则状态，不另写结算。外部调用参数及返回由声明 schema 校验，禁止绕过端口取得宿主状态。Instance.bind/run 负责通用回调和控制，BaseGame.bind/run 提供游戏语义回调及边界控制；游戏输入统一由 onDecision 返回，run 是 BaseGame 的唯一推进入口。直接运行不依赖存档、训练或搜索。
 
 Instance 是唯一完整运行态。内侧 GameSDK 和具体游戏规则在其中执行，外侧 BaseGame 通过共享 GameContract 绑定该 Instance。保存和恢复只使用 InstanceSnapshot；分支返回同类型 Instance/BaseGame。所有影响继续执行的 SDK/服务状态在 Instance 内；策略记忆、会话及搜索树属于调用方。Core 不认识随机或时间的含义。
 

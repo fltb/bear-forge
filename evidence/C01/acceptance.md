@@ -59,7 +59,7 @@ Current two-sided migration verification: 56 native/schema tests, 39 admitted sc
 
 ## Complete inner/outer control protocol and publish (current request)
 
-- Specify Instance bind/run, correlated callbacks, explicit reply/pause, manual resume, limits/cancellation, callback errors, lease/late-return rules, and unbound fork/restore.
+- Specify Instance bind/run, correlated callbacks, explicit reply/pause, one run entrypoint, limits/cancellation, callback errors, lease/late-return rules, and unbound fork/restore.
 - Specify BaseGame callback binding/run, typed decision offers (actor-visible observations and options), event delivery identity, callback-only advancement, event/decision/terminal boundaries and multiplayer routing. BaseGame adapts Instance callbacks without a second executor.
 - Preserve internal IO/GameSDK and single Instance state. Update types, fixed schemas, pure game contract, all consumers and proofs. Protocol phase only; no production driver.
 - Validate positive and negative type consumers for raw Instance callbacks, game callbacks and manual/search use, complete native Dou Dizhu and explicit emitted-event SDK use.
@@ -71,5 +71,11 @@ Historical callback/control verification before removal: npm run check passed (5
 ## 删除重复的 BaseGame 推进入口
 
 - `npm run check`：公共类型不再提供 submit/GameUpdate；binder 直接返回 GameHandle；搜索消费者使用 bind/run(maxInputs:1)，负向类型检查拒绝 submit。现有游戏/schema 测试全部通过。
-- `node evidence/C01/freeze-audit/check.mjs`：检查当前声明与规范无第二条游戏推进/批量事件返回路径；F1 保持开放。
+- `node evidence/C01/freeze-audit/check.mjs`：检查当前声明与规范无第二条游戏推进/批量事件返回路径；捕捉闭合由后续本文件的清理验收项验证。
 - `python3 evidence/C01/verify-migration.py` 与 `python3 tools/check_project.py`：公共声明附录、证据与账本一致。不启动生产运行器实现。
+
+## 清除剩余混合边界与冻结审核
+
+- `npm run check`：Instance 无第二推进入口；decision/terminal 不携带事件；事件身份仅来自 event 调用；capture 在 transfer 后仍可按实例身份读取，close 与记录释放分离。正向消费者和负向类型/schema 检查覆盖这些边界。
+- `node evidence/C01/freeze-audit/check.mjs`：检查唯一入口、事件来源、捕捉接线的实际声明，不能以文字自称修复。
+- 逐项审核协议操作、生命周期、错误、作者契约与 R03–R08 接线；冻结需有限需求集合上的构造证明和状态转换覆盖，生产实现义务独立列出。不能把类型通过当作任意程序正确性证明。

@@ -8,12 +8,12 @@ export const InstanceSnapshotSchema = z.strictObject({
 export const InstanceErrorSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('rejected'),
-    code: z.enum(['invalid_input', 'invalid_argument', 'call_mismatch', 'snapshot_not_found', 'snapshot_incompatible']),
+    code: z.enum(['invalid_input', 'invalid_argument', 'snapshot_not_found', 'snapshot_incompatible', 'records_not_found']),
     message: z.string(),
   }),
   z.strictObject({
     kind: z.literal('conflict'),
-    code: z.enum(['instance_busy', 'instance_closed', 'instance_finished', 'instance_owned']),
+    code: z.enum(['instance_busy', 'instance_closed', 'instance_owned']),
     message: z.string(),
   }),
   z.strictObject({

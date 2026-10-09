@@ -14,7 +14,7 @@ export const InputOptionsSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('construct'), description: JsonValueSchema }),
 ]);
 export const GameErrorSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('rejected'), code: z.enum(['invalid_input', 'invalid_argument', 'decision_mismatch', 'choice_not_found', 'snapshot_not_found', 'snapshot_incompatible']), message: z.string() }),
+  z.strictObject({ kind: z.literal('rejected'), code: z.enum(['invalid_input', 'invalid_argument', 'decision_mismatch', 'choice_not_found', 'snapshot_incompatible']), message: z.string() }),
   z.strictObject({ kind: z.literal('conflict'), code: z.enum(['game_busy', 'game_closed', 'game_ended', 'view_unavailable']), message: z.string() }),
   z.strictObject({ kind: z.literal('unsupported'), code: z.literal('capability_unavailable'), message: z.string() }),
   z.strictObject({ kind: z.literal('fault'), code: z.enum(['invalid_output', 'program_failed', 'budget_exceeded']), message: z.string() }),
@@ -24,9 +24,6 @@ export const GameErrorSchema = z.discriminatedUnion('kind', [
 export const GameRunLimitsSchema = z.strictObject({maxInputs:z.number().safe().nonnegative().optional()});
 export const EventDeliveryIdSchema = z.strictObject({
   instanceId:InstanceIdSchema,
-  origin:z.discriminatedUnion('kind',[
-    z.strictObject({kind:z.literal('call'),callId:CallIdSchema}),
-    z.strictObject({kind:z.literal('done')}),
-  ]),
+  callId:CallIdSchema,
   index:z.number().safe().nonnegative(),
 });

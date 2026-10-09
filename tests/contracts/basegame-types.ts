@@ -77,13 +77,16 @@ export async function actualBinding(
   controlled:ControlledCoreLoader,
   artifact:Artifact<DouDizhuTypes['setup'],DouDizhuPorts,DouDizhuTypes['programResult']>,
 ) {
-  await native.load(game.program);
-  await controlled.load(artifact);
+  const nativeLoaded=await native.load(game.program);
+  if(nativeLoaded.ok){const loaded:typeof core=nativeLoaded.value;void loaded;}
+  const controlledLoaded=await controlled.load(artifact);
+  if(controlledLoaded.ok){const loaded:typeof core=controlledLoaded.value;void loaded;}
   const started=await core.core.start({game:{profile:'competitive-2016-bear-1',firstBidder:'0',initialGameTime:0},seed:12});
   if(!started.ok)return;
   const bound=await binder.bind({instance:started.value,contract:game.contract,...(core.persistence?{persistence:core.persistence}:{})});
   if(!bound.ok)return;
   const base:DDZ=bound.value;
+  if(core.capture)await core.capture.read(base.id,{after:null,limit:10});
   try {
     if(base.fork){
       const child=await base.fork();
@@ -105,7 +108,7 @@ export async function actualBinding(
         }finally{await core.persistence.release(saved.value);}
       }
     }
-  }finally{await base.close();}
+  }finally{await base.close();if(core.capture)await core.capture.release(base.id);}
   // @ts-expect-error setup retains the game's declared rule profile
   await core.core.start({game:{profile:'unregistered',firstBidder:'0',initialGameTime:0},seed:12});
   // @ts-expect-error binding requires a real Instance, not a Core or a module
@@ -185,4 +188,16 @@ export async function callbackPlay(base:DDZ, policy:DecisionPolicy<DouDizhuTypes
   // @ts-expect-error undeclared host callbacks are not protocol fields
   await base.bind({randomInteger:async()=>3});
   await base.bind(null);
+}
+
+// Terminal and decision projections cannot introduce a second event delivery channel.
+import type { DecisionData, TerminalData, GameRunStop } from '@bear-forge/contracts';
+export function eventBoundaryOnly(decision:DecisionData<DouDizhuTypes>,terminal:TerminalData<DouDizhuTypes>) {
+  // @ts-expect-error notifications belong to event ports
+  decision.events;
+  // @ts-expect-error terminal results have no pending notifications
+  terminal.events;
+  // @ts-expect-error a completed game cannot also be paused waiting for delivery
+  const stopped:GameRunStop<Interactions,string,number>={acceptedInputs:0,kind:'paused',reason:'requested',boundary:{kind:'ended',result:0}};
+  void stopped;
 }

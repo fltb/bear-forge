@@ -1,3 +1,5 @@
-PASS F2 removed: one BaseGame driving API, direct binder result, callback-only event delivery.
-OPEN F1: capture access after transfer is still not closed; protocol freeze remains pending.
-SCOPE declaration regression checks, not production execution evidence.
+PASS: Instance and BaseGame each have one driving entrypoint.
+PASS: only event ports deliver notifications; terminal state has no pending delivery.
+PASS: capture is provider-scoped by identity and survives control transfer/close until release.
+SCOPE declaration and consumer checks; implementation conformance remains a separate obligation.
+PASS: exact method inventories and both loader failure outcomes match the freeze proof.

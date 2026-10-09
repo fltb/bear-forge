@@ -76,7 +76,6 @@ export type Instance<P extends { [K in keyof P]: PortShape }, R> = {
   bind: (bindings: PortBindings<P> | null) => Promise<Outcome<void>>;
   run: (options?: InstanceRunOptions) => Promise<Outcome<InstanceRunStop<P, R>>>;
   inspect: () => Promise<Outcome<InstanceStop<P, R>>>;
-  resume: (input: { callId: CallId; reply: PortReturn<P> }) => Promise<Outcome<InstanceStop<P, R>>>;
   fork?: () => Promise<Outcome<Instance<P, R>>>;
   close: () => Promise<Outcome<void>>;
 };
@@ -96,9 +95,11 @@ export type InstanceRecord<S, P extends { [K in keyof P]: PortShape }, R> =
   | { sequence: number; kind: 'returned'; callId: CallId; reply: PortReturn<P> }
   | { sequence: number; kind: 'completed'; result: R }
   | { sequence: number; kind: 'faulted'; error: InstanceFault };
+/** Provider-scoped audit authority, independent of transferable execution handles. */
 export type InstanceCapture<S, P extends { [K in keyof P]: PortShape }, R> = {
-  read: (instance: Instance<P, R>, input: RecordRead) => Promise<Outcome<{
+  read: (instanceId: InstanceId, input: RecordRead) => Promise<Outcome<{
     records: InstanceRecord<S, P, R>[];
     next: number | null;
   }>>;
+  release: (instanceId: InstanceId) => Promise<Outcome<void>>;
 };

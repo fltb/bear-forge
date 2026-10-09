@@ -45,8 +45,10 @@ export async function consume(
     if (restored.ok) await restored.value.inspect();
     await persistence.release(saved.value);
   }
-  await capture.read(instance, { after: null, limit: 10 });
+  await capture.read(instance.id, { after: null, limit: 10 });
   await instance.close();
+  await capture.read(instance.id, { after: null, limit: 10 });
+  await capture.release(instance.id);
 }
 export function invalid(io: IO<Ports>, uncertain: 'read' | 'announce') {
   // @ts-expect-error registered names only
@@ -77,6 +79,8 @@ const symbol:PortCall<{[key]:{input:1;output:1}}>={port:'key',input:1};void symb
 export async function boundExecution(core:Core<string,Ports,number>) {
   const started=await core.start('key');if(!started.ok)return;
   const instance=started.value;
+  // @ts-expect-error advancement is only through run with a bound callback
+  instance.resume;
   await instance.bind({
     async read(request,control){
       const key:string=request.input.key;void key;

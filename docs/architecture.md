@@ -18,10 +18,11 @@ flowchart TB
 | 部分 | 状态与职责 | 对外 |
 | --- | --- | --- |
 | Core | 通用程序准入、执行机制；无游戏语义 | start、可选 persistence/capture |
-| Instance | 控制栈、局部值、闭包、对象图、SDK/服务状态、待决调用和记录 | bind/run/inspect/resume/fork?/transfer/close |
+| Instance | 控制栈、局部值、闭包、对象图、SDK/服务状态、待决调用和记录 | bind/run/inspect/fork?/transfer/close |
 | 内侧 SDK | 在受控程序内创建，封装端口与领域组合；可变状态属于 Instance | GameSDK 的端口函数及领域扩展 |
 | GameContract | 无可变状态；类型/schema 与纯投影、转换 | ports/finish/observe/inputs/queries |
 | 外侧 BaseGame | 独占驱动一个 Instance；缓存仅为可重建数据 | bind/run/inspect/observe/describe/validate/query/fork?/save?/close |
+| 捕捉 | 提供者授予的独立审计权限，按实例 id 读取；close 后显式释放记录 | capture.read/release |
 | 会话 | 身份权限、交付时刻、回执和重试 | 消费 BaseGame |
 | 策略/搜索 | 策略记忆、候选、搜索树与评估 | 同一 BaseGame 接口 |
 | 训练/分析 | 轨迹编码、奖励、实验条件与关系证据 | 消费观察、事件与结果 |
@@ -34,7 +35,7 @@ flowchart TB
 4. BaseGameBinder.bind(instance,contract) 通过 Instance.transfer 接管驱动权，只投影当前边界。BaseGame.bind 注册游戏回调，包装为 Instance.bind 的通用端口回调。
 5. BaseGame.run 委托 Instance.run；输入回调收到参与方可见观察及合法选项，回答经纯 respond 编码。驱动租约禁止重入推进。
 6. 内侧程序验证返回并结算，继续自己的循环；外侧不调用另一份 apply。
-7. event 端口经纯处理器投影后由外侧 onEvent 确认；它可以暂停，但不等待动画。decision 可回调回答或保持暂停；done 用 finish 提取结果及终局事件。
+7. event 端口经纯处理器投影后由外侧 onEvent 确认；它可以暂停，但不等待动画。decision 可回调回答或保持暂停；终局事件在 return 前经 event 发布；done 用 finish 提取结果。
 
 ## 分支与恢复
 

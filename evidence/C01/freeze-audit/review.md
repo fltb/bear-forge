@@ -1,7 +1,11 @@
-# 删除重复推进后的审计状态
+# 边界清理审计
 
-BaseGame 只通过 bind 配置回调、run 推进。批量返回事件的 GameUpdate 以及 binder 的 initial 包装均已删除；初始边界通过 inspect 获取。搜索消费者已改用子实例 bind/run(maxInputs:1)。F2 所依赖的两种游戏推进模式已不存在；事件只经 onEvent 交付，保留带身份的至少一次重试语义。
+- F1 已闭合：capture.read(instanceId,...) 使用提供者授予的独立审计权限。transfer 保持 id，BaseGame 暴露同一 id；close 后留存记录，capture.release 显式回收。类型消费者覆盖绑定游戏后的读取。
+- F2 已消除：BaseGame 与 Instance 都仅通过 bind/run 驱动；不存在 submit、resume 或 GameUpdate 公共入口。
+- 事件来源统一：仅 event 端口交付通知。DecisionData/TerminalData 不携带事件，ended 不再是 paused 边界；EventDeliveryId 只引用 callId。
+- 装载失败统一：两个 loader 都返回 Outcome，不将已知准入失败藏在未声明的成功返回中。
+- 契约故障不能伪装成程序 fault：适配器使用公开控制接口撤销驱动并关闭实例，不依赖私有 markFault。
 
-F1 仍开放：InstanceCapture.read 需要 Instance，但 transfer 使旧句柄失效，BaseGame 私有持有新句柄且没有捕捉读取接线。此次删除不解决这项独立能力闭合问题，C01-03 不能标为通过。
+完整需求闭合、状态归属、操作存在性与归纳证明见 ../protocol-freeze-proof.md。原始反例及输出保留在 baseline/，只对应旧提交，不是当前消费代码。
 
-原始审计及命令输出保存在 baseline/，针对提交 2ed41da80b1570a094726583a6ef2490a25c9fdf，不是当前协议的消费者或重放指令。当前检查执行 `node evidence/C01/freeze-audit/check.mjs`，完整验证执行 `npm run check`。100 个公共定义的覆盖不等于完整正确性证明；生产运行器仍未实现。
+当前审计命令：`node evidence/C01/freeze-audit/check.mjs`；完整类型/原生/schema 验证：`npm run check`。这些命令不测试尚未实现的生产运行器；其履约义务单独留在 C02/C03。

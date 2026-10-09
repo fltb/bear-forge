@@ -59,7 +59,7 @@ export type GameBindings<T extends InteractionTable, A, D, S, V, E> = {
 export type GameRunLimits = z.infer<typeof GameRunLimitsSchema>;
 export type GameRunOptions = {limits?:GameRunLimits;signal?:AbortSignal};
 export type GameRunStop<T extends InteractionTable, A, R> = {acceptedInputs:number} & (
-  | {kind:'paused';reason:PauseReason;boundary:GameBoundary<T,A,R>;message?:string}
+  | {kind:'paused';reason:PauseReason;boundary:Exclude<GameBoundary<T,A,R>,{kind:'ended'}>;message?:string}
   | {kind:'ended';result:R}
   | {kind:'fault';error:Extract<GameError,{kind:'fault'}>});
 /** Exclusive outer facade of one Instance; no separate mutable game/service state. */

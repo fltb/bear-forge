@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { InstanceErrorSchema, GameErrorSchema, RecordReadSchema, InputOptionsSchema } from '@bear-forge/contracts';
 
 test('fixed failure categories distinguish a rejected submission from execution failure',()=>{
-  assert.ok(InstanceErrorSchema.safeParse({kind:'rejected',code:'call_mismatch',message:'x'}).success);
+  assert.ok(InstanceErrorSchema.safeParse({kind:'rejected',code:'records_not_found',message:'x'}).success);
+  assert.equal(InstanceErrorSchema.safeParse({kind:'rejected',code:'call_mismatch',message:'x'}).success,false);
   assert.equal(InstanceErrorSchema.safeParse({kind:'rejected',code:'program_failed',message:'x'}).success,false);
   assert.ok(GameErrorSchema.safeParse({kind:'rejected',code:'decision_mismatch',message:'x'}).success);
   assert.equal(GameErrorSchema.safeParse({kind:'conflict',code:'invalid_output',message:'x'}).success,false);
@@ -39,7 +40,7 @@ test('control schemas close pause categories and require finite nonnegative run 
     for(const value of [-1,0.5,Infinity])assert.equal(schema.safeParse({[key]:value}).success,false);
   }
   const instanceId='11111111-1111-4111-8111-111111111111',callId='22222222-2222-4222-8222-222222222222';
-  assert.ok(EventDeliveryIdSchema.safeParse({instanceId,origin:{kind:'call',callId},index:0}).success);
-  assert.ok(EventDeliveryIdSchema.safeParse({instanceId,origin:{kind:'done'},index:0}).success);
+  assert.ok(EventDeliveryIdSchema.safeParse({instanceId,callId,index:0}).success);
+  assert.equal(EventDeliveryIdSchema.safeParse({instanceId,origin:{kind:'done'},index:0}).success,false);
   assert.equal(EventDeliveryIdSchema.safeParse({instanceId,origin:{kind:'call'},index:0}).success,false);
 });

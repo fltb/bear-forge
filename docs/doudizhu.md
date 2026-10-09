@@ -19,7 +19,7 @@
 
 program.ts 是唯一完整循环，类型 Program<ProgramSetup,DouDizhuPorts,Frame>。ProgramSetup={game:Setup,seed:uint32}。程序内部创建 SDK，随机状态在 SDK 闭包内驱动洗牌；decision 端口发布 Frame 并等待 Input；event 端口发布尚未交付的 AuditEvent[] 并等待 null 确认。published 在事件确认后推进，决策/终局 Frame.events 清空以避免重复发布。局部 state 与 published 位于程序现场，完整恢复由 Instance 的实现承担。
 
-implementation.ts 导出 GameModule={program,contract} 声明 game；没有宿主实例 Map、执行器绑定循环或独立规则推进。decision.receive 从 Frame 投影 view/choices/events；respond 使用同一 validateInput 规则检查并编码 Input。finish 从 state.result 提取唯一终局结果。
+implementation.ts 导出 GameModule={program,contract} 声明 game；没有宿主实例 Map、执行器绑定循环或独立规则推进。decision.receive 从 Frame 投影 view/choices；respond 使用同一 validateInput 规则检查并编码 Input。finish 从 state.result 提取唯一终局结果。
 
 ## 字段与数据流
 

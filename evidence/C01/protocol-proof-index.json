@@ -1,14 +1,14 @@
 {
   "scope": "public-contract-definitions",
   "sources": {
-    "packages/contracts/src/authoring/types.ts": "714bea6d61b60a280fda523b63ff7dd6531067e9026fc7147460b1b6a60f5dde",
-    "packages/contracts/src/core/schemas.ts": "46fe706135303f1c16b32897f358759d505e02c257390bc58fcc45117db5e109",
-    "packages/contracts/src/core/types.ts": "ddff702da8882d824c4159db78a5f69e3972670f1db3f499b707273dcac66a77",
-    "packages/contracts/src/game/schemas.ts": "392908c26b24ba432dcf847933ee40da7c310e38cdca951b53d6bad30e0df08e",
-    "packages/contracts/src/game/types.ts": "17669d42143b7cf901a502d77bd1a21cef11cafb400141693c7da4d572f03c4a",
+    "packages/contracts/src/authoring/types.ts": "3fbb5c14dd9b9365f9b73a48c2c0eb280fff18ff88cb3aa50252b36565655539",
+    "packages/contracts/src/core/schemas.ts": "9525015d79f9dceb5b735cccf708b1aa23fc7f99d34d75adda01c24f3198ed8f",
+    "packages/contracts/src/core/types.ts": "eaf1b91b99aeb835a57933f762b53ea17acad5bab1d31f55d5edc235817d8185",
+    "packages/contracts/src/game/schemas.ts": "33dfe897759745f6fcd25032dddb50119fb6f994b74171a96d2705f4e8c4e764",
+    "packages/contracts/src/game/types.ts": "bbcc1fecbdc7fd6c99a1da05fcb52a9e67db4ab4a769c9643e86ffa31c4c5f56",
     "packages/contracts/src/index.ts": "b3583f8b335db1266daf185927626b48d23262d8fe37d337502b0b9758dd8539",
     "packages/contracts/src/runtime/schemas.ts": "e9a033ee25aea4cdd84c071bd76a774067982ba4436f688874ab5181bc7bdcb6",
-    "packages/contracts/src/runtime/types.ts": "778521466f4248e26cb6daf7689070870f83ab4fafb7379e8ceb776bf67fe9a9"
+    "packages/contracts/src/runtime/types.ts": "11f3468ace72c9f026df4d709c2fd3ce057a6567bdd9b69c1682e63757f7d925"
   },
   "laws": [
     {
@@ -24,7 +24,8 @@
       "argument": "evidence/C01/boundary-migration-review.md",
       "evidence": [
         "tests/contracts/instance-types.ts",
-        "docs/protocol.md"
+        "docs/protocol.md",
+        "evidence/C01/protocol-freeze-proof.md"
       ],
       "openObligations": [
         "Production controlled executor, continuation fork/save/restore and capability rebinding remain C02 obligations.",
@@ -35,7 +36,7 @@
     {
       "id": "game",
       "claim": "BaseGame reads and drives its bound Instance; same-type fork and InstanceSnapshot save introduce no second transition engine.",
-      "status": "open",
+      "status": "conditional",
       "assumptions": [
         "Admitted program preserves TS semantics; inner mutable state is complete and isolated.",
         "GameContract handlers are pure and value-isolated; program/contract pairing is correct.",
@@ -46,13 +47,13 @@
       "evidence": [
         "tests/contracts/basegame-types.ts",
         "docs/protocol.md",
-        "evidence/C01/freeze-audit/review.md"
+        "evidence/C01/freeze-audit/review.md",
+        "evidence/C01/protocol-freeze-proof.md"
       ],
       "openObligations": [
         "Production controlled executor, continuation fork/save/restore and capability rebinding remain C02 obligations.",
         "Production binder ownership, lifecycle/failure isolation and real native/controlled differential execution remain unimplemented.",
-        "Runtime callback driving, driver ownership, cancellation races and event retry behavior require actual provider conformance tests.",
-        "F1: define an authorized capture read path after BaseGame transfers ownership."
+        "Runtime callback driving, driver ownership, cancellation races and event retry behavior require actual provider conformance tests."
       ]
     },
     {
@@ -68,7 +69,8 @@
       "argument": "evidence/C01/boundary-migration-review.md",
       "evidence": [
         "tests/doudizhu/game.test.ts",
-        "docs/protocol.md"
+        "docs/protocol.md",
+        "evidence/C01/protocol-freeze-proof.md"
       ],
       "openObligations": [
         "Production controlled executor, continuation fork/save/restore and capability rebinding remain C02 obligations.",
@@ -79,7 +81,7 @@
     {
       "id": "runtime",
       "claim": "Loaders provide execution; binder attaches a compatible contract to an existing Instance with exclusive driving authority.",
-      "status": "open",
+      "status": "conditional",
       "assumptions": [
         "Admitted program preserves TS semantics; inner mutable state is complete and isolated.",
         "GameContract handlers are pure and value-isolated; program/contract pairing is correct.",
@@ -90,13 +92,13 @@
       "evidence": [
         "tests/contracts/basegame-types.ts",
         "docs/protocol.md",
-        "evidence/C01/freeze-audit/review.md"
+        "evidence/C01/freeze-audit/review.md",
+        "evidence/C01/protocol-freeze-proof.md"
       ],
       "openObligations": [
         "Production controlled executor, continuation fork/save/restore and capability rebinding remain C02 obligations.",
         "Production binder ownership, lifecycle/failure isolation and real native/controlled differential execution remain unimplemented.",
-        "Runtime callback driving, driver ownership, cancellation races and event retry behavior require actual provider conformance tests.",
-        "F1: define an authorized capture read path after BaseGame transfers ownership."
+        "Runtime callback driving, driver ownership, cancellation races and event retry behavior require actual provider conformance tests."
       ]
     }
   ],

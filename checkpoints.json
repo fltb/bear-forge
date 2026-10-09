@@ -29,13 +29,13 @@
       "items": {
         "C01-01": "passed",
         "C01-02": "pending",
-        "C01-03": "pending",
+        "C01-03": "passed",
         "C01-04": "pending",
         "C01-05": "passed"
       },
       "evidence": "evidence/C01/report.json",
       "blocker": null,
-      "next_action": "Complete removal regression checks; F1 capture access remains open before protocol freeze."
+      "next_action": "Protocol freeze and finite-requirement completeness proof completed. C01-02/04 implementation preparation remains pending; C02 runtime not started."
     },
     "C02": {
       "status": "pending",
@@ -323,6 +323,16 @@
       "date": "2026-10-09",
       "source": "用户要求将 submit 删除干净",
       "change": "Remove BaseGame submit and GameUpdate, migrate binder return and all consumers to bind/run; preserve Core resume. F1 capture obligation remains open."
+    },
+    {
+      "date": "2026-10-09",
+      "source": "用户目标：清除全部混合状态，形成干净冻结稿及完备性证明",
+      "change": "Unify Instance advancement through bind/run; only event ports emit events; separate provider-scoped capture authority from transferable execution authority. Audit the complete protocol before freezing; no runtime implementation or version bump."
+    },
+    {
+      "date": "2026-10-09",
+      "source": "Complete audit after mixed-boundary cleanup",
+      "change": "Freeze Core/Instance/BaseGame declarations with constructive operational semantics, invariants, capability closure and scoped expressiveness proof. C01-03 passes; production conformance remains C02/C03, not inferred from native tests."
     }
   ]
 }

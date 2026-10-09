@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { Core, ProgramModule, PortShape, FixedTable, InstancePersistence, InstanceCapture, Instance } from '../core/types.ts';
+import type { Core, ProgramModule, PortShape, FixedTable, InstancePersistence, InstanceCapture, Instance, Outcome } from '../core/types.ts';
 import type { BaseGame, QueryShape, GameOutcome } from '../game/types.ts';
 import type { GameContract, GameTypes } from '../authoring/types.ts';
 import type { CompiledProgramDataSchema } from './schemas.ts';
@@ -15,11 +15,11 @@ export type LoadedCore<S, P extends { [K in keyof P]: PortShape }, R> = {
   capture?: InstanceCapture<S, P, R>;
 };
 export type ControlledCoreLoader = {
-  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: CompiledProgram<S, P, R>) => Promise<LoadedCore<S, P, R>>;
+  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: CompiledProgram<S, P, R>) => Promise<Outcome<LoadedCore<S, P, R>>>;
 };
 /** Differential execution uses the same author source, without claiming continuation snapshots. */
 export type NativeCoreLoader = {
-  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: ProgramModule<S, P, R>) => Promise<LoadedCore<S, P, R>>;
+  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: ProgramModule<S, P, R>) => Promise<Outcome<LoadedCore<S, P, R>>>;
 };
 export type GameHandle<G extends GameTypes, Q extends { [K in keyof Q]: QueryShape }> = BaseGame<
   G['interactions'], G['actor'], G['delivery'], G['signal'], G['observer'], G['observation'], G['event'], G['result'], Q

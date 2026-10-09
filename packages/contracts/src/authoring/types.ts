@@ -21,12 +21,10 @@ export type Submission<G extends GameTypes> = GameInput<G['interactions'], G['de
 export type DecisionData<G extends GameTypes> = {
   view: G['view'];
   choices: Choice<G['interactions'], G['actor']>[];
-  events: G['event'][];
 };
 export type TerminalData<G extends GameTypes> = {
   view: G['view'];
   result: G['result'];
-  events: G['event'][];
 };
 export type PreparedReturn<T> = { valid: false; reason: string } | { valid: true; output: T };
 /** External ports have one game protocol role. Stateful services execute inside the program. */

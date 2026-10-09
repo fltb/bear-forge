@@ -1,20 +1,20 @@
 {
   "checkpoint": "C01",
   "kind": "design",
-  "summary": "Removed BaseGame submit, GameUpdate and binder initial wrapper; migrated public consumers, search and active documentation to bind/run. 57 native/schema tests pass, 44 schemas and 100 public definitions checked. F2 competing delivery path removed; F1 capture access remains open and C01-03 pending. No production runtime implemented.",
+  "summary": "Protocol freeze: one bind/run driver at each layer, event-port-only notifications, independent capture authority and explicit record release, typed loader failures. Constructive semantics, invariants, finite-requirement completeness and completion audit recorded. 57 native/schema tests, 44 schema profiles and 100 public definitions pass. C01-03 passes; production runtime conformance remains C02/C03.",
   "replay_command": "npm ci --ignore-scripts && npm run check",
   "artifacts": [
     {
       "path": "docs/doudizhu.md",
-      "sha256": "de90cde69cd06696d5429ab150a955209cb8d1383a8754c5aa77100d9d8315a4"
+      "sha256": "9d1c83901e0be2173ce4b75b084ce68156683d894ce6da5f48bd647b312b2eec"
     },
     {
       "path": "docs/protocol.md",
-      "sha256": "a27a7596f71452d43ba2e3087738f3d5d95ad935a1f01956a5d865c3526eb488"
+      "sha256": "b13b0def8058ff6b83dd0c77b4d91c0b7c5aefad264543a7dfe435db00633467"
     },
     {
       "path": "evidence/C01/acceptance.md",
-      "sha256": "78ee0b75518784b07de340ccb1ee5567bf2b365f7dcbe25275f3b3d36c1d9add"
+      "sha256": "569ed9c29a78b37c9b8a6e969638466ce7808003a6bad42f4ef26149a6b05069"
     },
     {
       "path": "evidence/C01/boundary-migration-acceptance.md",
@@ -22,7 +22,7 @@
     },
     {
       "path": "evidence/C01/boundary-migration-review.md",
-      "sha256": "58e5f57258fe35ccaf520b59d0adaca53cd3126c0e2cc35cc184e32d1b7c5d88"
+      "sha256": "c26a719b7714d332260f7c76cc82f7d534f0121228a16b320bafc5e7fb416071"
     },
     {
       "path": "evidence/C01/freeze-audit/baseline/check.log",
@@ -50,11 +50,11 @@
     },
     {
       "path": "evidence/C01/freeze-audit/check.log",
-      "sha256": "3d4e7b1f78ac36e0758133cd490bddde79968d6087bdb0eb4db88d691c2e431f"
+      "sha256": "a34f411eb2c86da0aa24f33fca3b1c8d58de6dfeb06a59688e14c7478df4d8b0"
     },
     {
       "path": "evidence/C01/freeze-audit/check.mjs",
-      "sha256": "3aa9356e97a80221236052c221fd10ed86d189ef2d7dde8359eafcc7dba78e40"
+      "sha256": "0e8f3f01de68dfc1e4f4218da29c5c59fa02d435f71c6accdab3fef76cdddff4"
     },
     {
       "path": "evidence/C01/freeze-audit/coverage.log",
@@ -62,11 +62,15 @@
     },
     {
       "path": "evidence/C01/freeze-audit/review.md",
-      "sha256": "1ef19b5f80926082dd88fc0c9c22b03ed54ad6011cd8bb7546df85f457ff0962"
+      "sha256": "44fc73c2aa4a51715a28f0873a43bfb2972eb8152b0d6e8c1d35f8b7ec319ded"
+    },
+    {
+      "path": "evidence/C01/protocol-freeze-proof.md",
+      "sha256": "14fc74a34554bfb2055cfce447070623169bb20beeffd3e27ac76372360d9744"
     },
     {
       "path": "evidence/C01/protocol-proof-index.json",
-      "sha256": "a3865791bdf355b766105c407136a83b2d1a02348a414a443b3de8bf4824c6c6"
+      "sha256": "f94d64becbe815cfec859377264a45f057c010b61e7e0b1a8db8ddd65b985ce6"
     },
     {
       "path": "evidence/C01/verify-migration.py",
@@ -82,7 +86,7 @@
     },
     {
       "path": "games/doudizhu/src/implementation.ts",
-      "sha256": "c01a6bd0c90ac8e8f8b3dcc61b5f22e391b772090750a6cb1a217beb70cadf76"
+      "sha256": "87933d8315da00d558c1c95cffbfa8dcae0a9510b89270d2719cc3e175767ce4"
     },
     {
       "path": "games/doudizhu/src/index.ts",
@@ -118,7 +122,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "395eb5bab0b0a4189b20dd87f429302610d9ddb532c01a5eed1d90e6b9f09d14"
+      "sha256": "b4dbbaa8e815a260e14df48368a0098f11b849a273b6eadfb4c0ceebc7bd759a"
     },
     {
       "path": "packages/contracts/package.json",
@@ -126,23 +130,23 @@
     },
     {
       "path": "packages/contracts/src/authoring/types.ts",
-      "sha256": "714bea6d61b60a280fda523b63ff7dd6531067e9026fc7147460b1b6a60f5dde"
+      "sha256": "3fbb5c14dd9b9365f9b73a48c2c0eb280fff18ff88cb3aa50252b36565655539"
     },
     {
       "path": "packages/contracts/src/core/schemas.ts",
-      "sha256": "46fe706135303f1c16b32897f358759d505e02c257390bc58fcc45117db5e109"
+      "sha256": "9525015d79f9dceb5b735cccf708b1aa23fc7f99d34d75adda01c24f3198ed8f"
     },
     {
       "path": "packages/contracts/src/core/types.ts",
-      "sha256": "ddff702da8882d824c4159db78a5f69e3972670f1db3f499b707273dcac66a77"
+      "sha256": "eaf1b91b99aeb835a57933f762b53ea17acad5bab1d31f55d5edc235817d8185"
     },
     {
       "path": "packages/contracts/src/game/schemas.ts",
-      "sha256": "392908c26b24ba432dcf847933ee40da7c310e38cdca951b53d6bad30e0df08e"
+      "sha256": "33dfe897759745f6fcd25032dddb50119fb6f994b74171a96d2705f4e8c4e764"
     },
     {
       "path": "packages/contracts/src/game/types.ts",
-      "sha256": "17669d42143b7cf901a502d77bd1a21cef11cafb400141693c7da4d572f03c4a"
+      "sha256": "bbcc1fecbdc7fd6c99a1da05fcb52a9e67db4ab4a769c9643e86ffa31c4c5f56"
     },
     {
       "path": "packages/contracts/src/index.ts",
@@ -154,19 +158,19 @@
     },
     {
       "path": "packages/contracts/src/runtime/types.ts",
-      "sha256": "778521466f4248e26cb6daf7689070870f83ab4fafb7379e8ceb776bf67fe9a9"
+      "sha256": "11f3468ace72c9f026df4d709c2fd3ce057a6567bdd9b69c1682e63757f7d925"
     },
     {
       "path": "tests/contracts/basegame-types.ts",
-      "sha256": "3e6429a0760fb424a71121073429f2fa85906fb8b77c5fe25ad6efa5542676c9"
+      "sha256": "cf488448d826b0c1750521a20915a0c1405abe90883dbb111c45911a510e86c2"
     },
     {
       "path": "tests/contracts/instance-types.ts",
-      "sha256": "e6a732a312516556d95a2935dca983d5d05d3fe658a4f0d2889040597702b4ed"
+      "sha256": "3ec0245c185068bfa517d6489a672c91e5e12843e2e9b08181a73bfc8cd50a26"
     },
     {
       "path": "tests/contracts/new-protocol.test.ts",
-      "sha256": "9596e6fbb3dde9ef38bb6989229dca2992a5fb61e9354aa0b29c1938e5931957"
+      "sha256": "c52ae3d6597c84e57124a212fa1981022d0859f4a6aeb15f5fed488d295911e6"
     },
     {
       "path": "tests/contracts/schema-admission.test.ts",
@@ -219,6 +223,13 @@
       "command": "npm run check",
       "exit_code": 0,
       "log": "evidence/C01/boundary-migration-check.log"
+    },
+    {
+      "id": "C01-03",
+      "status": "passed",
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "evidence/C01/boundary-migration-check.log"
     }
   ],
   "supplemental_checks": [
@@ -229,13 +240,13 @@
       "log": "evidence/C01/boundary-completion-audit.log"
     },
     {
-      "scope": "duplicate driving surface removal regression; F1 remains open",
+      "scope": "single driver/event source, capture reachability and loader outcome declaration checks",
       "command": "node evidence/C01/freeze-audit/check.mjs",
       "exit_code": 0,
       "log": "evidence/C01/freeze-audit/check.log"
     },
     {
-      "scope": "proof coverage with explicit open freeze obligations",
+      "scope": "all current public definitions covered; implementation conformance obligations remain explicit",
       "command": "npm run check:proof-coverage",
       "exit_code": 0,
       "log": "evidence/C01/freeze-audit/coverage.log"

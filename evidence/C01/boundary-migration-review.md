@@ -1,6 +1,6 @@
 # Instance 两侧游戏协议：迁移与条件证明
 
-冻结审计结论：当前不能冻结。F1 捕捉访问缺口见 freeze-audit/review.md；下文保留的条件论证不构成协议已完整冻结的证明。
+冻结稿：重复推进入口、重复事件来源及捕捉权限断链已清除。完整需求闭合、操作构造和完成审计见 [冻结证明](protocol-freeze-proof.md)。
 
 本轮交付公共协议、内侧斗地主 SDK/程序、类型消费与原生测试。没有生产执行器、保存/分支实现或搜索器。以下证明针对协议表达和组合；运行实现必须满足列明的前提，不能由导出数量或 TS 编译通过推出。
 
@@ -23,7 +23,7 @@
 
 ## P1：表达力不因边界收敛而减少
 
-令程序现场 C=(控制栈、环境、堆、受控能力引用、待决调用、记录前缀)。内部归约是 C→C'；外部调用暂停为 Wait(k,p,a)，回复 v 后继续 k(v)。声明端口 IO.call 表达 Wait，Instance.resume 表达提供 v。语言内部递归、循环与数据构造仍使用受控 TS，不要求新增游戏原子。
+令程序现场 C=(控制栈、环境、堆、受控能力引用、待决调用、记录前缀)。内部归约是 C→C'；外部调用暂停为 Wait(k,p,a)，回复 v 后继续 k(v)。声明端口 IO.call 表达 Wait，绑定返回 v 的回调并执行 Instance.run 表达提供 v。语言内部递归、循环与数据构造仍使用受控 TS，不要求新增游戏原子。
 
 对有限的可计算交互程序，逐步把外部读取换成声明端口即可构造同轨迹程序；内部纯计算和受控局部状态保持原样。GameSDK 只是普通函数组合，加入它不改变此归约关系。游戏阶段、优先权、响应栈和触发队列可以是任意内部计算，不进入 Core。
 
@@ -35,7 +35,7 @@
 
 因此外侧所需数据可以从 x 与静态 contract 重建。删除全部缓存后重新绑定，观察、合法选项和输入转换不变。若某实现还必须恢复一个宿主随机游标、已提交玩家列表或隐藏事件计数才能继续，它就是这一条的反例，不能声称符合协议。
 
-BaseGame.run 的状态推进委托 Instance 的端口返回接受路径：先匹配凭证与 choice，调用纯 respond，拒绝时不 resume；成功时将唯一 reply 送入原实例。后续 event 的 receive/output 也是静态纯函数，持续驱动到下一游戏边界。因此一个游戏步是原程序轨迹的一个片段，并非第二个 transition 实现。
+BaseGame.run 的状态推进委托 Instance 的端口返回接受路径：先匹配凭证与 choice，调用纯 respond，拒绝时不向程序返回值；成功时将唯一 reply 送入原实例。后续 event 的 receive/output 也是静态纯函数，持续驱动到下一游戏边界。因此一个游戏步是原程序轨迹的一个片段，并非第二个 transition 实现。
 
 前提：contract 纯且输入/输出隔离；绑定独占驱动权。TS 的 readonly 与类型兼容性不证明纯性或所有权，后端和准入检查必须落实。
 
@@ -75,7 +75,7 @@ walk 类型示例确实在 fork 后读取子凭证，再 validate/run/递归/clo
 
 ## P7：事件和资源不成为隐藏规则状态
 
-发布游标、待公开选择与规则日志属于内侧；外侧只是返回本次推进得到的 events。读取或重新绑定可以得到同一边界数据，但不会自动发送外部通知。会话交付游标与回执由消费者保存，并以实例/记录身份去重。它们不影响规则是否能够从快照继续。
+发布游标、待公开选择与规则日志属于内侧；外侧只交付当前 event 端口投影的 events。读取或重新绑定可以得到同一边界数据，但不会自动发送外部通知。会话交付游标与回执由消费者保存，并以实例/记录身份去重。它们不影响规则是否能够从快照继续。
 
 fork/save 不重放事件；restore 从原挂起点继续。关闭父实例不影响子实例或保存引用；释放保存引用不影响已恢复实例。外侧绑定失败关闭已接管实例，子绑定失败不影响父。独占权、故障清理及资源生命周期须运行验收。
 
@@ -111,9 +111,9 @@ implementation.ts 导出 {program,contract}。receive 投影 Frame；respond 从
 
 类型消费、schema 准入、实际原生对局、独立规则 oracle、源码边界审计和导出索引是本轮证据。生产受控编译、准入完备检查、Instance fork/save/restore、绑定独占权、失败清理和实际双端 diff test 仍由 C02/C03 验收。协议表达力证明以上述具体前提为条件，没有声称证明任意实现无 bug。
 
-## P8：回调控制与手动驱动等价
+## P8：唯一驱动与控制租约
 
-Instance.bind 只注册外部回调；run 在当前 call 查表，将参数复制给对应回调，接受 reply.value 时调用与 resume 相同的原子返回操作。因此去掉宿主等待时长后，给定相同被接受的回复序列，回调驱动与手动 resume 的程序轨迹相同。BaseGame 回调只额外进行纯请求投影、输入验证/编码和事件交付；GameInput 仅经 onDecision 输入，经过 respond 编码为底层 reply。
+Instance.bind 只注册外部回调；run 在当前 call 查表，将参数复制给对应回调，接受 reply.value 时执行一次内部原子返回。给定相同被接受的回复序列，程序轨迹与宿主等待时长无关。BaseGame 回调只额外进行纯请求投影、输入验证/编码和事件交付；GameInput 仅经 onDecision 输入，经过 respond 编码为底层 reply。
 
 活动驱动持有租约，回调结果携带隐含的 (Instance.id,callId,驱动代次) 归属。返回接受、取消撤销和新驱动登记按一个串行顺序提交；只有仍拥有当前租约且匹配当前 call 的返回能够生效。因此即使旧 Promise 不响应取消、在新 run 或 fork 后才完成，也不能推进其他现场。绑定表与租约属于宿主控制，不是必须保存的游戏数据；fork/restore 丢弃它们并保留受控待决调用。
 
@@ -125,7 +125,7 @@ Instance.bind 只注册外部回调；run 在当前 call 查表，将参数复�
 
 回调在稳定等待时允许只读、fork/save，所以搜索可在 onDecision 内建立子实例，重新绑定搜索回调，使用 run 的 maxInputs 限额控制深度。父回调的驱动租约继续保护父现场，子驱动互不影响。run(maxInputs:0) 可经过事件确认停在决策；单次输入或任意有限输入预算均不必调用底层端口。
 
-事件 delivery id 从 Instance 身份、当前 call/done 和纯事件数组下标计算，不依赖外侧隐藏游标。部分交付后失败允许以同 id 重投，消费方去重；这明确是可重试协议，不假装实现网络恰好一次。前端动画或慢消费者不得成为游戏规则时钟。Core 捕捉实际调用与被接受的确认，原生斗地主测试验证全部事件通过 event 端口传出且与规则事件序列完全一致。
+事件 delivery id 从 Instance 身份、当前 event callId 和纯事件数组下标计算，不依赖外侧隐藏游标。部分交付后失败允许以同 id 重投，消费方去重；这明确是可重试协议，不假装实现网络恰好一次。前端动画或慢消费者不得成为游戏规则时钟。Core 捕捉实际调用与被接受的确认，原生斗地主测试验证全部事件通过 event 端口传出且与规则事件序列完全一致。
 
 ## P10：多玩家与策略接入
 
@@ -149,7 +149,19 @@ GameRequest 的 offers 从当前真实 choices 构造。每个 offer.observation
 
 ## P11：适配器所有权可由公开协议实现
 
-BaseGameBinder 通过 Instance.transfer 获取同一实例的新句柄，旧句柄失去操作权。transfer 不复制现场、不启动执行，并清除宿主绑定；它只改变宿主控制权。随后 BaseGame 的端口适配仅通过新句柄 bind/run/resume/fork/save。故独占绑定不依赖未声明的私有引擎函数或在适配器中伪造全局锁。活动 run 时 transfer 被拒绝，不能劫持在途回调；fork 与 transfer 区别为独立新运行态和同运行态的控制权移动。实际失效旧句柄由 provider 验收，不由 TypeScript 静态类型冒充保证。
+BaseGameBinder 通过 Instance.transfer 获取同一实例的新句柄，旧句柄失去操作权。transfer 不复制现场、不启动执行，并清除宿主绑定；它只改变宿主控制权。随后 BaseGame 的端口适配仅通过新句柄 bind/run/fork 与提供者 save。故独占绑定不依赖未声明的私有引擎函数或在适配器中伪造全局锁。活动 run 时 transfer 被拒绝，不能劫持在途回调；fork 与 transfer 区别为独立新运行态和同运行态的控制权移动。实际失效旧句柄由 provider 验收，不由 TypeScript 静态类型冒充保证。
+
+## P12：捕捉访问与控制权分离
+
+设提供者授予的捕捉能力为 A，执行实例身份为 i。read(A,i,cursor) 的授权条件是 i 属于 A 的实例集合且记录未释放；它不依赖执行句柄 h。transfer(h)=h' 保持 i，故 transfer 前后 read 的授权条件不变。BaseGame.id=i，子分支及恢复返回各自的新 id，调用方无需穿透 BaseGame 即可定位原局或子局记录。F1 的不可达链路由公开参数与返回值闭合。
+
+记录是不可变前缀；一次读取线性化到某个已提交序号，读取与运行可并行。close 只释放执行权，release(A,i) 只在关闭后释放该记录引用，因此对局结束后仍可分析，回收又不会删除正在追加的数据。分支和快照独立持有前缀，父引用释放不能改变它们。运行提供者须验收授权、留存和引用隔离；身份本身不是访问凭证。
+
+## P13：唯一事件来源保持表达力
+
+对旧决策投影的事件 e 和输入请求 d，作者改写为先 await event(e)，再 await decision(d)；对旧终局事件 e 和结果 r，改写为先 await event(e)，再 return r。对有限事件数组按顺序构造即可。抹去事件确认的宿主等待时间后，外部观察顺序与规则输入序列保持不变；确认暂停现在统一落在 event call，而不再落在已经结束的程序上。
+
+新增的等待点保存完整程序现场，故分支和恢复仍适用 P4。每个事件身份由 (instanceId,callId,index) 唯一构成；重试可重发而不会生成不同身份。决策和终局类型不再产生事件，无法构造第二条交付路径。快照无需外侧“终局事件还没发完”状态。
 
 ## 全部公共声明逐字段附录
 
@@ -179,12 +191,10 @@ export type Submission<G extends GameTypes> = GameInput<G['interactions'], G['de
 export type DecisionData<G extends GameTypes> = {
   view: G['view'];
   choices: Choice<G['interactions'], G['actor']>[];
-  events: G['event'][];
 };
 export type TerminalData<G extends GameTypes> = {
   view: G['view'];
   result: G['result'];
-  events: G['event'][];
 };
 export type PreparedReturn<T> = { valid: false; reason: string } | { valid: true; output: T };
 /** External ports have one game protocol role. Stateful services execute inside the program. */
@@ -256,12 +266,12 @@ export const InstanceSnapshotSchema = z.strictObject({
 export const InstanceErrorSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('rejected'),
-    code: z.enum(['invalid_input', 'invalid_argument', 'call_mismatch', 'snapshot_not_found', 'snapshot_incompatible']),
+    code: z.enum(['invalid_input', 'invalid_argument', 'snapshot_not_found', 'snapshot_incompatible', 'records_not_found']),
     message: z.string(),
   }),
   z.strictObject({
     kind: z.literal('conflict'),
-    code: z.enum(['instance_busy', 'instance_closed', 'instance_finished', 'instance_owned']),
+    code: z.enum(['instance_busy', 'instance_closed', 'instance_owned']),
     message: z.string(),
   }),
   z.strictObject({
@@ -367,7 +377,6 @@ export type Instance<P extends { [K in keyof P]: PortShape }, R> = {
   bind: (bindings: PortBindings<P> | null) => Promise<Outcome<void>>;
   run: (options?: InstanceRunOptions) => Promise<Outcome<InstanceRunStop<P, R>>>;
   inspect: () => Promise<Outcome<InstanceStop<P, R>>>;
-  resume: (input: { callId: CallId; reply: PortReturn<P> }) => Promise<Outcome<InstanceStop<P, R>>>;
   fork?: () => Promise<Outcome<Instance<P, R>>>;
   close: () => Promise<Outcome<void>>;
 };
@@ -387,11 +396,13 @@ export type InstanceRecord<S, P extends { [K in keyof P]: PortShape }, R> =
   | { sequence: number; kind: 'returned'; callId: CallId; reply: PortReturn<P> }
   | { sequence: number; kind: 'completed'; result: R }
   | { sequence: number; kind: 'faulted'; error: InstanceFault };
+/** Provider-scoped audit authority, independent of transferable execution handles. */
 export type InstanceCapture<S, P extends { [K in keyof P]: PortShape }, R> = {
-  read: (instance: Instance<P, R>, input: RecordRead) => Promise<Outcome<{
+  read: (instanceId: InstanceId, input: RecordRead) => Promise<Outcome<{
     records: InstanceRecord<S, P, R>[];
     next: number | null;
   }>>;
+  release: (instanceId: InstanceId) => Promise<Outcome<void>>;
 };
 ```
 
@@ -414,7 +425,7 @@ export const InputOptionsSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('construct'), description: JsonValueSchema }),
 ]);
 export const GameErrorSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('rejected'), code: z.enum(['invalid_input', 'invalid_argument', 'decision_mismatch', 'choice_not_found', 'snapshot_not_found', 'snapshot_incompatible']), message: z.string() }),
+  z.strictObject({ kind: z.literal('rejected'), code: z.enum(['invalid_input', 'invalid_argument', 'decision_mismatch', 'choice_not_found', 'snapshot_incompatible']), message: z.string() }),
   z.strictObject({ kind: z.literal('conflict'), code: z.enum(['game_busy', 'game_closed', 'game_ended', 'view_unavailable']), message: z.string() }),
   z.strictObject({ kind: z.literal('unsupported'), code: z.literal('capability_unavailable'), message: z.string() }),
   z.strictObject({ kind: z.literal('fault'), code: z.enum(['invalid_output', 'program_failed', 'budget_exceeded']), message: z.string() }),
@@ -424,10 +435,7 @@ export const GameErrorSchema = z.discriminatedUnion('kind', [
 export const GameRunLimitsSchema = z.strictObject({maxInputs:z.number().safe().nonnegative().optional()});
 export const EventDeliveryIdSchema = z.strictObject({
   instanceId:InstanceIdSchema,
-  origin:z.discriminatedUnion('kind',[
-    z.strictObject({kind:z.literal('call'),callId:CallIdSchema}),
-    z.strictObject({kind:z.literal('done')}),
-  ]),
+  callId:CallIdSchema,
   index:z.number().safe().nonnegative(),
 });
 ```
@@ -496,7 +504,7 @@ export type GameBindings<T extends InteractionTable, A, D, S, V, E> = {
 export type GameRunLimits = z.infer<typeof GameRunLimitsSchema>;
 export type GameRunOptions = {limits?:GameRunLimits;signal?:AbortSignal};
 export type GameRunStop<T extends InteractionTable, A, R> = {acceptedInputs:number} & (
-  | {kind:'paused';reason:PauseReason;boundary:GameBoundary<T,A,R>;message?:string}
+  | {kind:'paused';reason:PauseReason;boundary:Exclude<GameBoundary<T,A,R>,{kind:'ended'}>;message?:string}
   | {kind:'ended';result:R}
   | {kind:'fault';error:Extract<GameError,{kind:'fault'}>});
 /** Exclusive outer facade of one Instance; no separate mutable game/service state. */
@@ -545,7 +553,7 @@ export const CompiledProgramDataSchema = z.strictObject({
 
 ```ts
 import type { z } from 'zod';
-import type { Core, ProgramModule, PortShape, FixedTable, InstancePersistence, InstanceCapture, Instance } from '../core/types.ts';
+import type { Core, ProgramModule, PortShape, FixedTable, InstancePersistence, InstanceCapture, Instance, Outcome } from '../core/types.ts';
 import type { BaseGame, QueryShape, GameOutcome } from '../game/types.ts';
 import type { GameContract, GameTypes } from '../authoring/types.ts';
 import type { CompiledProgramDataSchema } from './schemas.ts';
@@ -561,11 +569,11 @@ export type LoadedCore<S, P extends { [K in keyof P]: PortShape }, R> = {
   capture?: InstanceCapture<S, P, R>;
 };
 export type ControlledCoreLoader = {
-  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: CompiledProgram<S, P, R>) => Promise<LoadedCore<S, P, R>>;
+  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: CompiledProgram<S, P, R>) => Promise<Outcome<LoadedCore<S, P, R>>>;
 };
 /** Differential execution uses the same author source, without claiming continuation snapshots. */
 export type NativeCoreLoader = {
-  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: ProgramModule<S, P, R>) => Promise<LoadedCore<S, P, R>>;
+  load: <S, P extends { [K in keyof P]: PortShape }, R>(program: ProgramModule<S, P, R>) => Promise<Outcome<LoadedCore<S, P, R>>>;
 };
 export type GameHandle<G extends GameTypes, Q extends { [K in keyof Q]: QueryShape }> = BaseGame<
   G['interactions'], G['actor'], G['delivery'], G['signal'], G['observer'], G['observation'], G['event'], G['result'], Q

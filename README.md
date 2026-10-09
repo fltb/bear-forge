@@ -22,7 +22,7 @@ Core 提供通用执行机制，Instance 承载完整现场。游戏只通过声
 
 输入选择是指定真实入口上的 exact 值列表或 construct JSON 约定。动作、交付时间与会话信号分别声明。Core 捕捉/保存是可选能力，游戏保存复用 InstanceSnapshot，搜索使用同类型 fork 后的普通游戏接口；普通运行不要求存档或训练。
 
-完整迁移报告、字段清单与功能等价证明见 [报告](evidence/C01/boundary-migration-review.md)。万智牌 like 需求保留在 [15 个压力场景](docs/scenario-resolution-requirements.md)。
+协议冻结的需求闭合与构造证明见 [冻结证明](evidence/C01/protocol-freeze-proof.md)，字段原文和场景映射见 [报告](evidence/C01/boundary-migration-review.md)。万智牌 like 需求保留在 [15 个压力场景](docs/scenario-resolution-requirements.md)。
 
 ## 检查
 

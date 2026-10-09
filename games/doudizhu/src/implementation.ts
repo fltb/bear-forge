@@ -54,7 +54,7 @@ export const game:DouDizhuModule = {
         receive(raw){
           const frame=FrameSchema.parse(raw);
           if(!frame.state.stage)throw new Error('decision requires a stage');
-          return {view:frame,events:frame.events,choices:frame.state.stage.slots.map(slot=>({id:slot.slotId,actor:slot.actor,type:'action' as const,request:slot}))};
+          return {view:frame,choices:frame.state.stage.slots.map(slot=>({id:slot.slotId,actor:slot.actor,type:'action' as const,request:slot}))};
         },
         respond:prepareInput,
       },
@@ -62,7 +62,7 @@ export const game:DouDizhuModule = {
     finish(raw){
       const frame=FrameSchema.parse(raw);
       if(frame.state.phase!=='ended'||!frame.state.result)throw new Error('program result is not terminal');
-      return {view:frame,result:frame.state.result,events:frame.events};
+      return {view:frame,result:frame.state.result};
     },
     observerFor: actor=>actor,
     observe,

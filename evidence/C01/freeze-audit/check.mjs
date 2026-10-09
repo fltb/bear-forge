@@ -25,7 +25,7 @@ for(const premise of ['close 释放执行现场但保留捕捉记录','transfer 
 console.log('PASS: Instance and BaseGame each have one driving entrypoint.');
 console.log('PASS: only event ports deliver notifications; terminal state has no pending delivery.');
 console.log('PASS: capture is provider-scoped by identity and survives control transfer/close until release.');
-console.log('SCOPE declaration and consumer checks; implementation conformance remains a separate obligation.');
+console.log('SCOPE C01 declarations and consumers; C02/C03 provider conformance.');
 const runtime=aliases('packages/contracts/src/runtime/types.ts');
 for(const name of ['NativeCoreLoader','ControlledCoreLoader'])assert.ok(runtime.get(name).includes('Promise<Outcome<LoadedCore<S, P, R>>>'));
 const fields=declaration=>{
@@ -38,3 +38,20 @@ assert.deepEqual(fields(core.get('Instance')),['bind','close','fork','id','inspe
 assert.deepEqual(fields(game.get('BaseGame')),['bind','close','describe','fork','id','inspect','observe','query','run','save','validate']);
 assert.deepEqual(fields(core.get('InstanceCapture')),['read','release']);
 console.log('PASS: exact method inventories and both loader failure outcomes match the freeze proof.');
+assert.ok(/player:\s*string/.test(author.get('GameTypes')));
+assert.ok(/playerEvent:/.test(author.get('GameTypes')));
+assert.ok(/signalPlayers:\s*G\['player'\]\[\]/.test(author.get('DecisionData')));
+assert.ok(/player:\s*G\['player'\]/.test(author.get('GamePorts')));
+assert.ok(/playerFor:/.test(author.get('GameContract'))&&/projectEvent:/.test(author.get('GameContract')));
+assert.deepEqual(fields(game.get('GameRequest')),['acceptsSignal','decisionId','observation','offers']);
+assert.deepEqual(fields(game.get('GameBindings')),['onDecision','onEvent','player']);
+assert.ok(!/observation:/.test(game.get('DecisionOffer')));
+assert.ok(/observe:.*player: Player/.test(game.get('BaseGame')));
+assert.ok(/validate:.*player: Player/.test(game.get('BaseGame')));
+assert.ok(runtime.get('GameHandle').includes("G['playerEvent']"));
+for(const path of ['README.md','docs/protocol.md','docs/architecture.md','docs/requirements.md','docs/doudizhu.md','docs/controlled-program-spec.md','evidence/C01/protocol-freeze-proof.md','evidence/C01/boundary-migration-review.md',
+  'packages/contracts/src/authoring/types.ts','packages/contracts/src/game/types.ts','packages/contracts/src/runtime/types.ts','games/doudizhu/src/implementation.ts','games/doudizhu/src/types.ts']){
+  assert.ok(!/\bobserver(?:For)?\b/.test(read(path)),`${path}: stale player contract`);
+}
+for(const premise of ['bind({player,onDecision?,onEvent?})','(view,submission,player)','(player,id)','signalPlayers','第一个通过检查及 respond 的回复原子提交'])assert.ok(protocol.includes(premise),premise);
+console.log('PASS: player binding, observation, request ownership, signal recipients and projected events share one contract.');

@@ -13,9 +13,10 @@ export type DouDizhuTypes = {
   actor: Seat;
   delivery: Delivery;
   signal: Signal;
-  observer: Seat;
+  player: Seat;
   observation: Observed;
   event: AuditEvent;
+  playerEvent: AuditEvent['event'];
   result: Result;
 };
 export type DouDizhuModule = GameModule<DouDizhuTypes, {}>;

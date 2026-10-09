@@ -87,7 +87,7 @@ export type Pending = z.infer<typeof PendingSchema>;
 export type Observed = z.infer<typeof ObservedSchema>;
 
 export const DeliverySchema = z.strictObject({receivedAtGameTime:CounterSchema});
-export const SignalSchema = InputSchema.options[1];
+export const SignalSchema = InputSchema.options[1].omit({boundaryKey:true});
 export const ProgramSetupSchema = z.strictObject({game:SetupSchema,seed:z.number().int().min(0).max(4294967295)});
 export type ProgramSetup = z.infer<typeof ProgramSetupSchema>;
 export const programSchemas = {

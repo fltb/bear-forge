@@ -23,7 +23,7 @@ for path in [*Path('games/doudizhu/src').glob('*.ts'),*Path('packages/contracts/
     assert not re.search(r'\b(?:bindDouDizhu|Execution|GameRuntime|GameContext|ManagedStateCapability)\b',path.read_text()),path
 print('PASS no compatibility entrypoints in active source')
 log=Path('evidence/C01/boundary-migration-check.log').read_text()
-for expected in ['tests 57','pass 57','fail 0','skipped 0','44 public/game schemas','100 public definitions']:
+for expected in ['tests 68','pass 68','fail 0','skipped 0','44 public/game schemas','100 public definitions']:
     assert expected in log,expected
 print('PASS final full check counts and no skipped tests')
-print('SCOPE declarations + complete native game author source; production runtime and Instance fork/save/restore implementation remain future conformance obligations')
+print('SCOPE C01 declarations, player consumers and native game author source; C02/C03 verify production execution, binding and persistence')

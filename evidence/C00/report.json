@@ -1,12 +1,12 @@
 {
   "checkpoint": "C00",
   "kind": "documentation",
-  "summary": "Active control protocol, two-sided game boundary and R01-R09 documentation re-audited; archive preserved. Callback lifecycle, state ownership and conditional proof scope synchronized.",
+  "summary": "Player-scoped architecture, requirements and protocol documentation audited; archived originals preserved. State ownership, player projection and checkpoint acceptance synchronized.",
   "replay_command": "python3 tools/audit_c00.py && python3 tools/check_project.py && python3 tools/check_project.py --self-test",
   "artifacts": [
     {
       "path": "README.md",
-      "sha256": "c4910346dc1309e13e463c2f4846c4e5d3298382f6952f3f5dbe24ead0bf1dce"
+      "sha256": "73603e170a1cbc2fcbf24e6224885e1b216b95313e07cdcff5da61662e71f974"
     },
     {
       "path": "AGENTS.md",
@@ -14,15 +14,15 @@
     },
     {
       "path": "docs/requirements.md",
-      "sha256": "aa374c7ee4d44a1fe24df580c08937b3971f8504f68990d6dea149428cf310ca"
+      "sha256": "146dd9b56f199970e336c395b3058eb6ef82f61c561397523233a56f06ff50d8"
     },
     {
       "path": "docs/architecture.md",
-      "sha256": "b00cca08115b8bd4fd91642ce86b825491a2bde75fca203dacbd836007c380b0"
+      "sha256": "e0e345b44d374e196b3f82c5db6cc5e4aa5a7e78ce574ce723450fbc08960f70"
     },
     {
       "path": "docs/workflow.md",
-      "sha256": "8436e8e63b8713c6bdce42de9e2b83b60e554567898f9e7b847bf8f38e1543eb"
+      "sha256": "74d67cb3cb1d1116be4daf296d5c5ecc9ba7197a7504f3e2821e884dc6a87696"
     },
     {
       "path": "tools/check_project.py",
@@ -46,19 +46,19 @@
     },
     {
       "path": "docs/protocol.md",
-      "sha256": "b13b0def8058ff6b83dd0c77b4d91c0b7c5aefad264543a7dfe435db00633467"
+      "sha256": "2fc23f80930aa5353b17a26d2b9fc98779798d6ae7d09b447da0d9d0c7a5ce7a"
     },
     {
       "path": "docs/doudizhu.md",
-      "sha256": "9d1c83901e0be2173ce4b75b084ce68156683d894ce6da5f48bd647b312b2eec"
+      "sha256": "21a35f85195d6db7cfdf2178896e995b3ec6d8b2f0339b2d60c19f2e7afd1b5c"
     },
     {
       "path": "docs/plan.md",
-      "sha256": "0bea7e8931dff345d08db40cde02571535e61a81387fcd79a56c36a7354736d0"
+      "sha256": "6c38e6d07d1f2d63c020447d7cdda0efdc9c2c7a06e8fb73a549b3cdc8d1746a"
     },
     {
       "path": "docs/controlled-program-spec.md",
-      "sha256": "63da171f4770e03ccb39de7fb0f625b1a95ac2d99e0ed501d789b7a5c26223ed"
+      "sha256": "d56c4b4c06bafd0fe1a5f8dda3df1dd1a02fcf0772a0c62717dcc1d61404ceaa"
     }
   ],
   "checks": [

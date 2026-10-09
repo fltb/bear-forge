@@ -1,11 +1,10 @@
-# 边界清理审计
+# 协议审计
 
-- F1 已闭合：capture.read(instanceId,...) 使用提供者授予的独立审计权限。transfer 保持 id，BaseGame 暴露同一 id；close 后留存记录，capture.release 显式回收。类型消费者覆盖绑定游戏后的读取。
-- F2 已消除：BaseGame 与 Instance 都仅通过 bind/run 驱动；不存在 submit、resume 或 GameUpdate 公共入口。
-- 事件来源统一：仅 event 端口交付通知。DecisionData/TerminalData 不携带事件，ended 不再是 paused 边界；EventDeliveryId 只引用 callId。
-- 装载失败统一：两个 loader 都返回 Outcome，不将已知准入失败藏在未声明的成功返回中。
-- 契约故障不能伪装成程序 fault：适配器使用公开控制接口撤销驱动并关闭实例，不依赖私有 markFault。
+- Core/Instance 保持通用执行与端口；BaseGame/GameContract 负责玩家归属和投影。
+- Instance 与 BaseGame 各有 bind/run 这一控制路径；程序通知统一通过 event 端口。
+- 玩家绑定按字符串键独立替换/移除。同一函数绑定不同玩家时，control.player 与对应投影共同确定调用。
+- 输入请求包含自己的 observation/offers 和 acceptsSignal；纯信号等待有显式 signalPlayers。respond 接收 player 以验证领域目标。
+- event/playerEvent 分别声明，projectEvent 可以返回不同载荷或跳过。重试使用稳定事件身份，消费者按玩家去重。
+- 两个 loader 返回 Outcome。capture(id) 在 transfer 和 close 后保留读取路径，release 明确回收。
 
-完整需求闭合、状态归属、操作存在性与归纳证明见 ../protocol-freeze-proof.md。原始反例及输出保留在 baseline/，只对应旧提交，不是当前消费代码。
-
-当前审计命令：`node evidence/C01/freeze-audit/check.mjs`；完整类型/原生/schema 验证：`npm run check`。这些命令不测试尚未实现的生产运行器；其履约义务单独留在 C02/C03。
+命令：npm run check、python3 evidence/C01/verify-migration.py。原生消费者覆盖多人、信号、事件、竞争、取消和完整斗地主；生产提供者履约由 C02/C03 验收。完整证明见 [协议证明](../protocol-freeze-proof.md)。

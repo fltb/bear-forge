@@ -1,6 +1,6 @@
 # 唯一实施计划与 checklist
 
-当前授权补齐 Instance.bind/run 与 BaseGame 回调、边界控制、错误和取消协议，验证后 commit/push；落实 Instance 两侧的 GameContract：内侧 SDK 拥有所有服务运行状态，外侧 BaseGame 绑定实际 Instance；分支返回同类型对象，保存复用 InstanceSnapshot，删除游戏快照转移与读取 target。Core 是执行机制，Instance 是完整程序运行态，BaseGame 是游戏约定层。当前仅交付协议声明、具体游戏与验证，不实现生产底座或兼容层。迁移验收见 evidence/C01/acceptance.md 的当前两侧边界验收项；旧测试通过只证明旧测试覆盖的行为，不代表新协议验收。C01 保持 in_progress，C02–C07 不启动。
+当前授权完整实施 player 协议：每个 player 独立绑定，GameContract 投影状态、输入请求与事件；同步斗地主、类型消费者、原生测试和有效文档，验收后 commit/push。C01 交付协议与作者包，C02/C03 负责生产执行、绑定及保存分支。验收见 evidence/C01/acceptance.md 和 evidence/C01/player-acceptance.md。
 
 规则：checkbox 与 checkpoints.json 必须一致；[x] 只代表有证据通过。[执行规则](workflow.md) 约束状态转换和证据，不能因为预估超时删项。
 
@@ -12,7 +12,7 @@
 - [x] `C00-02` 有效文档自包含，保留 R01–R09 边界，无引用归档来补要求；唯一顺序与状态明确。
 - [x] `C00-03` AGENTS、工作流、账本与检查脚本齐全；跳关、缺证据、状态不一致等负向用例会失败。
 
-验收命令：python3 tools/check_project.py；python3 tools/check_project.py --self-test。原始输出和产物摘要在 evidence/C00/，语义边界还需逐项人工/代理审阅，不把文件存在当语义证明。
+验收命令：python3 tools/check_project.py；python3 tools/check_project.py --self-test。原始输出和产物摘要在 evidence/C00/，语义边界按条款逐项审阅。
 
 ## C01 落实首版游戏与可执行契约
 
@@ -25,7 +25,7 @@
 
 - [x] `C01-05` 完整斗地主游戏包通过公共 Program/IO 与 GameModule 声明实现 SDK、循环、全部牌型、叫分/加倍/出牌/超时/结算；规则测试、动作独立核对、真实原生程序完整对局、隐私、输入转换、协议消费和无旁路检查通过。生产运行底座仍由 C02 验收。
 
-本轮验收声明与游戏作者代码，不实现生产底座。C01-02/04 的后续模块选型与 C02 执行实现验收仍独立存在；当前任务不以它们冒充已完成，也不恢复旧公共边界。新迁移报告以 evidence/C01/boundary-migration-review.md 为准。
+本轮验收声明、游戏作者代码与原生消费者。模块复用和实施拆分分别在 C01-02/04 验收，生产执行底座在 C02/C03 验收。字段报告见 evidence/C01/boundary-migration-review.md。
 
 ## C02 执行器与 toolkit
 
@@ -97,4 +97,5 @@
 
 神经网络训练/推理合批、自动脚本演化、构筑/打法联合适应、受限规划搜索、更多游戏和正式真人产品。在扩展实施前建立新的 checkpoint 与验收，不挪用首版 done 状态。
 
-两层推进统一 bind/run，通知统一 event 端口，捕捉改为独立授权、按实例身份读取和释放。当前协议的需求闭合审核完成，C01-03 通过；见 evidence/C01/protocol-freeze-proof.md。生产实现履约证明留在 C02/C03。
+
+player 绑定、状态/请求/事件投影与斗地主迁移已通过原生和类型验收，证据见 evidence/C01/player-acceptance.md 与 report.json。

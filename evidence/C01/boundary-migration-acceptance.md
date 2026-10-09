@@ -1,6 +1,6 @@
 # Core / Instance / BaseGame migration acceptance
 
-User scope: replace the old boundary, preserve equivalent capabilities, migrate the complete Dou Dizhu author package, prove the declarations, and report exact fields and dataflow. No compatibility exports or production runtime implementation.
+User scope: replace the old boundary, preserve equivalent capabilities, migrate the complete Dou Dizhu author package, prove the declarations, and report exact fields and dataflow. Production execution and binding are accepted in C02/C03.
 
 ## Requirements and evidence
 
@@ -11,7 +11,7 @@ User scope: replace the old boundary, preserve equivalent capabilities, migrate 
 | B03 | Schema/TS correspondence, finite typed registries, correlated keys and payloads, no protocol factories | npm run typecheck; npm run check:schemas; npm run check:boundaries; positive and negative protocol consumers |
 | B04 | Execution, capture, save/restore, native differential authoring entry, compiled artifact association remain expressible | Field-by-field protocol reference and conditional trace/restore proof; declaration consumers. No runtime implementation claimed |
 | B05 | Observation, exact/construct options, authoritative validation, game queries, multiplayer and explicit timeout remain expressible | Concrete Dou Dizhu projections and complete submission validation; caller-visible data checked for privacy; no generic context filter |
-| B06 | Generic transition, resource release, hidden-state construction, evaluation, encoding, facts and history remain expressible | Generic capability consumers; no player/max/min assumption; reads available on child snapshots without advancing them |
+| B06 | Generic transition, resource release, hidden-state construction, evaluation, encoding, facts and history remain expressible | Generic capability consumers; no player/max/min assumption; reads available on same-type child games without advancing them |
 | B07 | Dou Dizhu actual rule program and SDK use only new public author contracts | npm test: complete games, all rule families, independently checked legal plays, timeout/redeal/doubling/scoring/invalid inputs; no private execution API |
 | B08 | All effective documentation and contract/test entrypoints use the new boundary | Source/doc inventory, no compatibility aliases; historical evidence explicitly historical, not normative |
 | B09 | Final report contains every public data/type field, ownership, direction and original-function mapping | evidence/C01/boundary-migration-review.md plus chat report; exported-symbol inventory cross-check |
@@ -33,4 +33,5 @@ P5 identical explicit inputs/services produce identical game behavior independen
 P6 neutral state transitions support algorithm-owned DFS/alpha-beta/MCTS; legal input construction and evaluation remain game/caller-owned.
 P7 type/schema structural checks are distinguished from semantic runtime obligations; no claim that arbitrary TS passing typecheck is controlled.
 
-Initial check: python3 tools/check_project.py failed on five stale artifact entries left by the prior interrupted correction. This is recorded, not treated as passed. Reports will be regenerated only after the new authoritative files and relevant checks exist.
+
+Current player acceptance: [player-acceptance.md](player-acceptance.md).

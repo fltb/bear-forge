@@ -1,6 +1,6 @@
 # 斗地主：规则配置与接口验证
 
-当前游戏包已迁移到声明端口与 GameModule；原生测试直接执行真实规则程序。Core、BaseGame 驱动器与保存实现属于后续 C02，不在本轮实现。
+游戏包使用声明端口与 GameModule；原生测试通过逐玩家回调执行真实规则程序。生产执行、驱动与保存由 C02/C03 验收。
 
 规则基准：[《竞技二打一扑克竞赛规则》2016 年 2 月，国家体育总局棋牌运动管理中心署名，全文镜像](https://www.pagat.com/docs/landlord412005.doc)。[总局发布说明](https://www.sport.gov.cn/n20001280/n20067662/n20067613/c22917445/content.html)。实现单副牌第五至十一条、术语与附录一记分；多人赛事 MP、瑞士移位和赛事组织不属于单副牌规则。配置 ID：competitive-2016-bear-1。
 
@@ -19,31 +19,31 @@
 
 program.ts 是唯一完整循环，类型 Program<ProgramSetup,DouDizhuPorts,Frame>。ProgramSetup={game:Setup,seed:uint32}。程序内部创建 SDK，随机状态在 SDK 闭包内驱动洗牌；decision 端口发布 Frame 并等待 Input；event 端口发布尚未交付的 AuditEvent[] 并等待 null 确认。published 在事件确认后推进，决策/终局 Frame.events 清空以避免重复发布。局部 state 与 published 位于程序现场，完整恢复由 Instance 的实现承担。
 
-implementation.ts 导出 GameModule={program,contract} 声明 game；没有宿主实例 Map、执行器绑定循环或独立规则推进。decision.receive 从 Frame 投影 view/choices；respond 使用同一 validateInput 规则检查并编码 Input。finish 从 state.result 提取唯一终局结果。
+implementation.ts 导出 GameModule={program,contract} 声明 game。decision.receive 从 Frame 投影 view/choices/signalPlayers；respond(view,input,player) 检查该玩家对应的 slot，使用同一 validateInput 规则检查并编码 Input。finish 从 state.result 提取唯一终局结果。
 
 ## 字段与数据流
 
 - setup：profile/firstBidder/initialGameTime。
 - ports.event：AuditEvent[] → null，角色 event；确认接收不等待动画。
-- seed：显式程序启动参数；受控 SDK 内维护伪随机流，不是外侧宿主状态。
+- seed：显式程序启动参数；伪随机流由受控 SDK 局部持有。
 - ports.decision：Frame{state,events} → Input，角色 decision。
 - view：Frame，只供可信游戏适配处理器读取。
 - interaction action：request 为 Slot，input 为 Action，description 为 never，options 只能 exact。
 - choice.id=slot.slotId，actor=slot.actor，type='action'，request=slot。
 - delivery：{receivedAtGameTime}，由会话提供可信接收时间。
-- signal：{kind:'host',boundaryKey,inputType:'timeout',gameTime,payload:{slotId}}。
-- observation：{observation,events}；observer 是 Seat。
-- event：AuditEvent{audience,event}；result：Result。
+- signal：{kind:'host',inputType:'timeout',gameTime,payload:{slotId}}。respond 从当前 stage 补出内部 boundaryKey；外部请求由 decisionId 定位。
+- player：Seat；playerFor(actor)=actor；observation：{observation,events}。
+- event：AuditEvent{audience,event}；playerEvent：Event；projectEvent 按 audience 返回 {event} 或 null；result：Result。
 
-模型/玩家只选择 Action。BaseGame 提交为 choice{choiceId,input:{type:'action',value:Action},delivery}。respond 根据当前真实 slot 补出 actor/stageId/slotId，与接收时间组合为程序 Input。超时经 signal 转成程序的 host Input。两者共用 validateInput 和 apply，没有替代规则。
+模型/玩家只选择 Action。BaseGame 提交为 choice{choiceId,input:{type:'action',value:Action},delivery}。respond 根据当前真实 slot 补出 actor/stageId/slotId，与接收时间组合为程序 Input。超时经 signal 转成程序的 host Input。两者共用 validateInput 和 apply。
 
-农民同时加倍表现为同一 decision 下两个 choices。接受其中一个后，剩余 choiceId 保持；游戏边界身份更新，由会话重新绑定提交。其他农民的私有加倍事件不进入其观察。
+农民同时加倍表现为同一 decision 下两个 choices。接受其中一个后，剩余 choiceId 保持；游戏边界身份更新，已有玩家绑定接收新的请求。其他农民的私有加倍事件不进入其观察。
 
 ## 数据与隐私
 
-Frame 含真实领域状态；它不是玩家观察。observe 只返回本人手牌、公开信息及该席位可见事件。终局不揭示其他未出手牌。AuditEvent 由可信会话按 audience 投影，不能将全部事件或 BaseGame 审计数据直接交给策略。
+Frame 含完整领域状态。observe 返回本人手牌、公开信息及该席位可见事件；终局延续相同可见性规则。GameContract.projectEvent 统一用于观察中的历史和主动事件交付，玩家回调收到 Event。三个席位可绑定同一函数，通过 control.player 区分所属玩家。
 
-describe 当前 choice 得到完整 Action 列表，不接收 context，不枚举时间和会话信号。动作顺序为叫分升序、布尔 false/true、出牌先过牌再按牌型/高点/长度/排序点数串。该顺序不是强度排名。Play.cards 为非降序点数，多重集对应唯一编码；pattern 保留每种合法牌型解释。客户端需提交规范编码，不由 schema 静默重排。
+describe 当前 choice 得到完整 Action 列表。时间和会话信号使用各自输入字段。动作顺序为叫分升序、布尔 false/true、出牌先过牌再按牌型/高点/长度/排序点数串。该顺序仅规定枚举顺序。Play.cards 为非降序点数，多重集对应唯一编码；pattern 保留每种合法牌型解释。客户端需提交规范编码，不由 schema 静默重排。
 
 ## 验收追踪
 
@@ -56,4 +56,4 @@ describe 当前 choice 得到完整 Action 列表，不接收 context，不枚�
 | 第10/11条、附录一 | settle | 胜负、春天反春、逐玩家得分、零和与附录算例 |
 | 协议 | GameModule、IO、纯处理器 | 三席位完整对局、隐私、非法/到期输入、完整动作列表、输入转换、隔离的原生对局 |
 
-运行 `npm run check`。游戏测试直接以公共 IO 驱动 program，不实现 Core 或 BaseGame 运行器。规则 oracle 未改；保存、执行生命周期与绑定器的实际实现由 C02/C03 验收。测试证据不把公共声明冒充可用 runtime。
+运行 `npm run check`。原生消费者以公共 IO、GameContract 和 GameBindings 驱动完整程序，覆盖逐玩家正常出牌、超时、私有事件、跨玩家拒绝。独立规则 oracle 核对合法动作；保存、执行生命周期与生产绑定器由 C02/C03 验收。

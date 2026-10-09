@@ -1,28 +1,28 @@
 {
   "checkpoint": "C01",
   "kind": "design",
-  "summary": "Protocol freeze: one bind/run driver at each layer, event-port-only notifications, independent capture authority and explicit record release, typed loader failures. Constructive semantics, invariants, finite-requirement completeness and completion audit recorded. 57 native/schema tests, 44 schema profiles and 100 public definitions pass. C01-03 passes; production runtime conformance remains C02/C03.",
+  "summary": "Player protocol migration: independent per-player bindings; player-owned observation/offers, explicit signal recipients and projected player events. Complete native Dou Dizhu games use the shared player callbacks for actions and timeouts. 68 tests, 44 schema profiles and 100 public definitions pass. C01-01/03/05 accepted; C01-02/04 plan module reuse and implementation acceptance; C02/C03 deliver production providers.",
   "replay_command": "npm ci --ignore-scripts && npm run check",
   "artifacts": [
     {
       "path": "docs/doudizhu.md",
-      "sha256": "9d1c83901e0be2173ce4b75b084ce68156683d894ce6da5f48bd647b312b2eec"
+      "sha256": "21a35f85195d6db7cfdf2178896e995b3ec6d8b2f0339b2d60c19f2e7afd1b5c"
     },
     {
       "path": "docs/protocol.md",
-      "sha256": "b13b0def8058ff6b83dd0c77b4d91c0b7c5aefad264543a7dfe435db00633467"
+      "sha256": "2fc23f80930aa5353b17a26d2b9fc98779798d6ae7d09b447da0d9d0c7a5ce7a"
     },
     {
       "path": "evidence/C01/acceptance.md",
-      "sha256": "569ed9c29a78b37c9b8a6e969638466ce7808003a6bad42f4ef26149a6b05069"
+      "sha256": "16d50b40a04a5f7d1f59ba2618749c038fd0ab392b8e67dbf1a3f1746f2edd95"
     },
     {
       "path": "evidence/C01/boundary-migration-acceptance.md",
-      "sha256": "3123217c1509d30e315d60435e2a9353722788c91e38ad507e48d5909b11f411"
+      "sha256": "68a2491d67b96f9652eab29adfd72a90d3ffd55803b04059fabd1d86f8c8d311"
     },
     {
       "path": "evidence/C01/boundary-migration-review.md",
-      "sha256": "c26a719b7714d332260f7c76cc82f7d534f0121228a16b320bafc5e7fb416071"
+      "sha256": "4098227b853f9853ec89d02b831538a9e2b6257c2e429961dfe821c2b0ff50da"
     },
     {
       "path": "evidence/C01/freeze-audit/baseline/check.log",
@@ -50,11 +50,11 @@
     },
     {
       "path": "evidence/C01/freeze-audit/check.log",
-      "sha256": "a34f411eb2c86da0aa24f33fca3b1c8d58de6dfeb06a59688e14c7478df4d8b0"
+      "sha256": "96b9f98620c0e0a5080e378edc8c94c53b7292f42577c0b7ae56d8e6f669520d"
     },
     {
       "path": "evidence/C01/freeze-audit/check.mjs",
-      "sha256": "0e8f3f01de68dfc1e4f4218da29c5c59fa02d435f71c6accdab3fef76cdddff4"
+      "sha256": "39371ab1d5b02360f5af7e8ba07226a1ec6730e3a0434b1c6f998fae9ec992f5"
     },
     {
       "path": "evidence/C01/freeze-audit/coverage.log",
@@ -62,19 +62,23 @@
     },
     {
       "path": "evidence/C01/freeze-audit/review.md",
-      "sha256": "44fc73c2aa4a51715a28f0873a43bfb2972eb8152b0d6e8c1d35f8b7ec319ded"
+      "sha256": "0315b8a3bf54e0a98171d89aea2b802e82c4ac2c3b3faeb20daf4c8f717cdd0f"
+    },
+    {
+      "path": "evidence/C01/player-acceptance.md",
+      "sha256": "19a37870240d2d4b48f48c1632a96f1550c426310611828758806aa480d56842"
     },
     {
       "path": "evidence/C01/protocol-freeze-proof.md",
-      "sha256": "14fc74a34554bfb2055cfce447070623169bb20beeffd3e27ac76372360d9744"
+      "sha256": "98f84e82afaf8beadbdd1996a307d36aad6cc1cae353d550fc897a4094abfb8e"
     },
     {
       "path": "evidence/C01/protocol-proof-index.json",
-      "sha256": "f94d64becbe815cfec859377264a45f057c010b61e7e0b1a8db8ddd65b985ce6"
+      "sha256": "d0831913c2a387443401c1fcbf9a5e4c7d0d633756c5d90f9793c0cfeda4aa43"
     },
     {
       "path": "evidence/C01/verify-migration.py",
-      "sha256": "86c90ffce5cb35d8f30530bb9498185a153603316a3da5d30c20fce0a71fe057"
+      "sha256": "1e36f11deb72eff8ff5fbb4e48f0b4d8247202ba83d391e31016d8e1559cc52e"
     },
     {
       "path": "games/doudizhu/package.json",
@@ -86,7 +90,7 @@
     },
     {
       "path": "games/doudizhu/src/implementation.ts",
-      "sha256": "87933d8315da00d558c1c95cffbfa8dcae0a9510b89270d2719cc3e175767ce4"
+      "sha256": "676cbdc5e40f24f0a8aa65f5f509d6e341eed27bb3db4124712e75ed2d13753d"
     },
     {
       "path": "games/doudizhu/src/index.ts",
@@ -106,7 +110,7 @@
     },
     {
       "path": "games/doudizhu/src/schemas.ts",
-      "sha256": "69bdaa2a27aa92689448c380c9a64d832c09416d6e3c21ee8567ff284a2acab4"
+      "sha256": "a9c9d0c666630e7699da27d3ffdfc1a330546c7924af07795dfecb26c89ee979"
     },
     {
       "path": "games/doudizhu/src/sdk.ts",
@@ -114,7 +118,7 @@
     },
     {
       "path": "games/doudizhu/src/types.ts",
-      "sha256": "f15c6c972f6cd1ab34db4cda78f04941f29bde08bcd97e623b454073441ede28"
+      "sha256": "a2821a07cb7f0ee7852d30c576aa4d701c3b582fc58a29156a1d458e5022e46a"
     },
     {
       "path": "package-lock.json",
@@ -130,7 +134,7 @@
     },
     {
       "path": "packages/contracts/src/authoring/types.ts",
-      "sha256": "3fbb5c14dd9b9365f9b73a48c2c0eb280fff18ff88cb3aa50252b36565655539"
+      "sha256": "53e4d514e832c0378885339cf492a27efc9e52c720bb9c47b3448569d0d72a1f"
     },
     {
       "path": "packages/contracts/src/core/schemas.ts",
@@ -146,7 +150,7 @@
     },
     {
       "path": "packages/contracts/src/game/types.ts",
-      "sha256": "bbcc1fecbdc7fd6c99a1da05fcb52a9e67db4ab4a769c9643e86ffa31c4c5f56"
+      "sha256": "e843d51be1c913ecd02a8736b6d2299aeee8648d43d4b54bb560d3453906878d"
     },
     {
       "path": "packages/contracts/src/index.ts",
@@ -158,11 +162,11 @@
     },
     {
       "path": "packages/contracts/src/runtime/types.ts",
-      "sha256": "11f3468ace72c9f026df4d709c2fd3ce057a6567bdd9b69c1682e63757f7d925"
+      "sha256": "dfcd5af1b67e8f8d4d78219aa0a4f7cfc7aa46c1a0c1bc9380dadde62309124f"
     },
     {
       "path": "tests/contracts/basegame-types.ts",
-      "sha256": "cf488448d826b0c1750521a20915a0c1405abe90883dbb111c45911a510e86c2"
+      "sha256": "481bdc3625650b5e4310ed477cd743a3b0cf5ef1f01f546b9a98e1a35e2f2295"
     },
     {
       "path": "tests/contracts/instance-types.ts",
@@ -173,12 +177,20 @@
       "sha256": "c52ae3d6597c84e57124a212fa1981022d0859f4a6aeb15f5fed488d295911e6"
     },
     {
+      "path": "tests/contracts/player-consumer.ts",
+      "sha256": "f4c44f3eab9cba964c00a2801b85a21561c391c8cecf1a8e3d5b7dec86e17dc4"
+    },
+    {
+      "path": "tests/contracts/player.test.ts",
+      "sha256": "0466408c3b60187299fb4a3938970f50813b01a424812460572a89dbe941e32c"
+    },
+    {
       "path": "tests/contracts/schema-admission.test.ts",
       "sha256": "2a2113568655167968a2674f902c5e477b2ca377b8082e9485764d2325b13ae3"
     },
     {
       "path": "tests/doudizhu/game.test.ts",
-      "sha256": "538a27bf2e7653c008cfb4a86aac1e5187f181f36a4abef7c572476c1c298cf9"
+      "sha256": "f2e3e1b45f3ef4b192b7f20464096f3156244bc25dc233de05a86851a866c541"
     },
     {
       "path": "tests/doudizhu/oracle.ts",
@@ -198,7 +210,7 @@
     },
     {
       "path": "tools/check_schema_admission.ts",
-      "sha256": "ee866e1e0c82a509fad42454d5e3ca44363d7aa13d851589be798c9c5df0f647"
+      "sha256": "b7352226d620f0093e7d74b95c36413e488c7c6e18ee9837ef35392c256a68b6"
     },
     {
       "path": "tools/schema_admission.ts",
@@ -240,13 +252,13 @@
       "log": "evidence/C01/boundary-completion-audit.log"
     },
     {
-      "scope": "single driver/event source, capture reachability and loader outcome declaration checks",
+      "scope": "player-scoped contracts, single driver, event projection and capture declaration checks",
       "command": "node evidence/C01/freeze-audit/check.mjs",
       "exit_code": 0,
       "log": "evidence/C01/freeze-audit/check.log"
     },
     {
-      "scope": "all current public definitions covered; implementation conformance obligations remain explicit",
+      "scope": "all public declarations mapped to stated laws and provider obligations",
       "command": "npm run check:proof-coverage",
       "exit_code": 0,
       "log": "evidence/C01/freeze-audit/coverage.log"

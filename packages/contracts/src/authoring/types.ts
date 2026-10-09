@@ -12,15 +12,17 @@ export type GameTypes = {
   actor: unknown;
   delivery: unknown;
   signal: unknown;
-  observer: unknown;
+  player: string;
   observation: unknown;
   event: unknown;
+  playerEvent: unknown;
   result: unknown;
 };
 export type Submission<G extends GameTypes> = GameInput<G['interactions'], G['delivery'], G['signal']>;
 export type DecisionData<G extends GameTypes> = {
   view: G['view'];
   choices: Choice<G['interactions'], G['actor']>[];
+  signalPlayers: G['player'][];
 };
 export type TerminalData<G extends GameTypes> = {
   view: G['view'];
@@ -37,11 +39,11 @@ export type GamePorts<G extends GameTypes> = FixedTable<G['ports']> & {
     | {
         kind: 'decision';
         receive: (input: ReadView<G['ports'][K]['input']>) => DecisionData<G>;
-        respond: (view: ReadView<G['view']>, input: ReadView<Submission<G>>) => PreparedReturn<G['ports'][K]['output']>;
+        respond: (view: ReadView<G['view']>, input: ReadView<Submission<G>>, player: G['player']) => PreparedReturn<G['ports'][K]['output']>;
       };
 };
 export type GameSchemas<G extends GameTypes> = FixedTable<G['interactions']> & {
-  [K in 'view' | 'actor' | 'delivery' | 'signal' | 'observer' | 'observation' | 'event' | 'result']: z.ZodType<G[K]>;
+  [K in 'view' | 'actor' | 'delivery' | 'signal' | 'player' | 'observation' | 'event' | 'playerEvent' | 'result']: z.ZodType<G[K]>;
 } & {
   interactions: {
     [K in keyof G['interactions']]: {
@@ -67,8 +69,9 @@ export type GameContract<G extends GameTypes, Q extends { [K in keyof Q]: QueryS
   schemas: GameSchemas<G>;
   ports: GamePorts<G>;
   finish: (result: ReadView<G['programResult']>) => TerminalData<G>;
-  observerFor: (actor: ReadView<G['actor']>) => G['observer'];
-  observe: (view: ReadView<G['view']>, observer: ReadView<G['observer']>) => G['observation'];
+  playerFor: (actor: ReadView<G['actor']>) => G['player'];
+  observe: (view: ReadView<G['view']>, player: G['player']) => G['observation'];
+  projectEvent: (event: ReadView<G['event']>, player: G['player']) => { event: G['playerEvent'] } | null;
   inputs: GameInputDefinitions<G>;
   queries: { [K in keyof Q]: GameQueryDefinition<G, Q[K]> } & FixedTable<Q>;
 };

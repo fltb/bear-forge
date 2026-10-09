@@ -22,7 +22,7 @@ export type NativeCoreLoader = {
   load: <S, P extends { [K in keyof P]: PortShape }, R>(program: ProgramModule<S, P, R>) => Promise<Outcome<LoadedCore<S, P, R>>>;
 };
 export type GameHandle<G extends GameTypes, Q extends { [K in keyof Q]: QueryShape }> = BaseGame<
-  G['interactions'], G['actor'], G['delivery'], G['signal'], G['observer'], G['observation'], G['event'], G['result'], Q
+  G['interactions'], G['actor'], G['delivery'], G['signal'], G['player'], G['observation'], G['playerEvent'], G['result'], Q
 >;
 /** Transfers exclusive driving authority; does not start another program or own services. */
 export type BaseGameBinder = {

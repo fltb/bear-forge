@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { InstanceIdSchema, CallIdSchema } from '@bear-forge/contracts';
 import type { IO, PortCall } from '@bear-forge/contracts';
 import { game, program, FrameSchema } from '../../games/doudizhu/src/index.ts';
 import type { DouDizhuPorts, DouDizhuSubmission, Setup, Frame, Input, Seat, Action, AuditEvent } from '../../games/doudizhu/src/index.ts';
@@ -11,7 +12,7 @@ const decisionPort=game.contract.ports.decision;
 if(decisionPort.kind!=='decision')throw new Error('expected declared decision port');
 const decision=decisionPort;
 const choice=(f:Frame,a:Action,index=0):DouDizhuSubmission=>({kind:'choice',choiceId:f.state.stage!.slots[index]!.slotId,input:{type:'action',value:a},delivery:{receivedAtGameTime:f.state.now}});
-const timeout=(f:Frame):DouDizhuSubmission=>({kind:'signal',signal:{kind:'host',boundaryKey:f.state.stage!.boundaryKey,inputType:'timeout',gameTime:f.state.stage!.slots[0]!.deadline.atGameTime,payload:{slotId:f.state.stage!.slots[0]!.slotId}}});
+const timeout=(f:Frame):DouDizhuSubmission=>({kind:'signal',signal:{kind:'host',inputType:'timeout',gameTime:f.state.stage!.slots[0]!.deadline.atGameTime,payload:{slotId:f.state.stage!.slots[0]!.slotId}}});
 const pick=(f:Frame):DouDizhuSubmission=>{
   const actor=f.state.stage!.slots[0]!.actor;
   const a:Action=f.state.phase==='bidding'?{kind:'bid',value:3}:f.state.phase==='doubling'?{kind:'double',value:false}:f.state.phase==='redoubling'?{kind:'redouble',value:true}:legalActions(f.state,actor).at(-1)!;
@@ -32,7 +33,10 @@ async function run(seed=11,seat:Seat='0',override?:(frame:Frame,index:number)=>D
       const f=FrameSchema.parse(call.input);frames.push(f);assert.ok(++count<600);
       const projected=decision.receive(f);
       assert.equal(projected.choices.length,f.state.stage!.slots.length);
-      const response=decision.respond(f,override?.(f,count)??pick(f));
+      const input=override?.(f,count)??pick(f);
+      const slotId=input.kind==='choice'?input.choiceId:input.signal.payload.slotId;
+      const player=f.state.stage!.slots.find(slot=>slot.slotId===slotId)!.actor;
+      const response=decision.respond(f,input,player);
       assert.ok(response.valid,response.valid?'':response.reason);
       if(!response.valid)throw new Error('invalid response');
       output=response.output;inputs.push(output);
@@ -54,7 +58,7 @@ for(const [seed,seat] of [[1,'0'],[7,'1'],[123,'2']] as const)test(`new author p
   assert.equal(Object.values(r.result.scores).reduce((a,b)=>a+b),0);
   assert.deepEqual(r.events,r.frames.at(-1)!.state.events);
   assert.ok(r.frames.every(f=>f.events.length===0));
-  for(const observer of ['0','1','2'] as const)assert.deepEqual(game.contract.observe(r.frames.at(-1)!,observer).observation.result,r.result);
+  for(const player of ['0','1','2'] as const)assert.deepEqual(game.contract.observe(r.frames.at(-1)!,player).observation.result,r.result);
 });
 test('all-pass redeals and ordinary three-bid auction remain unchanged',async()=>{
   const a=await run(11,'0',(f,i)=>i<=3?choice(f,{kind:'bid',value:0}):null);
@@ -65,10 +69,10 @@ test('all-pass redeals and ordinary three-bid auction remain unchanged',async()=
 test('private simultaneous choices preserve the remaining endpoint and reveal bottom later',async()=>{
   const r=await run();const f=structuredClone(r.frames.find(f=>f.state.phase==='doubling')!);
   const first=choice(f,{kind:'double',value:true},1),second=choice(f,{kind:'double',value:false},0);
-  const observer=f.state.stage!.slots[0]!.actor,before=observe(f,observer);
-  const prepared=prepareInput(f,first);assert.ok(prepared.valid);if(!prepared.valid)throw new Error();apply(f.state,prepared.output);
-  assert.deepEqual(observe(f,observer),before);
-  const remaining=prepareInput(f,second);assert.ok(remaining.valid);if(!remaining.valid)throw new Error();apply(f.state,remaining.output);
+  const player=f.state.stage!.slots[0]!.actor,before=observe(f,player);
+  const prepared=prepareInput(f,first,f.state.stage!.slots[1]!.actor);assert.ok(prepared.valid);if(!prepared.valid)throw new Error();apply(f.state,prepared.output);
+  assert.deepEqual(observe(f,player),before);
+  const remaining=prepareInput(f,second,player);assert.ok(remaining.valid);if(!remaining.valid)throw new Error();apply(f.state,remaining.output);
   assert.equal(f.state.phase,'redoubling');assert.equal(observe(f,'0').observation.hand.length,17);assert.equal(observe(f,'0').observation.bottom,null);
 });
 test('timeout signals drive a complete game without becoming fake action choices',async()=>{
@@ -77,7 +81,7 @@ test('timeout signals drive a complete game without becoming fake action choices
 });
 test('all timeout defaults and two passes retain rule behavior',async()=>{
   const r=await run(),f=structuredClone(r.frames[0]!);
-  const expire=()=>{const x=prepareInput(f,timeout(f));assert.ok(x.valid);if(!x.valid)throw new Error();apply(f.state,x.output);};
+  const expire=()=>{const x=prepareInput(f,timeout(f),f.state.stage!.slots[0]!.actor);assert.ok(x.valid);if(!x.valid)throw new Error();apply(f.state,x.output);};
   expire();assert.equal(f.state.bidCount,1);assert.equal(f.state.highBid,0);
   const s=f.state;s.phase='doubling';s.landlord='0';s.highBid=3;stage(s,['1','2']);expire();assert.equal(s.doubles['1'],false);
   s.doubles['1']=true;expire();assert.equal(s.phase,'redoubling');expire();assert.equal(s.redoubled,false);assert.equal(s.phase,'playing');
@@ -87,7 +91,7 @@ test('invalid choice, illegal action and equality deadline fail before rule muta
   const r=await run(),f=r.frames[0]!,before=structuredClone(f),good=choice(f,{kind:'bid',value:1});
   if(good.kind!=='choice')throw new Error();
   for(const input of [{...good,choiceId:'other'}, {...good,delivery:{receivedAtGameTime:25000}}, choice(f,{kind:'pass'})]){
-    assert.equal(prepareInput(f,input).valid,false);assert.deepEqual(f,before);
+    assert.equal(prepareInput(f,input,f.state.stage!.slots[0]!.actor).valid,false);assert.deepEqual(f,before);
   }
   const c=decision.receive(f).choices[0]!;
   assert.deepEqual(game.contract.inputs.action.describe(f,c),{kind:'exact',values:[0,1,2,3].map(value=>({kind:'bid',value}))});
@@ -101,7 +105,7 @@ test('every advertised legal payload prepares successfully with valid delivery d
   const r=await run();
   for(const f of r.frames.slice(0,-1))for(const c of decision.receive(f).choices){
     const options=game.contract.inputs.action.describe(f,c);assert.equal(options.kind,'exact');
-    for(const action of options.values){const response=prepareInput(f,{kind:'choice',choiceId:c.id,input:{type:'action',value:action},delivery:{receivedAtGameTime:f.state.now}});assert.ok(response.valid);}
+    for(const action of options.values){const response=prepareInput(f,{kind:'choice',choiceId:c.id,input:{type:'action',value:action},delivery:{receivedAtGameTime:f.state.now}},c.actor);assert.ok(response.valid);}
   }
   const f=r.frames.find(f=>f.state.phase==='playing')!,c=decision.receive(f).choices[0]!,options=game.contract.inputs.action.describe(f,c);
   assert.equal(options.values.some(a=>a.kind==='pass'),false);
@@ -123,8 +127,8 @@ test('terminal result has one authoritative source and canonical card encoding s
   const lead=r.frames.find(f=>f.state.phase==='playing')!,c=decision.receive(lead).choices[0]!;
   const canonical=game.contract.inputs.action.describe(lead,c).values.find(a=>a.kind==='play'&&new Set(a.cards).size>1);
   assert.ok(canonical&&canonical.kind==='play');
-  assert.throws(()=>prepareInput(lead,choice(lead,{...canonical,cards:[...canonical.cards].reverse()})));
-  assert.ok(prepareInput(lead,choice(lead,canonical)).valid);
+  assert.throws(()=>prepareInput(lead,choice(lead,{...canonical,cards:[...canonical.cards].reverse()}),c.actor));
+  assert.ok(prepareInput(lead,choice(lead,canonical),c.actor).valid);
 });
 
 test('native inner SDK uses decision and event ports; seed is explicit controlled setup',async()=>{
@@ -135,4 +139,57 @@ test('native inner SDK uses decision and event ports; seed is explicit controlle
   const a=await run(1),b=await run(2),again=await run(1);
   assert.deepEqual(a,again);
   assert.notDeepEqual(a.frames[0]!.state.hands,b.frames[0]!.state.hands);
+});
+
+test('player callbacks drive complete games from projected requests and events',async()=>{
+  const {playerConsumer}=await import('../contracts/player-consumer.ts');
+  for(const useTimeouts of [false,true]){
+    const consumer=playerConsumer(game.contract,InstanceIdSchema.parse('00000000-0000-4000-8000-000000000001'));
+    const received:Record<Seat,AuditEvent['event'][]>={'0':[],'1':[],'2':[]};
+    const decisions=new Set<Seat>();let calls=0;
+    const onDecision:NonNullable<Parameters<typeof consumer.bind>[0]>['onDecision']=async(request,control)=>{
+      const player=control.player;decisions.add(player);
+      assert.equal(request.observation.observation.actor,player);
+      assert.ok(request.offers.length>0);
+      assert.ok(request.offers.every(offer=>offer.choice.actor===player));
+      assert.equal(request.acceptsSignal,true);
+      const offer=request.offers[0]!,slot=offer.choice.request;
+      if(useTimeouts&&slot.actionSpec.phase!=='bidding')return {kind:'reply',value:{kind:'signal',signal:{
+        kind:'host',inputType:slot.onTimeout.inputType,payload:slot.onTimeout.payload,gameTime:slot.deadline.atGameTime,
+      }}};
+      const action=slot.actionSpec.phase==='bidding'?{kind:'bid' as const,value:3}:offer.options.values.at(-1)!;
+      return {kind:'reply',value:{kind:'choice',choiceId:offer.choice.id,input:{type:'action',value:action},delivery:{receivedAtGameTime:slot.deadline.atGameTime-1}}};
+    };
+    const onEvent:NonNullable<Parameters<typeof consumer.bind>[0]>['onEvent']=async(delivery,control)=>{
+      received[control.player].push(structuredClone(delivery.event));
+      if(delivery.event.type==='doubleChosen')assert.equal(delivery.event.actor,control.player);
+      return {kind:'reply',value:null};
+    };
+    for(const player of ['0','1','2'] as const)consumer.bind({player,onDecision,onEvent});
+    const io:IO<DouDizhuPorts>={async call<A extends PortCall<DouDizhuPorts>>(call:A):Promise<DouDizhuPorts[A['port']]['output']>{
+      assert.ok(++calls<1200);const callId=CallIdSchema.parse(`00000000-0000-4000-8000-${String(calls).padStart(12,'0')}`);
+      if(call.port==='event'){
+        const reply=await consumer.events(call.input as AuditEvent[],callId);assert.equal(reply.kind,'reply');
+        return null as DouDizhuPorts[A['port']]['output'];
+      }
+      const response=await consumer.decision(decision.receive(call.input as Frame),callId,decision.respond);
+      assert.equal(response.kind,'accepted');if(response.kind!=='accepted')throw new Error('expected accepted response');
+      return response.output as DouDizhuPorts[A['port']]['output'];
+    }};
+    const final=await program({game:setup(),seed:31},io);
+    assert.equal(final.state.phase,'ended');assert.equal(decisions.size,3);
+    for(const player of ['0','1','2'] as const){
+      const expected=final.state.events.flatMap(event=>{const projection=game.contract.projectEvent(event,player);return projection?[projection.event]:[];});
+      assert.deepEqual(received[player],expected);
+      assert.deepEqual(consumer.observe(final,player).events,expected);
+    }
+  }
+});
+
+test('another player cannot answer a choice or its timeout',async()=>{
+  const f=(await run()).frames[0]!,before=structuredClone(f);
+  for(const input of [choice(f,{kind:'bid',value:3}),timeout(f)]){
+    assert.equal(prepareInput(f,input,'1').valid,false);
+    assert.deepEqual(f,before);
+  }
 });

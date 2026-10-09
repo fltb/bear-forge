@@ -22,14 +22,14 @@ export async function consume(base:B, decisionId:DecisionId) {
   }
   const count=await base.query({name:'count',args:null});
   if(count.ok){const n:number=count.value;void n;}
-  await base.bind({onDecision:async()=>({kind:'reply',value:{kind:'choice',choiceId:'bidder',input:{type:'bid',value:{amount:2}},delivery:{at:0}}})});
-  await base.bind({onDecision:async()=>({kind:'reply',value:{kind:'signal',signal:{timeout:'bidder'}}})});
+  await base.bind({player:'0',onDecision:async()=>({kind:'reply',value:{kind:'choice',choiceId:'bidder',input:{type:'bid',value:{amount:2}},delivery:{at:0}}})});
+  await base.bind({player:'0',onDecision:async()=>({kind:'reply',value:{kind:'signal',signal:{timeout:'bidder'}}})});
   await base.run({limits:{maxInputs:1}});
   // @ts-expect-error no generic context filter
   const badDescribe:DescribeChoice<Interactions>={decisionId,choiceId:'bidder',type:'bid',context:{actor:'x'}};
   void badDescribe;
   // @ts-expect-error input template and payload remain correlated
-  await base.bind({onDecision:async()=>({kind:'reply',value:{kind:'choice',choiceId:'bidder',input:{type:'text',value:{amount:2}},delivery:{at:0}}})});
+  await base.bind({player:'0',onDecision:async()=>({kind:'reply',value:{kind:'choice',choiceId:'bidder',input:{type:'text',value:{amount:2}},delivery:{at:0}}})});
   // @ts-expect-error query payload cannot be swapped
   await base.query({name:'count',args:3});
 }
@@ -92,7 +92,7 @@ export async function actualBinding(
       const child=await base.fork();
       if(child.ok){
         const sameType:DDZ=child.value;
-        try { await sameType.observe({observer:'0'});await walk(sameType,2,0); }
+        try { await sameType.observe({player:'0'});await walk(sameType,2,0); }
         finally { await sameType.close(); }
       }
     }
@@ -147,11 +147,11 @@ export async function walk(base:DDZ,depth:number,receivedAtGameTime:number):Prom
         if(boundary.value.kind!=='decision')throw new Error('fork changed boundary');
         // Read the child identity; parent credentials must never be submitted to it.
         const input={kind:'choice' as const,choiceId:choice.id,input:{type:'action' as const,value:action},delivery:{receivedAtGameTime}};
-        const accepted=await child.validate({decisionId:boundary.value.decisionId,input});
+        const accepted=await child.validate({player:game.contract.playerFor(choice.actor),decisionId:boundary.value.decisionId,input});
         if(!accepted.ok)throw accepted.error;
         if(!accepted.value.valid)continue;
         const expected=boundary.value.decisionId;
-        const bound=await child.bind({onDecision:async(request)=>{
+        const bound=await child.bind({player:game.contract.playerFor(choice.actor),onDecision:async(request)=>{
           if(request.decisionId.instanceId!==expected.instanceId||request.decisionId.callId!==expected.callId)return {kind:'pause'};
           return {kind:'reply',value:input};
         }});if(!bound.ok)throw bound.error;
@@ -164,29 +164,31 @@ export async function walk(base:DDZ,depth:number,receivedAtGameTime:number):Prom
   }
 }
 
-// Trusted session/router consumes batches; individual policies receive only one actor offer.
+// Each player receives its own request and projected event payloads.
 export async function callbackPlay(base:DDZ, policy:DecisionPolicy<DouDizhuTypes['interactions'],DouDizhuTypes['actor'],DouDizhuTypes['observation']>) {
   const abort=new AbortController();
-  await base.bind({
+  const callbacks:Parameters<DDZ['bind']>[0] & {} = {
+    player:'0' as const,
     async onDecision(request,control) {
       if(control.signal.aborted)return {kind:'pause'};
       const offer=request.offers[0];if(!offer)return {kind:'pause'};
-      const ownHand:number[]=offer.observation.observation.hand;
+      const ownHand:number[]=request.observation.observation.hand;
       void ownHand;
-      const selected=await policy(offer,control);if(selected.kind==='pause')return selected;
+      const selected=await policy(offer,request.observation,control);if(selected.kind==='pause')return selected;
       return {kind:'reply',value:{kind:'choice',choiceId:offer.choice.id,input:{type:'action',value:selected.value},delivery:{receivedAtGameTime:0}}};
     },
     async onEvent(delivery) {
-      const event:DouDizhuTypes['event']=delivery.event;void event;
+      const event:DouDizhuTypes['playerEvent']=delivery.event;void event;
       return {kind:'reply',value:null};
     },
-  });
+  };
+  for(const player of ['0','1','2'] as const)await base.bind({...callbacks,player});
   const stopped=await base.run({limits:{maxInputs:1},signal:abort.signal});
   if(stopped.ok&&stopped.value.kind==='paused')await base.inspect();
   // @ts-expect-error event acknowledgment cannot become a game action
-  await base.bind({onEvent:async()=>({kind:'reply',value:{kind:'pass'}})});
+  await base.bind({player:'0',onEvent:async()=>({kind:'reply',value:{kind:'pass'}})});
   // @ts-expect-error undeclared host callbacks are not protocol fields
-  await base.bind({randomInteger:async()=>3});
+  await base.bind({player:'0',randomInteger:async()=>3});
   await base.bind(null);
 }
 
@@ -200,4 +202,24 @@ export function eventBoundaryOnly(decision:DecisionData<DouDizhuTypes>,terminal:
   // @ts-expect-error a completed game cannot also be paused waiting for delivery
   const stopped:GameRunStop<Interactions,string,number>={acceptedInputs:0,kind:'paused',reason:'requested',boundary:{kind:'ended',result:0}};
   void stopped;
+}
+
+export async function playerBoundaries(base:DDZ) {
+  // @ts-expect-error a binding always selects a player
+  await base.bind({onDecision:async()=>({kind:'pause'})});
+  // @ts-expect-error player values use the game's declared type
+  await base.bind({player:'spectator'});
+  await base.bind({player:'1'});
+  await base.observe({player:'2'});
+  // @ts-expect-error validation includes the player context
+  await base.validate({decisionId:{},input:{}});
+}
+
+export function projectedEventOnly(binding:NonNullable<Parameters<DDZ['bind']>[0]>) {
+  binding.onEvent=async delivery=>{
+    const visible:DouDizhuTypes['playerEvent']=delivery.event;void visible;
+    // @ts-expect-error source visibility metadata stays in the game event projection
+    const raw:DouDizhuTypes['event']=delivery.event;void raw;
+    return {kind:'reply',value:null};
+  };
 }

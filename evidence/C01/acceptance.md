@@ -1,81 +1,29 @@
-# Core / Instance / BaseGame migration acceptance
+# C01 协议与游戏作者包验收
 
-User scope: replace the old boundary, preserve equivalent capabilities, migrate the complete Dou Dizhu author package, prove the declarations, and report exact fields and dataflow. No compatibility exports or production runtime implementation.
+范围：Core / Instance / BaseGame 公共协议、玩家绑定、完整斗地主作者包、原生与类型消费者、字段报告和条件证明。C02/C03 验收生产执行、绑定、保存与分支。
 
-## Requirements and evidence
-
-| ID | Required outcome | Verification / expected evidence |
+| 清单 | 交付 | 验收命令与结果要求 |
 | --- | --- | --- |
-| B01 | Core is game-neutral; Instance owns complete execution continuation; all external functions use declared ports | Source audit of every contract declaration and dependency; public correlated port call/return type negatives |
-| B02 | BaseGame owns game interaction conventions, not a second rules loop | Game adapter definitions and complete Dou Dizhu module; no concrete host runtime in game source |
-| B03 | Schema/TS correspondence, finite typed registries, correlated keys and payloads, no protocol factories | npm run typecheck; npm run check:schemas; npm run check:boundaries; positive and negative protocol consumers |
-| B04 | Execution, capture, save/restore, native differential authoring entry, compiled artifact association remain expressible | Field-by-field protocol reference and conditional trace/restore proof; declaration consumers. No runtime implementation claimed |
-| B05 | Observation, exact/construct options, authoritative validation, game queries, multiplayer and explicit timeout remain expressible | Concrete Dou Dizhu projections and complete submission validation; caller-visible data checked for privacy; no generic context filter |
-| B06 | Generic transition, resource release, hidden-state construction, evaluation, encoding, facts and history remain expressible | Generic capability consumers; no player/max/min assumption; reads available on child snapshots without advancing them |
-| B07 | Dou Dizhu actual rule program and SDK use only new public author contracts | npm test: complete games, all rule families, independently checked legal plays, timeout/redeal/doubling/scoring/invalid inputs; no private execution API |
-| B08 | All effective documentation and contract/test entrypoints use the new boundary | Source/doc inventory, no compatibility aliases; historical evidence explicitly historical, not normative |
-| B09 | Final report contains every public data/type field, ownership, direction and original-function mapping | evidence/C01/boundary-migration-review.md plus chat report; exported-symbol inventory cross-check |
-| B10 | Evidence matches real files and checks | npm run check; python3 tools/check_project.py; python3 tools/check_project.py --self-test; actual logs and artifact hashes |
+| C01-01 | 斗地主规则配置、歧义解释和单副牌覆盖 | docs/doudizhu.md 审阅；npm run check 的规则与完整对局验收 |
+| C01-02 | 候选底座与后端选择 | 保留原计划的选型关卡 |
+| C01-03 | 公共 type/schema、作者接口、逐玩家交互、表达与组合证明 | npm run check；python3 evidence/C01/verify-migration.py；逐字段与需求映射审阅 |
+| C01-04 | 生产底座验证输入 | 保留原计划对应验收 |
+| C01-05 | 真实斗地主 SDK、循环、规则、协议接线 | npm run check；规则基线哈希；逐玩家完整对局、超时与拒绝测试 |
 
-## Preservation baseline
+## 约定与行为
 
-Retain Dou Dizhu setup/rule profile, complete bidding/dealing/redeal/doubling/redoubling/playing/scoring loop, all pattern variants, canonical action encoding, per-seat observations, private simultaneous choices, explicit time events, rejection behavior and full-game fixtures. Replace the binding mechanics, not the independent rule coverage.
+- Core 使用声明端口；Instance 持有完整续延及 SDK 状态。内侧规则推进由 program.run 执行。
+- GameContract 定义纯 receive/respond/finish/playerFor/observe/projectEvent/describe/query，BaseGame 持有真实 Instance 并按 player 绑定。
+- 请求只包含当前 player 的 observation 和 offers，信号接收者显式声明；事件通过游戏投影后交付。同一函数的不同玩家绑定相互独立。
+- validate 和回复检查 player、当前调用与输入关联；非法回复保持规则状态不变。并发回复接受一次，取消后迟到回复失效。
+- 分支返回同类型对象；保存复用 InstanceSnapshot；捕捉通过提供者能力按 id 读取并显式释放。
+- 斗地主保留真实规则、主循环、SDK、牌型和独立 oracle；正常出牌与超时均通过玩家回调完成对局。
+- exact/construct 保持类型关联；delivery/signal 各自声明。游戏与消费者共同核对完整输入可构造。
 
-Existing full Input envelopes include actor/stage/slot/time. Existing exact lists contain Action only. Migration must explicitly separate decision payload from delivery metadata and session events, or provide a complete representation; it must not call an Action list an exhaustive list of the larger Input envelope. This is a required design check, not permission to weaken exact.
+具体 player 场景与命令见 [player-acceptance.md](player-acceptance.md)。规则与 oracle 文件对照迁移基线哈希。字段报告逐字包含当前公共声明；证明索引覆盖所有公共导出与对应法则。
 
-## Proof obligations
+## 交付
 
-P1 internal computation + declared external call is trace-expressive under a semantics-preserving executor.
-P2 BaseGame advancement is a segment of the actual Instance trace, not a second state transition implementation.
-P3 all read handlers operate on explicitly published immutable boundary data; no arbitrary stack inspection.
-P4 game restore captures Instance and necessary owned service state; siblings isolate mutable state and resource identity.
-P5 identical explicit inputs/services produce identical game behavior independent of human/script/model origin.
-P6 neutral state transitions support algorithm-owned DFS/alpha-beta/MCTS; legal input construction and evaluation remain game/caller-owned.
-P7 type/schema structural checks are distinguished from semantic runtime obligations; no claim that arbitrary TS passing typecheck is controlled.
+文档、账本、日志与哈希通过 python3 tools/check_project.py、--self-test 和 git diff --check 验收。
 
-Initial check: python3 tools/check_project.py failed on five stale artifact entries left by the prior interrupted correction. This is recorded, not treated as passed. Reports will be regenerated only after the new authoritative files and relevant checks exist.
-
-## BaseGame branching convergence (current request)
-
-- One BaseGame facade keeps inspect/observe/describe/validate/query and bind/run/close; no separate reader or search service layer.
-- Replace game persistence/simulation and loaded-game wrappers with optional branching.save/step/restore/release directly on BaseGame. No compatibility aliases.
-- All reads accept current/snapshot; child reads require neither restore nor duplicate inspect. Parent and current instance remain unchanged by step. restore returns an independent BaseGame.
-- Factory returns game and initial update directly. Keep Core persistence/capture and neutral upper-level capabilities.
-- Verification: npm run check (type consumers include direct play without branching, concrete Dou Dizhu branch/read/restore, DFS and shared search operation types; negative consumers reject removed methods and wrong inputs); python3 evidence/C01/verify-migration.py; python3 tools/check_project.py and --self-test.
-- Preserve all rule files and native tests. Update authoritative protocol, architecture, field report and proof index; no runtime implementation or project numbering.
-
-Convergence start audit found stale hashes for docs/plan.md and this acceptance file from the reopened checkpoint; final reports are refreshed after verification. npm check passed after declaration/consumer migration. No production runtime was added.
-
-## Two-sided game contract and single Instance state (current request)
-
-- Instance owns all continuation-relevant mutable state, including inner SDK/service locals. No outer game snapshot composition.
-- Instance fork returns same Instance type; BaseGame fork returns same BaseGame type. Save/restore use only InstanceSnapshot and underlying persistence provider.
-- BaseGame binds an existing Instance and a pure GameContract. All ordinary reads target that bound Instance. Remove Branching, GameSnapshot, GameReadTarget, GameFactory and outer ServiceModule ownership.
-- GameModule separates program from shared GameContract; inner GameSDK uses declared ports. Dou Dizhu inner SDK owns deterministic random state, outer projections remain pure. Preserve rule/pattern/oracle files unchanged and complete native game tests.
-- Record proof of state closure, projection consistency, fork bisimulation up to identity, search interface closure and native/controlled equivalence; state implementation assumptions explicitly.
-- Acceptance: npm run check; concrete positive/negative type consumers for bind/fork/save/restore/search; full native games, seed isolation, inner-port consumption; migration audit; document/evidence integrity and negative self-test. No production interpreter, compiler or fork implementation.
-
-Current two-sided migration verification: 56 native/schema tests, 39 admitted schemas, 80 public definitions with conditional law coverage, type consumers and boundary audit passed. Previous branching convergence is superseded by the latest section; its old operations are forbidden exports in the migration audit. Production continuation execution remains outside this declaration task.
-
-## Complete inner/outer control protocol and publish (current request)
-
-- Specify Instance bind/run, correlated callbacks, explicit reply/pause, one run entrypoint, limits/cancellation, callback errors, lease/late-return rules, and unbound fork/restore.
-- Specify BaseGame callback binding/run, typed decision offers (actor-visible observations and options), event delivery identity, callback-only advancement, event/decision/terminal boundaries and multiplayer routing. BaseGame adapts Instance callbacks without a second executor.
-- Preserve internal IO/GameSDK and single Instance state. Update types, fixed schemas, pure game contract, all consumers and proofs. Protocol phase only; no production driver.
-- Validate positive and negative type consumers for raw Instance callbacks, game callbacks and manual/search use, complete native Dou Dizhu and explicit emitted-event SDK use.
-- Acceptance commands: npm run check; python3 evidence/C01/verify-migration.py; python3 tools/check_project.py and --self-test; git diff --check. Update proof inventory/field appendix and all active documents.
-- Finally commit the reviewed project worktree, push to fltb/bear-forge without force, and verify remote branch commit equals local HEAD.
-
-Historical callback/control verification before removal: npm run check passed (57 tests, 44 schemas, 101 public definitions); full field/source correspondence and unchanged rule baseline audit passed. Public transfer supplies the ownership primitive required by BaseGameBinder. Commit/push verification is reported from actual Git results after these checks.
-
-## 删除重复的 BaseGame 推进入口
-
-- `npm run check`：公共类型不再提供 submit/GameUpdate；binder 直接返回 GameHandle；搜索消费者使用 bind/run(maxInputs:1)，负向类型检查拒绝 submit。现有游戏/schema 测试全部通过。
-- `node evidence/C01/freeze-audit/check.mjs`：检查当前声明与规范无第二条游戏推进/批量事件返回路径；捕捉闭合由后续本文件的清理验收项验证。
-- `python3 evidence/C01/verify-migration.py` 与 `python3 tools/check_project.py`：公共声明附录、证据与账本一致。不启动生产运行器实现。
-
-## 清除剩余混合边界与冻结审核
-
-- `npm run check`：Instance 无第二推进入口；decision/terminal 不携带事件；事件身份仅来自 event 调用；capture 在 transfer 后仍可按实例身份读取，close 与记录释放分离。正向消费者和负向类型/schema 检查覆盖这些边界。
-- `node evidence/C01/freeze-audit/check.mjs`：检查唯一入口、事件来源、捕捉接线的实际声明，不能以文字自称修复。
-- 逐项审核协议操作、生命周期、错误、作者契约与 R03–R08 接线；冻结需有限需求集合上的构造证明和状态转换覆盖，生产实现义务独立列出。不能把类型通过当作任意程序正确性证明。
+实际执行检查后记录退出码、输出及产物 SHA-256；同步计划/账本与报告。最终提交并推送 fltb/bear-forge，核对本地 HEAD、远端 main 与工作树。

@@ -1,5 +1,6 @@
 PASS: Instance and BaseGame each have one driving entrypoint.
 PASS: only event ports deliver notifications; terminal state has no pending delivery.
 PASS: capture is provider-scoped by identity and survives control transfer/close until release.
-SCOPE declaration and consumer checks; implementation conformance remains a separate obligation.
+SCOPE C01 declarations and consumers; C02/C03 provider conformance.
 PASS: exact method inventories and both loader failure outcomes match the freeze proof.
+PASS: player binding, observation, request ownership, signal recipients and projected events share one contract.

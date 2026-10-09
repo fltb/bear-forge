@@ -35,7 +35,7 @@
       },
       "evidence": "evidence/C01/report.json",
       "blocker": null,
-      "next_action": "Protocol freeze and finite-requirement completeness proof completed. C01-02/04 implementation preparation remains pending; C02 runtime not started."
+      "next_action": "Player protocol and native consumer migration accepted. Continue C01-02 module reuse review and C01-04 implementation acceptance planning under the fixed player protocol."
     },
     "C02": {
       "status": "pending",
@@ -333,6 +333,11 @@
       "date": "2026-10-09",
       "source": "Complete audit after mixed-boundary cleanup",
       "change": "Freeze Core/Instance/BaseGame declarations with constructive operational semantics, invariants, capability closure and scoped expressiveness proof. C01-03 passes; production conformance remains C02/C03, not inferred from native tests."
+    },
+    {
+      "date": "2026-10-09",
+      "source": "用户要求完整实施 player 方案并清除混合状态和防御性表达",
+      "change": "Player-scoped binding, observation, requests and event projection; explicit signal recipients; migrate author contracts, Dou Dizhu, consumers, proofs and active docs. C01 declarations and author package scope."
     }
   ]
 }

@@ -36,25 +36,30 @@ export type QueryShape = { input: unknown; output: unknown };
 export type QueryCall<Q extends { [K in keyof Q]: QueryShape }> = {
   [K in TableKeys<Q>]: { name: K; args: Q[K]['input'] };
 }[TableKeys<Q>];
-/** Each offer is already projected for its actor; the whole batch belongs to a trusted router. */
-export type DecisionOffer<T extends InteractionTable, A, V> = {
+/** An input endpoint and its complete payload options. */
+export type DecisionOffer<T extends InteractionTable, A> = {
   [K in TableKeys<T>]: {
     choice:{id:ChoiceId;actor:A;type:K;request:T[K]['request']};
-    observation:V;
     options:InputOptions<T[K]['input'],T[K]['description']>;
   };
 }[TableKeys<T>];
-/** A policy receives one actor's offer, never a batch of other actors' observations. */
-export type DecisionPolicy<T extends InteractionTable, A, V> = <const C extends DecisionOffer<T,A,V>>(
-  offer:C, control:CallbackControl
+/** A policy selects a payload using one offer and its player observation. */
+export type DecisionPolicy<T extends InteractionTable, A, V> = <const C extends DecisionOffer<T,A>>(
+  offer:C, observation:V, control:CallbackControl
 ) => Promise<CallbackReply<T[C['choice']['type']]['input']>>;
-export type GameRequest<T extends InteractionTable, A, V> = {decisionId:DecisionId;offers:DecisionOffer<T,A,V>[]};
+export type GameRequest<T extends InteractionTable, A, V> = {
+  decisionId:DecisionId;
+  observation:V;
+  offers:DecisionOffer<T,A>[];
+  acceptsSignal:boolean;
+};
 export type EventDeliveryId = z.infer<typeof EventDeliveryIdSchema>;
 export type EventDelivery<E> = {id:EventDeliveryId;event:E};
-/** Host routing callbacks, not code or state injected into the controlled program. */
-export type GameBindings<T extends InteractionTable, A, D, S, V, E> = {
-  onDecision?: (request:GameRequest<T,A,V>, control:CallbackControl) => Promise<CallbackReply<GameInput<T,D,S>>>;
-  onEvent?: (delivery:EventDelivery<E>, control:CallbackControl) => Promise<CallbackReply<null>>;
+/** Callbacks registered for one game-defined player key. */
+export type GameBindings<T extends InteractionTable, A, D, S, Player extends string, V, E> = {
+  player:Player;
+  onDecision?: (request:GameRequest<T,A,V>, control:CallbackControl & {player:Player}) => Promise<CallbackReply<GameInput<T,D,S>>>;
+  onEvent?: (delivery:EventDelivery<E>, control:CallbackControl & {player:Player}) => Promise<CallbackReply<null>>;
 };
 export type GameRunLimits = z.infer<typeof GameRunLimitsSchema>;
 export type GameRunOptions = {limits?:GameRunLimits;signal?:AbortSignal};
@@ -63,16 +68,16 @@ export type GameRunStop<T extends InteractionTable, A, R> = {acceptedInputs:numb
   | {kind:'ended';result:R}
   | {kind:'fault';error:Extract<GameError,{kind:'fault'}>});
 /** Exclusive outer facade of one Instance; no separate mutable game/service state. */
-export type BaseGame<T extends InteractionTable, A, D, S, O, V, E, R, Q extends { [K in keyof Q]: QueryShape }> = FixedTable<T> & FixedTable<Q> & {
+export type BaseGame<T extends InteractionTable, A, D, S, Player extends string, V, E, R, Q extends { [K in keyof Q]: QueryShape }> = FixedTable<T> & FixedTable<Q> & {
   readonly id: InstanceId;
-  bind: (bindings: GameBindings<T,A,D,S,V,E> | null) => Promise<GameOutcome<void>>;
+  bind: (bindings: GameBindings<T,A,D,S,Player,V,E> | null) => Promise<GameOutcome<void>>;
   run: (options?: GameRunOptions) => Promise<GameOutcome<GameRunStop<T,A,R>>>;
   inspect: () => Promise<GameOutcome<GameBoundary<T, A, R>>>;
-  observe: (input: { observer: O }) => Promise<GameOutcome<V>>;
+  observe: (input: { player: Player }) => Promise<GameOutcome<V>>;
   describe: <const C extends DescribeChoice<T>>(input: C) => Promise<GameOutcome<InputOptions<T[C['type']]['input'], T[C['type']]['description']>>>;
-  validate: (input: { decisionId: DecisionId; input: GameInput<T, D, S> }) => Promise<GameOutcome<InputValidation>>;
+  validate: (input: { player: Player; decisionId: DecisionId; input: GameInput<T, D, S> }) => Promise<GameOutcome<InputValidation>>;
   query: <const C extends QueryCall<Q>>(call: C) => Promise<GameOutcome<Q[C['name']]['output']>>;
-  fork?: () => Promise<GameOutcome<BaseGame<T, A, D, S, O, V, E, R, Q>>>;
+  fork?: () => Promise<GameOutcome<BaseGame<T, A, D, S, Player, V, E, R, Q>>>;
   save?: () => Promise<GameOutcome<InstanceSnapshot>>;
   close: () => Promise<GameOutcome<void>>;
 };

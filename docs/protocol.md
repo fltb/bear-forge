@@ -187,6 +187,6 @@ NativeCoreLoader 装载 ProgramModule；ControlledCoreLoader 装载 CompiledProg
 
 binder.bind({instance,contract,persistence?}) 接管既有实例。调用方负责提供匹配的程序与 contract；类型只验证端口与数据形状。fork/save 与会话能力按实际提供情况组合成 GameHandle。恢复路径为 persistence.restore → binder.bind。
 
-## 审核与证明
+## 验证范围
 
-[字段报告](../evidence/C01/boundary-migration-review.md) 包含全部公开声明原文、三层职责与业务映射。[协议证明](../evidence/C01/protocol-freeze-proof.md) 列出操作构造、动作/会话分离、接受反馈及恢复前提。源码检查覆盖各功能子路径，默认入口独立核对。
+字段以 packages/contracts 的公共声明为准。`npm run check` 执行类型反例、schema 结构、模块依赖、SDK 原生轨迹、多人交互和完整斗地主测试。内侧 SDK 的逐调用等价关系及适配前提见本页“内侧 lib 与外侧功能配套”。这些检查验证当前协议与示例，不证明生产执行器已经正确实现保存、恢复和隔离；该部分仍在 C02/C03。

@@ -1,4 +1,0 @@
-PASS: 22 archived files match original hashes
-PASS: 9 active documents, R01-R09, C00-C07, local links and fences
-PASS: validator and audit Python syntax
-LIMIT: this audit does not prove game correctness, semantic completeness, or honest execution

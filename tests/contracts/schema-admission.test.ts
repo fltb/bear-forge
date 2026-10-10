@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
-import { assertBoundarySchema, parseBoundary, assertMatchingTables, ownTableKeys } from '../../tools/schema_admission.ts';
-import type { SchemaPolicy } from '../../tools/schema_admission.ts';
+import { assertBoundarySchema, parseBoundary, assertMatchingTables, ownTableKeys } from '../support/schema-admission.ts';
+import type { SchemaPolicy } from '../support/schema-admission.ts';
 
 test('schema profile rejects value changes, stripping and unknown nested constructors',()=>{
   const cases=[z.number().transform(n=>n+1),z.preprocess(Number,z.number()),z.coerce.number(),z.number().default(1),z.number().prefault(1),z.number().catch(1),z.object({x:z.number()}),z.looseObject({x:z.number()}),z.string().trim(),z.string().toLowerCase(),z.number().overwrite(n=>n+1),z.any(),z.unknown(),z.promise(z.number()),z.lazy(()=>z.number()),z.string().regex(/x/g),z.url(),z.record(z.enum(['x']),z.number()),z.custom(()=>true)];
@@ -29,7 +29,7 @@ test('custom checks require explicit trusted approval; equality guard rejects mu
   assert.throws(()=>parseBoundary(mutating,value,badApproval),/changed the value/);
   assert.deepEqual(value,{n:1});
 });
-test('F4 original transform is rejected before parsing; parser edge cases cannot silently change data',()=>{
+test('transforms are rejected before parsing; parser edge cases cannot silently change data',()=>{
   const changing=z.number().int().transform(n=>n+1);
   assert.throws(()=>parseBoundary(changing,0),/unsupported/);
   const record=z.record(z.string(),z.number());

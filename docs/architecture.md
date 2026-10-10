@@ -56,7 +56,7 @@ src/internal                      类型检查辅助工具
 @bear-forge/game-sdk               可执行内侧 lib：createGameSDK
 ```
 
-基础入口不导出保存、记录、训练或搜索辅助类型。基本 Core/Instance/Game 源码不导入可选功能目录；loading 在接线时组合实际提供的能力。类型依赖由 tools/check_boundaries.ts 检查。
+基础入口不导出保存、记录、训练或搜索辅助类型。基本 Core/Instance/Game 源码不导入可选功能目录；loading 在接线时组合实际提供的能力。类型依赖由 tests/contracts/architecture.test.ts 检查，包含在 npm test 中。
 
 游戏目录：schemas.ts 定义领域数据；types.ts 特化公开契约；program.ts 是主循环；sdk.ts 组合公共 game-sdk lib 与实例内随机流；rules.ts/patterns.ts 实现规则；implementation.ts 声明 GameModule 与纯处理器。
 

@@ -17,12 +17,7 @@
   "include": [
     "packages/contracts/src/**/*.ts",
     "packages/game-sdk/src/**/*.ts",
-    "tests/contracts/**/*.ts",
     "games/**/*.ts",
-    "tests/doudizhu/**/*.ts",
-    "tools/check_boundaries.ts",
-    "tools/schema_admission.ts",
-    "tools/check_schema_admission.ts",
-    "tools/check_protocol_coverage.ts"
+    "tests/**/*.ts"
   ]
 }

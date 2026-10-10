@@ -1,5 +1,0 @@
-PASS: ten default entrypoints; functional subpaths expose optional capabilities independently.
-PASS: direct player requests and pure actions; separate optional session callback.
-PASS: one-step Instance/Game run and concrete accepted input survive stop states.
-PASS: current public source and active specifications contain no removed interfaces.
-PASS: Core/Instance are game-neutral; basic modules do not import optional features.

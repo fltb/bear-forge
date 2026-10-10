@@ -148,9 +148,6 @@ vite.config.ts.timestamp-*
 # Turbo Repo
 .turbo
 
-# Versioned checkpoint acceptance evidence
-!evidence/**/*.log
-
 # Local OS and Python cache
 .DS_Store
 __pycache__/

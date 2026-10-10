@@ -1,6 +1,0 @@
-
-> bear-forge@0.3.0 check:schemas
-> node --experimental-strip-types tools/check_schema_admission.ts
-
-PASS: 42 public/game schemas satisfy the pinned value-preserving structural profile
-LIMIT: genuine admitted Zod instances and reviewed callback provenance are prerequisites; runtime must use value-equality validation, not arbitrary parse calls.

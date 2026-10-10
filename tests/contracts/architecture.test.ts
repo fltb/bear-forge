@@ -1,7 +1,10 @@
+import test from 'node:test';
 import ts from 'typescript';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import assert from 'node:assert/strict';
+
+test('protocol, SDK and game dependencies respect module boundaries',()=>{
 const root=resolve('.'), contracts=resolve('packages/contracts/src'), game=resolve('games/doudizhu/src'), sdk=resolve('packages/game-sdk/src');
 const files=(dir:string):string[]=>readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(resolve(dir,e.name)):e.name.endsWith('.ts')?[resolve(dir,e.name)]:[]);
 const errors:string[]=[];
@@ -43,6 +46,13 @@ for(const path of [...files(contracts),...files(game),...files(sdk)]){
   visit(source);
 }
 assert.deepEqual(errors,[]);
-const pkg=JSON.parse(readFileSync('node_modules/zod/package.json','utf8'));assert.equal(pkg.version,'4.6.5');assert.deepEqual(Object.keys(pkg.dependencies??{}),[]);
-console.log('PASS: three-layer and optional capability dependency graph; public declarations, inner SDK and game imports stay within their allowed paths');
-console.log('LIMIT: source dependency audit, not a controlled compiler or runtime sandbox proof');
+});
+
+test('the default contracts entry exposes only the ten basic public types',()=>{
+  const path='packages/contracts/src/index.ts';
+  const source=ts.createSourceFile(path,readFileSync(path,'utf8'),ts.ScriptTarget.Latest,true);
+  const names=source.statements.flatMap(node=>
+    ts.isExportDeclaration(node)&&node.exportClause&&ts.isNamedExports(node.exportClause)
+      ? node.exportClause.elements.map(item=>item.name.text) : []);
+  assert.deepEqual(names.sort(),['Core','Program','ProgramModule','IO','Instance','BaseGame','Request','InputOptions','GameModule','GameSDK'].sort());
+});

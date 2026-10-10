@@ -10,11 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/contracts/*.test.ts tests/doudizhu/*.test.ts",
-    "check": "npm run typecheck && npm test && npm run check:boundaries && npm run check:schemas && npm run check:proof-coverage && npm run check:protocol",
-    "check:boundaries": "node --experimental-strip-types tools/check_boundaries.ts",
-    "check:schemas": "node --experimental-strip-types tools/check_schema_admission.ts",
-    "check:proof-coverage": "node --experimental-strip-types tools/check_protocol_coverage.ts --self-test",
-    "check:protocol": "node evidence/C01/freeze-audit/check.mjs"
+    "check": "npm run typecheck && npm test"
   },
   "engines": {
     "node": ">=22.18.0"

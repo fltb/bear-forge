@@ -1,36 +1,39 @@
 # Bear Forge
 
-正式名称 **Bear Forge**，目录与包写法 `bear-forge`。当前交付 Core / Instance / BaseGame 协议声明及迁移后的完整斗地主游戏作者包；生产执行、编译、绑定与训练实现留在后续关卡。
+正式名称 **Bear Forge**，目录与包写法 `bear-forge`。当前交付公共协议、斗地主示例和内侧 SDK 薄封装；生产执行器、编译器、保存恢复和训练系统尚未实现。
 
-## 有效入口
+## 阅读入口
 
-1. [目标与边界](docs/requirements.md)
-2. [分层与数据流](docs/architecture.md)
-3. [执行规则](docs/workflow.md)
-4. [计划与清单](docs/plan.md)
-5. [协议字段和法则](docs/protocol.md)
-6. [斗地主规则和接线](docs/doudizhu.md)
-7. [受控程序规范](docs/controlled-program-spec.md)
+- [目标与边界](docs/requirements.md)
+- [分层与数据流](docs/architecture.md)
+- [协议字段和语义](docs/protocol.md)
+- [斗地主规则和接线](docs/doudizhu.md)
+- [受控程序规范](docs/controlled-program-spec.md)
+- [业务压力场景](docs/scenario-resolution-requirements.md)
+- [当前进度与计划](docs/plan.md)
 
-代理读取 [AGENTS.md](AGENTS.md)；状态以 checkpoints.json 为准。归档与旧 evidence 是历史记录，不补充当前规范。
+## 目录
 
-## 当前结构
+| 目录 | 内容 |
+| --- | --- |
+| packages/contracts | 公共 TS 类型与 Zod schema |
+| packages/game-sdk | 程序内使用的类型化端口薄封装 |
+| games/doudizhu | 真实斗地主规则、循环、领域 SDK 与外侧适配 |
+| tests/contracts | 协议类型、交互、依赖边界与 schema 测试 |
+| tests/doudizhu | 规则、合法动作独立核对与完整原生对局测试 |
+| tests/support | 测试辅助代码，不作为生产运行时 |
+| docs | 当前设计、需求和计划 |
+| archive | 已失效的历史设计，不作为当前依据 |
 
-Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释游戏交互。程序通过 IO.call 使用声明端口，配套 `@bear-forge/game-sdk` lib、领域 SDK 和游戏循环在 Instance 内执行。
+Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释游戏交互。上述是协议职责；当前测试通过原生 JS 执行示例，未实现受控执行现场保存。
 
-请求直接指定 player。onRequest 只返回动作，describe/validate 对应相同动作类型；时钟和超时通过可选 bindControl 输入。一次 run 接受至多一个游戏输入，返回具体接受结果并交付后续事件。
+游戏入口：[模块导出](games/doudizhu/src/index.ts)、[领域 SDK](games/doudizhu/src/sdk.ts)、[主循环](games/doudizhu/src/program.ts)。代理工作规则见 [AGENTS.md](AGENTS.md)。
 
-保存恢复、同类型分支和捕捉记录按功能路径独立导出。默认包入口有十个日常类型，细节与 schema 位于各自模块。训练、搜索、分析由上层组合公开能力。
-
-游戏入口：[game / program](games/doudizhu/src/index.ts)；[SDK](games/doudizhu/src/sdk.ts)；[主循环](games/doudizhu/src/program.ts)。协议矩阵见 [架构](docs/architecture.md)，全部字段见 [报告](evidence/C01/boundary-migration-review.md)，构造证明见 [协议证明](evidence/C01/protocol-freeze-proof.md)。[15 个压力场景](docs/scenario-resolution-requirements.md) 保留业务需求。
-
-## 检查
+## 正式检查
 
 ```sh
 npm ci --ignore-scripts
 npm run check
-python3 tools/check_project.py
-python3 tools/check_project.py --self-test
 ```
 
-类型与 schema 检查、实际原生游戏测试、独立牌型 oracle 和公共导出证明索引共同验证本轮交付。生产执行与绑定的履约验收在 C02/C03，训练与实验交付按后续清单执行。
+`npm run check` 执行 TypeScript 类型检查和全部测试；也可分别运行 `npm run typecheck`、`npm test`。测试输出直接显示，不提交运行日志或验收报告。

@@ -1,8 +1,0 @@
-PASS unchanged domain/oracle baseline: games/doudizhu/src/patterns.ts
-PASS unchanged domain/oracle baseline: tests/doudizhu/oracle.ts
-PASS unchanged domain/oracle baseline: tests/doudizhu/rules.test.ts
-PASS original rules unchanged after normalizing the explicit session-clock migration
-PASS declaration appendix reproduces every current contract and internal type file
-PASS simplified interfaces and optional capability entrypoints replace old public surfaces
-PASS final full check: 80 tests, 41 admitted schemas, 70 definitions across capability subpaths
-SCOPE C01 public protocols, author game and executable native consumers; C02/C03 production providers

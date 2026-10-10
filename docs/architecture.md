@@ -11,7 +11,7 @@
 | 分支，可选 | — | 同类型独立实例 | 同类型独立游戏 |
 | 捕捉，可选 | 提供记录访问 | 记录调用与返回 | 上层解释训练和分析数据 |
 
-Core 提供执行机制。Instance 持有受控程序的栈、局部变量、闭包、对象图、SDK 状态及待决调用。BaseGame 持有 Instance 的外部控制权。程序内 SDK 属于被执行内容；玩家回调和外侧 GameContract 处理器在宿主侧。
+Core 提供执行机制。Instance 持有受控程序的栈、局部变量、闭包、对象图、SDK 状态及待决调用。BaseGame 持有 Instance 的外部控制权。配套 lib `@bear-forge/game-sdk` 和游戏领域 SDK 属于被执行内容；玩家回调和外侧 GameContract 处理器在宿主侧。
 
 ```mermaid
 flowchart TB
@@ -46,17 +46,20 @@ flowchart TB
   /core                           程序、端口、创建
   /instance                       通用回调、单步运行、状态、关闭
   /game                           请求、纯动作、玩家交互
-  /authoring                      游戏程序、SDK、纯适配声明
+  /authoring                      游戏程序、SDK、共享端口、纯适配声明
   /session                        可选会话控制
   /persistence                    可选保存恢复
   /branching                      可选同类型分支
   /capture                        可选执行记录
   /loading                        装载、接管和可选能力组合
 src/internal                      类型检查辅助工具
+@bear-forge/game-sdk               可执行内侧 lib：createGameSDK
 ```
 
 基础入口不导出保存、记录、训练或搜索辅助类型。基本 Core/Instance/Game 源码不导入可选功能目录；loading 在接线时组合实际提供的能力。类型依赖由 tools/check_boundaries.ts 检查。
 
-游戏目录：schemas.ts 定义领域数据；types.ts 特化公开契约；program.ts 是主循环；sdk.ts 封装 IO 与实例内随机流；rules.ts/patterns.ts 实现规则；implementation.ts 声明 GameModule 与纯处理器。
+游戏目录：schemas.ts 定义领域数据；types.ts 特化公开契约；program.ts 是主循环；sdk.ts 组合公共 game-sdk lib 与实例内随机流；rules.ts/patterns.ts 实现规则；implementation.ts 声明 GameModule 与纯处理器。
 
 C01 交付公共声明、完整斗地主及原生协议消费者。生产执行、保存续延及正式绑定器在 C02/C03 验收。
+
+内侧 lib 与外侧功能的逐项对应、类型关联和语义法则见 protocol.md 的“内侧 lib 与外侧功能配套”。GamePortDeclarations 同时用于 Program 的端口 schema 与内侧函数生成；GameContract 受同一端口类别/输入/返回类型约束。Core/Instance 不依赖该游戏声明或 lib。lib 不持有 BaseGame、Instance 控制句柄或宿主回调。

@@ -21,7 +21,7 @@ assert {'Core','Instance','BaseGame','Request','Accepted','GameModule','GameSDK'
 assert not names&{'Choice','DecisionOffer','GameRequest','GameInput','DecisionPolicy','GameRunStop','GameRunLimits','InstanceRunLimits','GameHistory','StateTransition','FactExtraction','GameUpdate'}
 print('PASS simplified interfaces and optional capability entrypoints replace old public surfaces')
 log=Path('evidence/C01/boundary-migration-check.log').read_text()
-for expected in ['tests 75','pass 75','fail 0','skipped 0','41 public/game schemas','68 public definitions']:
+for expected in ['tests 80','pass 80','fail 0','skipped 0','41 public/game schemas','70 public definitions']:
  assert expected in log,expected
-print('PASS final full check: 75 tests, 41 admitted schemas, 68 definitions across capability subpaths')
+print('PASS final full check: 80 tests, 41 admitted schemas, 70 definitions across capability subpaths')
 print('SCOPE C01 public protocols, author game and executable native consumers; C02/C03 production providers')

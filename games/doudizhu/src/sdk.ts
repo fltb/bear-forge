@@ -1,6 +1,8 @@
+import { createGameSDK } from '@bear-forge/game-sdk';
+import { gamePorts } from './schemas.ts';
 import type { IO, GameSDK } from '@bear-forge/contracts';
 import type { DouDizhuPorts } from './types.ts';
-import type { State, Frame } from './schemas.ts';
+import type { State } from './schemas.ts';
 import { event, stage } from './rules.ts';
 
 /** Domain composition over the registered toolkit; no private runtime interface. */
@@ -30,8 +32,7 @@ export function createSDK(io: IO<DouDizhuPorts>, seed: number): GameSDK<DouDizhu
     return random % maximum;
   };
   return {
-    decision: (frame: Frame) => io.call({port:'decision',input:frame}),
-    event: events => io.call({port:'event',input:events}),
+    ...createGameSDK<DouDizhuPorts>(io, gamePorts),
     deal: (state: State) => deal(state, integer),
   };
 }

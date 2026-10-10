@@ -2,7 +2,7 @@
   "scope": "public-contract-definitions",
   "sources": {
     "packages/contracts/src/authoring/index.ts": "fc38a18ee36b35337d60e24d8537d3984bed4ce1d46b579c8557ea5d8b8a21c6",
-    "packages/contracts/src/authoring/types.ts": "45bb824490bb4913163fd42fe18c6b499b4bfb5ccec741f7ddc8b0dc34129c8e",
+    "packages/contracts/src/authoring/types.ts": "80d81ce3a2338dfc71f01d46f3be167891978ab3369c50faf8c4a99ce48b2918",
     "packages/contracts/src/branching/index.ts": "fc38a18ee36b35337d60e24d8537d3984bed4ce1d46b579c8557ea5d8b8a21c6",
     "packages/contracts/src/branching/types.ts": "2dc1f6201efcb520f6717ee69308bfa35b8776771083dc9dc62ab8dadd976512",
     "packages/contracts/src/capture/index.ts": "e4ea91c11c4eff72f76b1c41d8fcf030b2f6a946bc07bc9200d4f7c6d0b3039f",
@@ -76,7 +76,7 @@
     },
     {
       "id": "authoring",
-      "claim": "The game supplies rules, request ownership, pure observation/event projections and optional session conversion; no generic timing enters actions.",
+      "claim": "The game supplies rules, request ownership, pure observation/event projections and optional session conversion; no generic timing enters actions. Shared finite port declarations constrain request/event roles and SDK input/output; packaged inner methods forward exactly one declared IO call without host control capabilities.",
       "status": "conditional",
       "assumptions": [
         "Admitted program execution preserves source semantics and owns complete controlled state.",
@@ -90,7 +90,10 @@
         "tests/contracts/instance-types.ts",
         "tests/doudizhu/game.test.ts",
         "docs/protocol.md",
-        "evidence/C01/convergence-acceptance.md"
+        "evidence/C01/convergence-acceptance.md",
+        "tests/contracts/sdk-types.ts",
+        "tests/contracts/sdk.test.ts",
+        "packages/game-sdk/src/index.ts"
       ],
       "openObligations": [
         "C02/C03 verify production controlled execution, admission and full continuation persistence.",
@@ -285,6 +288,20 @@
     },
     {
       "name": "GameModule",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GamePortDeclarations",
+      "source": "packages/contracts/src/authoring/types.ts",
+      "laws": [
+        "authoring"
+      ]
+    },
+    {
+      "name": "GamePortShape",
       "source": "packages/contracts/src/authoring/types.ts",
       "laws": [
         "authoring"

@@ -4,6 +4,7 @@
   "type": "module",
   "workspaces": [
     "packages/contracts",
+    "packages/game-sdk",
     "games/doudizhu"
   ],
   "scripts": {

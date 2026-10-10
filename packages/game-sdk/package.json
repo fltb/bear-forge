@@ -1,0 +1,9 @@
+{
+  "name": "@bear-forge/game-sdk",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@bear-forge/contracts": "*"
+  }
+}

@@ -1,28 +1,40 @@
 {
   "checkpoint": "C01",
   "kind": "design",
-  "summary": "Three-layer protocol convergence delivered: ten default entrypoint types, functional capability subpaths, direct-player requests, pure action replies, optional session control, one-step execution and concrete accepted input feedback. Complete native Dou Dizhu normal/timeout games and independent domain tests pass. 75 tests, 41 schemas and 68 definitions across subpaths. C01-01/03/05 accepted; C01-02/04 and C02/C03 retain their stated scope.",
+  "summary": "Inner SDK completion accepted in C01-03/05: separately packaged @bear-forge/game-sdk forwards declared IO; shared schemas and request/event roles correlate inner and outer sides. Complete native Dou Dizhu, multiplayer/session/event/terminal consumers, exact/construct, type negatives and recursive native trace comparisons pass. 80 tests, 41 schemas, 70 public contract definitions; ten root types unchanged. C01-02/04 and production C02/C03 remain pending.",
   "replay_command": "npm ci --ignore-scripts && npm run check",
   "artifacts": [
     {
+      "path": "docs/architecture.md",
+      "sha256": "0ac380ad0703c38589d4f80dca07a9a315780d1012495e3e0cdb6c0077d31b28"
+    },
+    {
+      "path": "docs/controlled-program-spec.md",
+      "sha256": "c23d0f134b62f0a7f9ff2d032bc4d445d6bd914657a3b943407a1da40b8a97ee"
+    },
+    {
       "path": "docs/doudizhu.md",
-      "sha256": "b6102b1099f7403544da2ee6c3c127e94c33ccdf094f98e36c10f968bcc6ca30"
+      "sha256": "cba87822c788a1baa76c29ee01c1627c21628442d20013e966bfbe8339565718"
     },
     {
       "path": "docs/protocol.md",
-      "sha256": "db23a7d899a51a4386831fc1421843986fdcaae63e02940a73faf712f250f430"
+      "sha256": "014275f9820cd4dcd0d451759866cdc4f4e688899999d59f1ec479bb43c671f8"
     },
     {
       "path": "evidence/C01/acceptance.md",
-      "sha256": "403efed592a180657892ee16ac97da5c2e5489766b97c48dbf725c76e33955b8"
+      "sha256": "9f636a26b11b620b3c7d0bb9ddc8c51510b329b8cedef87b892e8da176827933"
     },
     {
       "path": "evidence/C01/boundary-migration-acceptance.md",
       "sha256": "5484aa7b34c95f936204d93c10f23740bdd438c9e2fe92c47a2713348e87fdea"
     },
     {
+      "path": "evidence/C01/boundary-migration-check.log",
+      "sha256": "110484085a8d36c855c00f8eaca7196d439f562797f9718ef361a73bef72df00"
+    },
+    {
       "path": "evidence/C01/boundary-migration-review.md",
-      "sha256": "f38356760cf58de6da14bb2dad798fbab56f30c2d905b3a737860f4161d5b6ba"
+      "sha256": "c21d7629893e979c2dfabbf7660edf17677318f878fc99715758d931fece3b92"
     },
     {
       "path": "evidence/C01/convergence-acceptance.md",
@@ -62,11 +74,11 @@
     },
     {
       "path": "evidence/C01/freeze-audit/coverage.log",
-      "sha256": "ae765cf20cc8a2a197438f7c4669911b970b7a9120942568b586849d34f048fe"
+      "sha256": "1577ff3a76ee3878d2b9f7712a4b7f584c32961ad56d514032682c01326fa8e6"
     },
     {
       "path": "evidence/C01/freeze-audit/review.md",
-      "sha256": "e30a004c20914ccc23036a24e126afcd017fb59ad10d5c51545727cb32e46731"
+      "sha256": "6fac7bd6e253e692f45e632f3e7b0f688d01ca7b2276378fac6974e062e5546b"
     },
     {
       "path": "evidence/C01/player-acceptance.md",
@@ -74,19 +86,27 @@
     },
     {
       "path": "evidence/C01/protocol-freeze-proof.md",
-      "sha256": "b28283c87540fefa714be4b17426132eaf9dc74225cd3a2b9b8354305e4a34c3"
+      "sha256": "6bee5d464bc802e61d5dc5d2c584b4d6baf47539944f9e7b190f808d4c236808"
     },
     {
       "path": "evidence/C01/protocol-proof-index.json",
-      "sha256": "9653e27c8cac43df9fa832aee48c474b10cb520c272c81758cd9d34df079643c"
+      "sha256": "434c3e8e342b30eecea20fa19a298aa4a00defba3fe2ff6197780312dcb137bd"
+    },
+    {
+      "path": "evidence/C01/sdk-install.log",
+      "sha256": "2fe4af5882e4007735602c24edffd47e8f60d4bf18e654cebe2e25955bdc0714"
+    },
+    {
+      "path": "evidence/C01/sdk-tests.log",
+      "sha256": "ba6e14d1eea93345705aaf926e7d89252a197d91035fe95cc0c290e8d19da28e"
     },
     {
       "path": "evidence/C01/verify-migration.py",
-      "sha256": "b2a7eb56665c376e6d79bb82fe475242cb1bc90044986933dff65459fc8af3a9"
+      "sha256": "05dfcb65531af81604132052cb63b1aad99fc1216e022edcf5ec23fd933df097"
     },
     {
       "path": "games/doudizhu/package.json",
-      "sha256": "d9e5cab93bf9e2859f08991c90c125434950b157d85e3347ca367b6adeb2a162"
+      "sha256": "dd5e689c6009b060f0ac31a454bcc74572a31693d4dd1acf70e28840cc3a90f7"
     },
     {
       "path": "games/doudizhu/src/errors.ts",
@@ -94,7 +114,7 @@
     },
     {
       "path": "games/doudizhu/src/implementation.ts",
-      "sha256": "c8f5c4b6fe102ecc744668691f2fefa6c47c65d6dfa9b681d8db16a99749709d"
+      "sha256": "3dd3c83ec1c73704450ebf586dffe8c1f3a42dae182870519247080435a8b248"
     },
     {
       "path": "games/doudizhu/src/index.ts",
@@ -114,23 +134,23 @@
     },
     {
       "path": "games/doudizhu/src/schemas.ts",
-      "sha256": "ba8ca42ba017e426d8ec35213d7a3d92bab7840b51f628c37957101156b80ec7"
+      "sha256": "943f6d2685aa5fae9835ca9c1c031cda093960c6c3089e4d658ece2ba05a8776"
     },
     {
       "path": "games/doudizhu/src/sdk.ts",
-      "sha256": "f8ed1b3cf074e9a70defad44c588c72ddf3d5e8578926ed1e6261ae041a875d8"
+      "sha256": "7644e0e34ac4b7032a4fa8a1429c10782c60557cf2a7b9440e7e3ce74651f53b"
     },
     {
       "path": "games/doudizhu/src/types.ts",
-      "sha256": "3190cb8bac67b557bf359c895ac8cb4acd442d3c4025e60c75e0261475d253e9"
+      "sha256": "c2a017434e1ebbf16d6d6d9632c38809dc6d09913a899b9a0bbe1649309e66f6"
     },
     {
       "path": "package-lock.json",
-      "sha256": "4deb4046d9ea710f5da3d7c3a5f91bb54f70f770e80623d79319604117b11be8"
+      "sha256": "f667125e10f3a1420467a1cf8d423b5c22b6b8d21ba366aff2356f426116b53b"
     },
     {
       "path": "package.json",
-      "sha256": "b4dbbaa8e815a260e14df48368a0098f11b849a273b6eadfb4c0ceebc7bd759a"
+      "sha256": "9597d6dad1d974aa719dba0f4c3ef82a85373fea10db76bfb7921f147bcf3bef"
     },
     {
       "path": "packages/contracts/package.json",
@@ -142,7 +162,7 @@
     },
     {
       "path": "packages/contracts/src/authoring/types.ts",
-      "sha256": "45bb824490bb4913163fd42fe18c6b499b4bfb5ccec741f7ddc8b0dc34129c8e"
+      "sha256": "80d81ce3a2338dfc71f01d46f3be167891978ab3369c50faf8c4a99ce48b2918"
     },
     {
       "path": "packages/contracts/src/branching/index.ts",
@@ -237,6 +257,14 @@
       "sha256": "92afa5982e5668d8896b4e1e3305d0c59fe7e2d49aadf975575974a4b1feae18"
     },
     {
+      "path": "packages/game-sdk/package.json",
+      "sha256": "c45d3e801c73ddd5f32db3b62a43a1bd3546b7ff6608a327021a05d9aac9f1ce"
+    },
+    {
+      "path": "packages/game-sdk/src/index.ts",
+      "sha256": "af7e3fb2e822bbd4029aa96cf18c721f07251e57f3d6eea7e96fc53b49ba3a94"
+    },
+    {
       "path": "tests/contracts/basegame-types.ts",
       "sha256": "2e4c9c4874fdfff5dcf40ba24c94afdf567bfdd80919c76bab03113104c45212"
     },
@@ -254,11 +282,19 @@
     },
     {
       "path": "tests/contracts/player.test.ts",
-      "sha256": "758b107e3c9fe9310d79a673f74ff678ac93eb836078fadfcb7643d6df669a72"
+      "sha256": "25283088d5a0a0e6a25068e850982d774d0a0ed9ffe9f15aee9af5e1cb5fc022"
     },
     {
       "path": "tests/contracts/schema-admission.test.ts",
       "sha256": "2a2113568655167968a2674f902c5e477b2ca377b8082e9485764d2325b13ae3"
+    },
+    {
+      "path": "tests/contracts/sdk-types.ts",
+      "sha256": "e519a30c72282d9c84e886f40af98485b003e81c2cda6b0ab97a2a767920890f"
+    },
+    {
+      "path": "tests/contracts/sdk.test.ts",
+      "sha256": "00936601e27ce71decbe494292429403389c0ab7eaee8ec305e6edd2cab99485"
     },
     {
       "path": "tests/doudizhu/game.test.ts",
@@ -274,7 +310,7 @@
     },
     {
       "path": "tools/check_boundaries.ts",
-      "sha256": "1e4327915307da17fbd90f8c0511e39caaf02cbd32ff098e7bdd4d2c215ae4f1"
+      "sha256": "e257257fbe55646c99ee6ea5dffe033228415e4efc89ae163c88aa691b0ee90c"
     },
     {
       "path": "tools/check_protocol_coverage.ts",
@@ -282,7 +318,7 @@
     },
     {
       "path": "tools/check_schema_admission.ts",
-      "sha256": "ee6811d3790a389dcc6898ce27dd472ad2c82e3afa59b498f54d61f0ab4ed717"
+      "sha256": "f6a14775903f114220286723a577d25b1cc258d7322efd3635b188f3b537a1b1"
     },
     {
       "path": "tools/schema_admission.ts",
@@ -290,7 +326,7 @@
     },
     {
       "path": "tsconfig.json",
-      "sha256": "ed7cc8c028a131097067dc430a5c29f703e1325755de3863363802930596331a"
+      "sha256": "010e7856b3a9ad329193ded26f5f2e946f2f4dba9699035c97ad39f80b118f00"
     }
   ],
   "checks": [
@@ -334,6 +370,12 @@
       "command": "npm run check:proof-coverage",
       "exit_code": 0,
       "log": "evidence/C01/freeze-audit/coverage.log"
+    },
+    {
+      "scope": "clean workspace installation including inner SDK",
+      "command": "npm ci --ignore-scripts",
+      "exit_code": 0,
+      "log": "evidence/C01/sdk-install.log"
     }
   ]
 }

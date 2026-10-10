@@ -4,7 +4,8 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@bear-forge/contracts": "0.3.0",
-    "zod": "4.6.5"
+    "@bear-forge/contracts": "*",
+    "zod": "4.6.5",
+    "@bear-forge/game-sdk": "*"
   }
 }

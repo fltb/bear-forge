@@ -1,14 +1,16 @@
+import { createGameSDK } from '@bear-forge/game-sdk';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
-import type {GameModule,GameContract} from '@bear-forge/contracts/authoring';
+import type {GameModule,GameContract,GamePortDeclarations} from '@bear-forge/contracts/authoring';
 import {nativeGame} from './player-consumer.ts';
 const Player=z.enum(['a','b']);
 const View=z.strictObject({n:z.number(),hands:z.strictObject({a:z.array(z.string()),b:z.array(z.string())})});
 const Raw=z.strictObject({owner:Player,value:z.number()});
 const Visible=z.discriminatedUnion('kind',[z.strictObject({kind:z.literal('own'),value:z.number()}),z.strictObject({kind:z.literal('other'),count:z.number()})]);
-type G={setup:null;ports:{ask:{input:z.infer<typeof View>;output:number};event:{input:z.infer<typeof Raw>[];output:null}};programResult:z.infer<typeof View>;view:z.infer<typeof View>;
+type G={setup:null;ports:{ask:{kind:'request';input:z.infer<typeof View>;output:number};event:{kind:'event';input:z.infer<typeof Raw>[];output:null}};programResult:z.infer<typeof View>;view:z.infer<typeof View>;
  actions:{pick:{request:{unit:string};action:number;description:never}};player:z.infer<typeof Player>;observation:{hand:string[]};event:z.infer<typeof Raw>;playerEvent:z.infer<typeof Visible>;result:number;control:{request:{n:number};input:{tick:number}}};
+const ports={ask:{kind:'request',input:View,output:z.number()},event:{kind:'event',input:z.array(Raw),output:z.null()}} satisfies GamePortDeclarations<G['ports']>;
 const requests=[{key:'a1',player:'a' as const,type:'pick' as const,data:{unit:'one'}},{key:'a2',player:'a' as const,type:'pick' as const,data:{unit:'two'}},{key:'b1',player:'b' as const,type:'pick' as const,data:{unit:'one'}}];
 function toy(options:{signalOnly?:boolean;failAfterInput?:boolean;hidden?:boolean;initialEvent?:boolean}={}):GameModule<G>{
  const contract:GameContract<G>={
@@ -20,12 +22,13 @@ function toy(options:{signalOnly?:boolean;failAfterInput?:boolean;hidden?:boolea
   projectEvent:(event,player)=>options.hidden&&event.owner!==player?null:{event:event.owner===player?{kind:'own',value:event.value}:{kind:'other',count:1}},
   inputs:{pick:{options:z.strictObject({kind:z.literal('exact'),values:z.array(z.number())}),describe:()=>({kind:'exact',values:[0,1]})}},
  };
- return {contract,program:{schemas:{setup:z.null(),result:View,ports:{ask:{input:View,output:z.number()},event:{input:z.array(Raw),output:z.null()}}},run:async(_setup,io)=>{
+ return {contract,program:{schemas:{setup:z.null(),result:View,ports},run:async(_setup,io)=>{
+  const sdk=createGameSDK<G['ports']>(io,ports);
   const state={n:0,hands:{a:['secret-a'],b:['secret-b']}};
-  if(options.initialEvent)await io.call({port:'event',input:[{owner:'a',value:7}]});
-  while(state.n<2){const value=await io.call({port:'ask',input:state});state.n++;
+  if(options.initialEvent)await sdk.event([{owner:'a',value:7}]);
+  while(state.n<2){const value=await sdk.ask(state);state.n++;
    if(options.failAfterInput)throw new Error('rule failure after accepting input');
-   await io.call({port:'event',input:[{owner:'a',value}]});
+   await sdk.event([{owner:'a',value}]);
   }
   return state;
  }}};
@@ -139,4 +142,25 @@ test('malformed public validation input is rejected without closing or advancing
   const result=await game.validate({player:'a',reply:reply as never});assert.equal(result.ok,false);if(!result.ok)assert.equal(result.error.code,'invalid_input');assert.deepEqual(await game.inspect(),before);
  }
  await game.close();
+});
+
+
+test('inner SDK works with construct options and terminal observations through the same outer API',async()=>{
+ type Construct=Omit<G,'actions'>&{actions:{pick:{request:{unit:string};action:number;description:{minimum:number;maximum:number}}}};
+ const source=toy();
+ const description=z.strictObject({minimum:z.number(),maximum:z.number()});
+ const module:GameModule<Construct>={...source,contract:{...source.contract,
+  schemas:{...source.contract.schemas,actions:{pick:{...source.contract.schemas.actions.pick,description}}},
+  inputs:{pick:{options:z.strictObject({kind:z.literal('construct'),description}),describe:()=>({kind:'construct',description:{minimum:0,maximum:1}})}},
+ }};
+ const base=await nativeGame(module,null);
+ await base.bind({player:'a',onRequest:async request=>{
+  assert.equal(request.options.kind,'construct');
+  if(request.options.kind!=='construct')throw new Error('expected construction description');
+  return {kind:'reply',value:request.options.description.maximum};
+ }});
+ await base.run();const ended=await base.run();
+ assert.ok(ended.ok);if(ended.ok)assert.deepEqual(ended.value.state,{kind:'ended',result:2});
+ assert.deepEqual(await base.observe({player:'a'}),{ok:true,value:{hand:['secret-a']}});
+ await base.close();
 });

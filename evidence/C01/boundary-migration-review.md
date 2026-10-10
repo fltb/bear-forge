@@ -56,6 +56,12 @@
 | 条件尾部跳过 | 普通内侧分支，不加 Core 领域规则 |
 
 
+## 配套内侧库
+
+公共 @bear-forge/game-sdk 的 createGameSDK 将 GamePortDeclarations 的键变成同名异步方法。Core 不解释游戏类别；GameContract 对每个端口的 request/event 角色受同一声明类型约束。观察、合法动作、动作校验、会话控制、事件和结束的对应表在 docs/protocol.md。声明包无执行工厂，库的实现独立存放。
+
+80 项测试包含原生递归/循环轨迹对照、真实斗地主、exact/construct、多人和独立会话输入。保存/分支/捕捉仍是提供者或外侧能力，生产实现留在 C02/C03。
+
 ## 声明与内部类型工具原文
 
 ### packages/contracts/src/authoring/types.ts
@@ -65,8 +71,19 @@ import type {z} from 'zod';
 import type {FixedTable,ReadView,TableKeys} from '../internal/types.ts';
 import type {PortShape,ProgramModule} from '../core/types.ts';
 import type {ActionTable,InputOptions} from '../game/types.ts';
+/** Game-only metadata; Core continues to consume input/output shapes alone. */
+export type GamePortShape=PortShape&{kind:'request'|'event'};
+export type GamePortDeclarations<P extends {[K in keyof P]:GamePortShape}>=FixedTable<P>&{
+  readonly [K in keyof P]:{
+    readonly kind:'request' extends P[K]['kind']
+      ? 'event' extends P[K]['kind'] ? never : 'request'
+      : 'event';
+    readonly input:z.ZodType<P[K]['input']>;
+    readonly output:z.ZodType<P[K]['output']>;
+  }
+};
 export type GameTypes={
-  setup:unknown;ports:Record<string,PortShape>;programResult:unknown;view:unknown;
+  setup:unknown;ports:Record<string,GamePortShape>;programResult:unknown;view:unknown;
   actions:ActionTable;player:string;observation:unknown;event:unknown;playerEvent:unknown;result:unknown;
   control:never|{request:unknown;input:unknown};
 };
@@ -79,15 +96,15 @@ export type GameContract<G extends GameTypes>={
     actions:{[K in keyof G['actions']]:{[F in keyof G['actions'][K]]:z.ZodType<G['actions'][K][F]>}};
   };
   ports:FixedTable<G['ports']>&{[K in keyof G['ports']]:
-    | {kind:'event';receive:(input:ReadView<G['ports'][K]['input']>)=>{events:G['event'][];output:G['ports'][K]['output']}}
-    | {kind:'request';receive:(input:ReadView<G['ports'][K]['input']>)=>{view:G['view'];requests:RequestData<G>[]};
+    | ({kind:'event';receive:(input:ReadView<G['ports'][K]['input']>)=>{events:G['event'][];output:G['ports'][K]['output']}} & ([G['ports'][K]['kind']] extends ['request']?never:unknown))
+    | ({kind:'request';receive:(input:ReadView<G['ports'][K]['input']>)=>{view:G['view'];requests:RequestData<G>[]};
        respond:<A extends TableKeys<G['actions']>>(view:ReadView<G['view']>,request:ReadView<Extract<RequestData<G>,{type:A}>>,action:ReadView<G['actions'][A]['action']>)=>Prepared<G['ports'][K]['output']>;
        session?:[G['control']] extends [never]?never:{
          requestSchema:z.ZodType<G['control']['request']>;inputSchema:z.ZodType<G['control']['input']>;
          request:(view:ReadView<G['view']>)=>G['control']['request'];
          respond:(view:ReadView<G['view']>,input:ReadView<G['control']['input']>)=>Prepared<G['ports'][K]['output']>;
        };
-      }
+      } & ([G['ports'][K]['kind']] extends ['event']?never:unknown))
   };
   finish:(result:ReadView<G['programResult']>)=>{view:G['view'];result:G['result']};
   observe:(view:ReadView<G['view']>,player:G['player'])=>G['observation'];
@@ -97,8 +114,12 @@ export type GameContract<G extends GameTypes>={
     describe:(view:ReadView<G['view']>,request:ReadView<Extract<RequestData<G>,{type:K}>>)=>InputOptions<G['actions'][K]['action'],G['actions'][K]['description']>;
   }};
 };
-export type GameModule<G extends GameTypes>={program:ProgramModule<G['setup'],G['ports'],G['programResult']>;contract:GameContract<G>};
-export type GameSDK<P extends {[K in keyof P]:PortShape}>=FixedTable<P>&{[K in keyof P]:(input:P[K]['input'])=>Promise<P[K]['output']>};
+export type GameModule<G extends GameTypes>={
+  program:ProgramModule<G['setup'],G['ports'],G['programResult']>&{schemas:{ports:GamePortDeclarations<G['ports']>}};
+  contract:GameContract<G>;
+};
+/** Construct inside Program.run; all effectful methods delegate to declared IO. */
+export type GameSDK<P extends {[K in keyof P]:GamePortShape}>=FixedTable<P>&{readonly [K in keyof P]:(input:P[K]['input'])=>Promise<P[K]['output']>};
 ```
 
 ### packages/contracts/src/branching/types.ts

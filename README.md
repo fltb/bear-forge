@@ -16,7 +16,7 @@
 
 ## 当前结构
 
-Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释游戏交互。程序通过 IO.call 使用声明端口，内侧 SDK 和游戏循环在 Instance 内执行。
+Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释游戏交互。程序通过 IO.call 使用声明端口，配套 `@bear-forge/game-sdk` lib、领域 SDK 和游戏循环在 Instance 内执行。
 
 请求直接指定 player。onRequest 只返回动作，describe/validate 对应相同动作类型；时钟和超时通过可选 bindControl 输入。一次 run 接受至多一个游戏输入，返回具体接受结果并交付后续事件。
 

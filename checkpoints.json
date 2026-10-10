@@ -35,7 +35,7 @@
       },
       "evidence": "evidence/C01/report.json",
       "blocker": null,
-      "next_action": "Three-layer convergence accepted: pure actions, optional session control, single-step acceptance feedback and complete native Dou Dizhu. C01-02/04 remain module-reuse and production acceptance planning."
+      "next_action": "Inner game-sdk library, paired declarations and full outer-feature correspondence accepted by native/type checks. C01-02/04 remain module-reuse and production acceptance planning; C02/C03 remain unimplemented."
     },
     "C02": {
       "status": "pending",
@@ -343,6 +343,16 @@
       "date": "2026-10-09",
       "source": "User accepted horizontal capability split, then clarified actions contain no time; active goal implements the new boundary.",
       "change": "Reopen C01-03/05. Simplify requests, direct player assignment and one-step run; separate optional session input and persistence/branch/capture; move policy/analysis helpers out of base public surface. Verify complete native game and update all current documents."
+    },
+    {
+      "date": "2026-10-10",
+      "source": "用户要求检查并补齐配合外侧 BaseGame 的内侧 SDK。",
+      "change": "C01-03/05 reopen: add separately packaged inner SDK, shared typed request/event port declarations, full outer-feature correspondence and native verification. No Core execution or production binder implementation."
+    },
+    {
+      "date": "2026-10-10",
+      "source": "本轮内侧 SDK 补全与原生验收",
+      "change": "Public inner library added separately from declarations, request/event role correlation and shared schema metadata enforced; Dou Dizhu and native player fixture use it. 80 tests, 41 schemas and 70 contract definitions pass. No production execution or persistence claims."
     }
   ]
 }

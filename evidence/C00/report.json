@@ -1,12 +1,12 @@
 {
   "checkpoint": "C00",
   "kind": "documentation",
-  "summary": "Current three-layer and horizontal-capability documentation audited; actions are independent from session time; source, checklist, proof references and archive integrity synchronized.",
+  "summary": "Active documents synchronized with paired inner SDK library and outer GameContract; architecture, requirements, protocol and authoring boundary audited; archive unchanged.",
   "replay_command": "python3 tools/audit_c00.py && python3 tools/check_project.py && python3 tools/check_project.py --self-test",
   "artifacts": [
     {
       "path": "README.md",
-      "sha256": "b9ac20bd1b1a2629587e942941f9faa94c0bb857ff03c8f6bd32e79211c6fd71"
+      "sha256": "5f2827c70e9ef6cdf07152eda88f80e8f3a99e84c7f767d96c70f0c0a5347420"
     },
     {
       "path": "AGENTS.md",
@@ -14,11 +14,11 @@
     },
     {
       "path": "docs/requirements.md",
-      "sha256": "15d8a95bb889d0e652ae684b4ff9e21300c2ec905d2e74b31930b2296fd74932"
+      "sha256": "cf229a1d1b307c9302060121471b1f4434df109db03f998f46b1b299a66a046a"
     },
     {
       "path": "docs/architecture.md",
-      "sha256": "823f1f0dec7f3fea7a8c494b8804889f0f5b2e67e005e007a0fdaa0acdc89be9"
+      "sha256": "0ac380ad0703c38589d4f80dca07a9a315780d1012495e3e0cdb6c0077d31b28"
     },
     {
       "path": "docs/workflow.md",
@@ -46,19 +46,19 @@
     },
     {
       "path": "docs/protocol.md",
-      "sha256": "db23a7d899a51a4386831fc1421843986fdcaae63e02940a73faf712f250f430"
+      "sha256": "014275f9820cd4dcd0d451759866cdc4f4e688899999d59f1ec479bb43c671f8"
     },
     {
       "path": "docs/doudizhu.md",
-      "sha256": "b6102b1099f7403544da2ee6c3c127e94c33ccdf094f98e36c10f968bcc6ca30"
+      "sha256": "cba87822c788a1baa76c29ee01c1627c21628442d20013e966bfbe8339565718"
     },
     {
       "path": "docs/plan.md",
-      "sha256": "15b1a08209064da0c5e09f4dad66a9a64ddbb827092b254b79fc60d245aff127"
+      "sha256": "321e0005e3a78eaaa41002beb19d3e3f045548386f49a672d02acf583a2c054f"
     },
     {
       "path": "docs/controlled-program-spec.md",
-      "sha256": "03b66dab0a9f36f22f8c519155990d6bc51368b083012e4d17dfa4a9b5386bf5"
+      "sha256": "c23d0f134b62f0a7f9ff2d032bc4d445d6bd914657a3b943407a1da40b8a97ee"
     }
   ],
   "checks": [
@@ -74,14 +74,14 @@
       "status": "passed",
       "command": "python3 tools/audit_c00.py",
       "exit_code": 0,
-      "log": "evidence/C00/boundary-migration-audit.log"
+      "log": "evidence/C00/sdk-audit.log"
     },
     {
       "id": "C00-03",
       "status": "passed",
       "command": "python3 tools/check_project.py --self-test",
       "exit_code": 0,
-      "log": "evidence/C00/boundary-migration-negative.log"
+      "log": "evidence/C00/sdk-negative.log"
     }
   ]
 }

@@ -14,7 +14,7 @@ import type { SchemaPolicy } from './schema_admission.ts';
 const require=createRequire(import.meta.url);
 assert.equal(require('zod/package.json').version,'4.6.5');
 // These exact source revisions contain the three reviewed pure cross-field predicates.
-const reviewedSources:Record<string,string>={'games/doudizhu/src/schemas.ts':'ba8ca42ba017e426d8ec35213d7a3d92bab7840b51f628c37957101156b80ec7'};
+const reviewedSources:Record<string,string>={'games/doudizhu/src/schemas.ts':'943f6d2685aa5fae9835ca9c1c031cda093960c6c3089e4d658ece2ba05a8776'};
 for(const [path,expected] of Object.entries(reviewedSources))assert.equal(createHash('sha256').update(readFileSync(path)).digest('hex'),expected,`${path}: re-review custom check purity after source changes`);
 const checks=new Set<object>([
   ...(doudizhu.StageSchema._zod.def.checks??[]),

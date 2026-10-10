@@ -16,6 +16,7 @@
   },
   "include": [
     "packages/contracts/src/**/*.ts",
+    "packages/game-sdk/src/**/*.ts",
     "tests/contracts/**/*.ts",
     "games/**/*.ts",
     "tests/doudizhu/**/*.ts",

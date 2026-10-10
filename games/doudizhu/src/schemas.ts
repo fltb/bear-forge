@@ -1,3 +1,5 @@
+import type { GamePortDeclarations } from '@bear-forge/contracts/authoring';
+import type { DouDizhuPorts } from './types.ts';
 import { z } from 'zod';
 const CounterSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const SeatSchema = z.enum(['0', '1', '2']);
@@ -96,8 +98,12 @@ export type SessionInput=z.infer<typeof SessionInputSchema>;
 export type SessionRequest=z.infer<typeof SessionRequestSchema>;
 export const ProgramSetupSchema = z.strictObject({game:SetupSchema,seed:z.number().int().min(0).max(4294967295)});
 export type ProgramSetup = z.infer<typeof ProgramSetupSchema>;
+export const gamePorts = {
+  decision:{kind:'request',input:FrameSchema,output:InputSchema},
+  event:{kind:'event',input:z.array(AuditEventSchema),output:z.null()},
+} satisfies GamePortDeclarations<DouDizhuPorts>;
 export const programSchemas = {
   setup:ProgramSetupSchema, result:FrameSchema,
-  ports:{decision:{input:FrameSchema,output:InputSchema},event:{input:z.array(AuditEventSchema),output:z.null()}},
+  ports:gamePorts,
 };
 export type Slot = z.infer<typeof SlotSchema>;

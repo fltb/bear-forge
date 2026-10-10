@@ -75,3 +75,13 @@ capture 通过提供者能力和实例 id 读取记录，transfer 保持 id，cl
 ## 证据
 
 player.test.ts 验证实际原生单步、接受反馈、事件重试、取消、故障、请求身份、多玩家投影与无可选能力运行。斗地主测试通过相同公开接口跑完纯动作和会话超时对局；原有牌型 oracle 保留。字段附录与子路径导出索引逐字对应源码。
+
+## 内侧 SDK 与外侧功能对应
+
+构造：对有限声明表每个自有键 K，创建 fK(x)=io.call({port:K,input:x})。无其他 I/O，返回原 Promise，故任何相同输入返回序列下，替换直接端口调用前后调用顺序、数据、异常与程序终值一致。tests/contracts/sdk.test.ts 覆盖嵌套递归/循环、等待和异常、不同实例及特殊字符串键；tests/contracts/player.test.ts 通过同一 lib 验证多人、会话、exact/construct、事件和结束。
+
+GamePortDeclarations<P> 和 GameContract<G> 同受 P[K].kind/input/output 约束；请求不能声明成事件，错误输入/返回、缺键与非固定键表由 tests/contracts/sdk-types.ts 拒绝。程序和 SDK 共享声明。此证明不将 TS 类型等同运行时安全；动态数据继续由 Instance 的 schema 校验与生产准入约束。
+
+外侧 observe/describe/validate 读取已发布 view，内侧没有对称的状态复制接口；事件由对应端口发布，结束由 return 表达；会话输入共用请求返回。bind/run/close/save/fork/capture 是外侧控制或提供者能力，不需进入 SDK。完整逐项映射及游戏适配语义法则列在 docs/protocol.md。
+
+未证明事项：保存含 SDK 闭包的真实续延、生产依赖白名单与隔离在 C02/C03 验收。原生测试不能证明这些能力已实现。

@@ -111,7 +111,41 @@ GameContract 提供：
 
 这些函数纯、确定、值隔离；所有 schema 保持值，禁止隐式变换。view 是程序发布的完整边界数据；纯函数只能读取发布数据。每个端口的返回仍由程序内规则验证。局部循环、触发、部分输入、随机流和事件发布位置都由程序维护。
 
-GameSDK 把声明端口包装成类型化函数，程序内创建并通过 IO.call 调用。上层领域 SDK 组合这些函数。语言语法与传递依赖准入在 C02 验收。
+### 内侧 lib 与外侧功能配套
+
+`@bear-forge/game-sdk` 提供 `createGameSDK(io, declarations)`，在 Program.run 内创建 GameSDK。每个声明端口得到一个同名函数：`sdk[K]: (input: P[K].input) => Promise<P[K].output>`。构造无 I/O；每次方法调用恰好转发一次 `IO.call({port:K,input})`，保持原 Promise 和异常，不复制参数、不增加自动运行或事件。库只依赖公开类型，没有宿主状态或外侧回调。游戏自己的领域 SDK 可以组合这些函数。
+
+`GamePortShape` 为 `{kind:'request'|'event',input,output}` 类型；`GamePortDeclarations<P>` 用有限必填字符串键表声明每个端口的单一 kind、input schema、output schema；同一端口的 kind 不能是两种类别的联合。GameModule.program.schemas.ports 使用这份声明，内侧 lib 使用它的键集合，GameContract.ports 的类别和入参返回受同一 P 约束。声明为普通自有可枚举数据属性；准入检查禁止访问器和隐藏字段。Core 只读取 input/output，不解释 kind。schema 文件仅包含声明，不生成协议或注入宿主函数。
+
+| 外侧功能 | 内侧对应 | 共用约定 |
+| --- | --- | --- |
+| onRequest、请求状态 | await 请求类 SDK 方法 | request.receive 将端口输入转成 view 和 key/player/type/data；玩家由程序数据指定 |
+| observe、请求中的 observation | 请求端口发布的 view；终局 return 的数据 | observe/finish 纯投影；不额外保留可变规则状态 |
+| describe、exact/construct | view 和请求数据充分表达当前合法性 | inputs.describe；构造约定由上层解释，SDK 不枚举 |
+| validate、动作返回 | await 的返回值进入游戏规则 | respond 校验并编码端口 output；程序内复用规则验证后应用 |
+| onEvent | await 事件类 SDK 方法，可一次发送数组 | event.receive → projectEvent → onEvent；事件发生时的数据由程序发布 |
+| bindControl（可选） | await 同一个请求端口，返回可区分的游戏控制输入 | session.request/respond；不往玩家 action 添加时间 |
+| ended、终局 observe | Program 正常 return | finish 得到最终 view 和 result；终局事件先发送 |
+| bind/run/close/取消 | 端口等待与继续执行 | 仅外侧驱动；取消等待不作为游戏动作或内侧异常注入 |
+| save/restore/fork（可选） | 内侧局部、闭包、对象和 SDK 状态 | Instance 保存现场；内侧无同名控制方法、无第二份状态 |
+| capture（可选） | 同一端口调用、返回与程序结束 | 提供者捕捉；SDK 不另建日志旁路 |
+
+对应法则：对每个请求输入 x，receive(x) 得到的 view 必须足以计算当前观察、请求和合法动作；respond(view,request,action) 的成功 output 必须是原程序对此请求认可的输入。会话返回遵守相同规则。动作/会话来源需要游戏区分时，游戏 output 必须携带自己的判别字段和请求键；SDK 不丢弃、补造或重编码它们。exact 与规则合法集合相等，construct 与 validate 保持同一动作类型及规则。事件投影使用发布时的值；finish 的 view/result 与实际结束状态一致。类型保证形状关联，语义由游戏规则与接线测试验证。
+
+多个待决玩家请求可以放在同一次请求输入；一次只返回一个输入，程序内保存部分结果并再次请求。无需 Promise.all 并发调用端口。只有等待会话控制时允许玩家请求数组为空；输入收齐、公开顺序和循环仍是游戏代码。
+
+在事件边界，外侧 observe 仍按既有协议返回 view_unavailable；内侧 lib 不虚构缓存观察。程序内部没有独立“更新外侧状态”调用：每次请求或终局发布当前数据即可。
+
+语言语法、schema 对象及全部传递依赖的生产准入在 C02 验收；lib 的原生轨迹对照不代替续延实现。
+
+```ts
+// 当前斗地主的实际接线方式；gamePorts 是同一份端口声明。
+const sdk = createGameSDK<DouDizhuPorts>(io, gamePorts);
+await sdk.event(events);
+const input = await sdk.decision(frame);
+// 游戏验证、结算；终局由 Program return，外侧 finish 转换。
+```
+
 
 ## 可选会话控制
 

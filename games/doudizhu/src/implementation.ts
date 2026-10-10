@@ -2,7 +2,7 @@ import { z } from 'zod';
 type ReadView<T>=T extends object?{readonly [K in keyof T]:ReadView<T[K]>}:T;
 import type { DouDizhuModule, DouDizhuRequest } from './types.ts';
 import type { Action, State, Seat, Frame, Input, AuditEvent, SessionInput } from './schemas.ts';
-import { ActionSchema, AuditEventSchema, EventSchema, SessionInputSchema, SessionRequestSchema, FrameSchema, InputSchema, LegalActionsSchema, ObservedSchema, ResultSchema, SeatSchema, SlotSchema, StateSchema, programSchemas } from './schemas.ts';
+import { ActionSchema, AuditEventSchema, EventSchema, SessionInputSchema, SessionRequestSchema, FrameSchema, InputSchema, LegalActionsSchema, ObservedSchema, ResultSchema, SeatSchema, SlotSchema, StateSchema, gamePorts, programSchemas } from './schemas.ts';
 import { program } from './program.ts';
 import { plays } from './patterns.ts';
 import { validateInput } from './rules.ts';
@@ -55,9 +55,9 @@ export const game:DouDizhuModule = {
       actions:{action:{request:SlotSchema.pick({actionSpec:true}),action:ActionSchema,description:z.never()}},
     },
     ports:{
-      event:{kind:'event',receive:events=>({events:z.array(AuditEventSchema).parse(events),output:null})},
+      event:{kind:gamePorts.event.kind,receive:events=>({events:z.array(AuditEventSchema).parse(events),output:null})},
       decision:{
-        kind:'request',
+        kind:gamePorts.decision.kind,
         receive(raw){
           const frame=FrameSchema.parse(raw);
           if(!frame.state.stage)throw new Error('decision requires a stage');

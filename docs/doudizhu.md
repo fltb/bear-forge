@@ -57,3 +57,7 @@ implementation.ts 声明 GameModule。request.receive 从 Frame 产生 {view,req
 | 事件 | 玩家投影与最终可见历史逐条一致 |
 
 运行 npm run check。C01 原生消费者执行真实 program/IO/GameContract；C02/C03 验收生产受控执行、完整续延保存和正式绑定器。
+
+## 内侧 SDK 接线
+
+schemas.ts 的 gamePorts 为 decision（request）和 event（event）声明类别与输入/返回 schema；programSchemas.ports 直接使用它。sdk.ts 在程序内调用 @bear-forge/game-sdk 的 createGameSDK，并组合游戏自己的发牌与随机流。外侧 implementation.ts 的端口类别取自同一声明。状态、合法动作、事件、会话控制和终局仍按 protocol.md 的对应表转换；主循环和牌型规则无需改变。

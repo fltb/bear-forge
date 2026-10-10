@@ -7,14 +7,19 @@
     "./core": "./src/core/index.ts",
     "./instance": "./src/instance/index.ts",
     "./game": "./src/game/index.ts",
-    "./authoring": "./src/authoring/index.ts",
-    "./persistence": "./src/persistence/index.ts",
-    "./branching": "./src/branching/index.ts",
-    "./capture": "./src/capture/index.ts",
-    "./loading": "./src/loading/index.ts",
-    "./session": "./src/session/index.ts"
+    "./authoring": "./src/game/authoring.types.ts",
+    "./persistence": "./src/instance/persistence.ts",
+    "./branching": "./src/instance/branching.types.ts",
+    "./capture": "./src/instance/capture.ts",
+    "./loading": "./src/loading.ts",
+    "./session": "./src/game/session.types.ts"
   },
   "dependencies": {
     "zod": "4.6.5"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/*/*.test.ts",
+    "check": "npm run typecheck && npm test"
   }
 }

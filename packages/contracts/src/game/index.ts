@@ -1,2 +1,2 @@
-export * from './types.ts';
-export * from './schemas.ts';
+export * from './game.types.ts';
+export * from './game.schemas.ts';

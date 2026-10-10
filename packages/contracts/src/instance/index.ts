@@ -1,2 +1,2 @@
-export * from './types.ts';
-export * from './schemas.ts';
+export * from './instance.types.ts';
+export * from './instance.schemas.ts';

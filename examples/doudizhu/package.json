@@ -1,17 +1,16 @@
 {
-  "name": "@bear-forge/game-sdk",
+  "name": "@bear-forge/doudizhu",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@bear-forge/contracts": "*"
+    "@bear-forge/contracts": "*",
+    "zod": "4.6.5",
+    "@bear-forge/game-sdk": "*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm run typecheck && npm test"
-  },
-  "devDependencies": {
-    "zod": "4.6.5"
   }
 }

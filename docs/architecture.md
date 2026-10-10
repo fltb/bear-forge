@@ -39,6 +39,35 @@ flowchart TB
 
 同时选择由游戏保存部分输入、封存结果和发布剩余请求。外侧一次交付一个返回；结算顺序和共同决策结束条件在程序里。
 
+## 源码目录
+
+```text
+packages/
+  contracts/
+    src/
+      core/          program、core、loading 的类型及 schema
+      instance/      instance、persistence、capture、branching
+      game/          game、authoring、binding、session
+      internal/      包内类型辅助
+      index.ts       日常入口
+      loading.ts     保持既有 /loading 公共入口的 re-export
+    tests/
+      core/          Core 层测试
+      instance/      Instance 层测试
+      game/          Game 层测试
+      support/       共用协议测试夹具
+      *.test.ts      跨层协议、schema 和依赖边界测试
+  game-sdk/
+    src/
+    tests/
+examples/
+  doudizhu/
+    src/
+    tests/
+```
+
+协议文件按职责命名为 `*.types.ts` 和 `*.schemas.ts`。各层的公共导出和保存/捕捉兼容入口仅做 re-export。源码归属与包的公共导入路径分别管理；目录迁移保持下列导入路径不变。
+
 ## 包路径
 
 ```text
@@ -56,10 +85,12 @@ src/internal                      类型检查辅助工具
 @bear-forge/game-sdk               可执行内侧 lib：createGameSDK
 ```
 
-基础入口不导出保存、记录、训练或搜索辅助类型。基本 Core/Instance/Game 源码不导入可选功能目录；loading 在接线时组合实际提供的能力。类型依赖由 tests/contracts/architecture.test.ts 检查，包含在 npm test 中。
+基础入口不导出保存、记录、训练或搜索辅助类型。基本 Core/Instance/Game 声明不依赖可选功能声明；loading 在接线时组合实际提供的能力。各模块 tests/architecture.test.ts 检查自身源码的依赖边界，包含在该模块的 npm test 中；根目录通过 workspaces 汇总。
 
-游戏目录：schemas.ts 定义领域数据；types.ts 特化公开契约；program.ts 是主循环；sdk.ts 组合公共 game-sdk lib 与实例内随机流；rules.ts/patterns.ts 实现规则；implementation.ts 声明 GameModule 与纯处理器。
+游戏目录：schemas.ts 定义领域数据；types.ts 特化公开契约；program.ts 是主循环；sdk.ts 组合公共 game-sdk lib 与实例内随机流；rules.ts/patterns.ts 实现规则；module.ts 声明 GameModule 与纯处理器。
 
 C01 交付公共声明、完整斗地主及原生协议消费者。生产执行、保存续延及正式绑定器在 C02/C03 验收。
 
 内侧 lib 与外侧功能的逐项对应、类型关联和语义法则见 protocol.md 的“内侧 lib 与外侧功能配套”。GamePortDeclarations 同时用于 Program 的端口 schema 与内侧函数生成；GameContract 受同一端口类别/输入/返回类型约束。Core/Instance 不依赖该游戏声明或 lib。lib 不持有 BaseGame、Instance 控制句柄或宿主回调。
+
+测试归属对应模块：contracts/tests 验证公共契约；game-sdk/tests 验证内侧库及游戏接口接线；doudizhu/tests 验证具体游戏。contracts/tests/support 的协议夹具由依赖模块的测试复用，不作为生产包导出。

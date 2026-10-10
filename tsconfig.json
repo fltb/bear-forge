@@ -15,9 +15,7 @@
     ]
   },
   "include": [
-    "packages/contracts/src/**/*.ts",
-    "packages/game-sdk/src/**/*.ts",
-    "games/**/*.ts",
-    "tests/**/*.ts"
+    "packages/**/*.ts",
+    "examples/**/*.ts"
   ]
 }

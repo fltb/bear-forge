@@ -1,2 +1,0 @@
-# Preserve verbatim command output, including its trailing blank lines.
-evidence/**/*.log whitespace=-blank-at-eof

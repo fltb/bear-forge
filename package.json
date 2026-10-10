@@ -5,12 +5,12 @@
   "workspaces": [
     "packages/contracts",
     "packages/game-sdk",
-    "games/doudizhu"
+    "examples/doudizhu"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/contracts/*.test.ts tests/doudizhu/*.test.ts",
-    "check": "npm run typecheck && npm test"
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces",
+    "check": "npm run check --workspaces"
   },
   "engines": {
     "node": ">=22.18.0"

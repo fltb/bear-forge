@@ -19,7 +19,7 @@
 
 ProgramSetup={game:Setup,seed:uint32}。program.ts 创建 SDK；SDK 内局部随机流驱动发牌；decision 端口发布 Frame 并等待 Input，event 端口发布 AuditEvent[] 并等待 null。state、随机局部和 published 事件位置由 Instance 保存。
 
-implementation.ts 声明 GameModule。request.receive 从 Frame 产生 {view,requests}；每个请求 key=slotId、player=席位、type='action'、data={actionSpec}。请求不含截止时间。GameContract 的 observe/projectEvent 分别生成玩家状态和可见事件。
+module.ts 声明 GameModule。request.receive 从 Frame 产生 {view,requests}；每个请求 key=slotId、player=席位、type='action'、data={actionSpec}。请求不含截止时间。GameContract 的 observe/projectEvent 分别生成玩家状态和可见事件。
 
 ## 动作与会话控制
 
@@ -53,11 +53,11 @@ implementation.ts 声明 GameModule。request.receive 从 Frame 产生 {view,req
 | 普通对局 | 三席位同一动作回调，无时间字段 |
 | 超时对局 | 独立会话回调，原规则超时默认 |
 | 时钟与期限 | 独立推进、时间倒退拒绝、截止点动作拒绝及 exact=[] |
-| 玩家请求身份 | 错玩家、旧调用、其他实例拒绝 |
+| 玩家请求身份 | 本模块 game.test.ts 验证错 key/错玩家；共享消费者的旧调用/其他实例拒绝由 packages/game-sdk/tests/game-integration.test.ts 验证 |
 | 事件 | 玩家投影与最终可见历史逐条一致 |
 
 运行 npm run check。C01 原生消费者执行真实 program/IO/GameContract；C02/C03 验收生产受控执行、完整续延保存和正式绑定器。
 
 ## 内侧 SDK 接线
 
-schemas.ts 的 gamePorts 为 decision（request）和 event（event）声明类别与输入/返回 schema；programSchemas.ports 直接使用它。sdk.ts 在程序内调用 @bear-forge/game-sdk 的 createGameSDK，并组合游戏自己的发牌与随机流。外侧 implementation.ts 的端口类别取自同一声明。状态、合法动作、事件、会话控制和终局仍按 protocol.md 的对应表转换；主循环和牌型规则无需改变。
+schemas.ts 的 gamePorts 为 decision（request）和 event（event）声明类别与输入/返回 schema；programSchemas.ports 直接使用它。sdk.ts 在程序内调用 @bear-forge/game-sdk 的 createGameSDK，并组合游戏自己的发牌与随机流。外侧 module.ts 的端口类别取自同一声明。状态、合法动作、事件、会话控制和终局仍按 protocol.md 的对应表转换；主循环和牌型规则无需改变。

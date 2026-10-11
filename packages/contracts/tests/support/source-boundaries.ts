@@ -1,5 +1,6 @@
-import ts from 'typescript';
-import { readdirSync, readFileSync } from 'node:fs';
+import * as ts from 'typescript/unstable/ast';
+import {API} from 'typescript/unstable/sync';
+import { readdirSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import assert from 'node:assert/strict';
 
@@ -7,8 +8,13 @@ export function assertSourceBoundaries(root:string,kind:'contracts'|'sdk'|'game'
 const files=(dir:string):string[]=>readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(resolve(dir,e.name)):e.name.endsWith('.ts')?[resolve(dir,e.name)]:[]);
 const errors:string[]=[];
 const forbidden=new Set(['Date','globalThis','process','window','document','fetch','WebSocket','require','eval','Function','setTimeout','setInterval','Worker','Atomics']);
-for(const path of files(root)){
-  const source=ts.createSourceFile(path,readFileSync(path,'utf8'),ts.ScriptTarget.Latest,true),label=relative(root,path),isContract=kind==='contracts',isSDK=kind==='sdk';
+const paths=files(root),api=new API();
+try {
+const snapshot=api.updateSnapshot({openFiles:paths});
+for(const path of paths){
+  const source=snapshot.getDefaultProjectForFile(path)?.program.getSourceFile(path);
+  assert.ok(source,`AST unavailable: ${path}`);
+  const label=relative(root,path),isContract=kind==='contracts',isSDK=kind==='sdk';
   const visit=(node:ts.Node)=>{
     if((ts.isImportDeclaration(node)||ts.isExportDeclaration(node))&&node.moduleSpecifier){
       if(!ts.isStringLiteral(node.moduleSpecifier))errors.push(`${label}: dynamic module`);
@@ -33,7 +39,7 @@ for(const path of files(root)){
             if(allowed[layer]&&!allowed[layer]!.includes(dependency))errors.push(`${label}: forbidden layer dependency ${dependency}`);
           }
         } else if(isSDK){
-          if(!['@bear-forge/contracts/core','@bear-forge/contracts/authoring'].includes(name)||!ts.isImportDeclaration(node)||!node.importClause?.isTypeOnly)errors.push(`${label}: SDK may import only public IO/authoring types`);
+          if(!['@bear-forge/contracts/core','@bear-forge/contracts/authoring'].includes(name)||!ts.isImportDeclaration(node)||node.importClause?.phaseModifier!==ts.SyntaxKind.TypeKeyword)errors.push(`${label}: SDK may import only public IO/authoring types`);
         } else if(name!=='zod'&&(isContract||!['@bear-forge/contracts','@bear-forge/contracts/core','@bear-forge/contracts/authoring','@bear-forge/contracts/game','@bear-forge/contracts/loading','@bear-forge/game-sdk'].includes(name)))errors.push(`${label}: external dependency ${name}`);
       }
     }
@@ -49,9 +55,10 @@ for(const path of files(root)){
       if(ts.isCallExpression(node)&&node.expression.kind===ts.SyntaxKind.ImportKeyword)errors.push(`${label}: dynamic import`);
       if(ts.isPropertyAccessExpression(node)&&node.expression.getText(source)==='Math'&&node.name.text==='random')errors.push(`${label}: uncontrolled random`);
     }
-    ts.forEachChild(node,visit);
+    node.forEachChild(visit);
   };
   visit(source);
 }
+} finally {api.close();}
 assert.deepEqual(errors,[]);
 }

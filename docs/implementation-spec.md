@@ -70,15 +70,13 @@ NativeCoreLoader 装载 ProgramModule，start 创建独立运行现场，run 通
 
 ### 受控路径与选型关卡
 
-优先验证 Neil Fraser JS-Interpreter：它已有 ES5 单步执行、隔离和现场序列化，可复用语言语义，不从头实现 JS 引擎。**它只是待验证的首选候选，不是已证明兼容的后端。** ES5、现代 TS、Zod、SDK 和顺序 async 的接线存在实质风险。
+受控路径采用提前编译、运行时装载产物的方式。首选 **Babel + EffectfulJS es-persist / es-persist-serialization**，把顺序 async/await 转换成显式续延和可保存环境，生成 JavaScript 由 V8 执行。运行时不解释作者 AST，也不再做 TS/Babel 转换；不要求作者手写 PC。完整的编译阶段、实例模块工厂、端口适配和差分验收见 [compiler-and-differential-spec.md](compiler-and-differential-spec.md)。
 
-候选方案：静态闭合模块 → TS 类型检查与语法准入 → 成熟语法降级工具处理可证明的构造 → 解释器执行。顺序 async/await 的降级必须保持所有已准入程序的调用、结果和异常语义；禁止仅删掉 async/await，禁止把一般 Promise 语义当同步调用。脱离现场的 Promise、任务、计时器等按 controlled-program-spec 的规则拒绝。
+此库提供可访问的 async 控制状态和序列化接线，不直接提供完整 Core/Instance。本项目仍需实现依赖准入、确定性调度、实例隔离、预算、静态构造器注册和跨进程持久快照。未决宿主 Promise、活动回调和默认事件循环不能成为保存机制；Zod/SDK 的实际可达代码与闭包必须验收。
 
-Zod 在宿主边界作为真实 schema 使用。程序内也调用 Zod；须验证其可达依赖能在受控路径执行。若需要 schema 的专门编译支持，使用声明身份、数据描述和经过审查的纯检查实现，保持 parse/safeParse、错误处理和返回值语义；自定义检查不能成为捕获宿主状态的函数旁路。不宣称整个 Zod 包天然符合纯计算准入。
+已核实官方文档、源码与最新 npm 元数据；最新发行存在 workspace:^ peer 元数据导致普通 npm 安装失败，须先修复发行/构建适配，且验证最新版 Babel 兼容性。尚未加入生产依赖或证明完整游戏可恢复。首选路线不通过时报告具体反例与替代编译工作量，不退回解释器、不降低需求、不修改冻结协议。
 
-首先执行同源原生/受控对照，必须覆盖：现有 SDK、完整斗地主、Array/Object/Math 实际用法、schema 构造与解析、自定义检查、嵌套 async/递归/闭包、别名、异常。降级无法保持实际作者代码时，此候选不通过；不得改游戏规则、要求作者手写 PC 或降低需求来迁就后端。
-
-QuickJS/V8 等运行时可作为重新选型候选，但字节码、对象序列化或启动快照不能直接认定为完整执行现场恢复。若首选失败，必须在同一验收集合上评估替代方案；明确记录未解决的具体技术点，不编造一个现成库已经具备全部能力。本关卡没有通过前，不估算整个受控后端工期，不勾选 C02。
+同源原生/编译产物差分必须覆盖完整逐调用轨迹、最终结果、通用语义与算法 benchmark、SDK/Zod、完整游戏，以及每个稳定点和独立进程恢复、双分支隔离。详见补充规格；不能仅以游戏胜负一致证明编译正确。
 
 ### 编译产物、准入与预算
 
@@ -239,13 +237,13 @@ viewer 至少有实验进度、条件筛选、关系图、指标表、证据对�
 
 测试按模块进入 npm run check，端到端依赖真实生产代码；不创建持久化验收报告或独立审计脚本。业务实验数据/配置/结果是产品产物，和禁止的测试日志账本区分。
 
-不新增性能 bench 项目。真实业务运行记录对局吞吐、峰值内存、快照大小/耗时和实际预算用于判断可用性；不以“同 runtime”推断性能已经达标。默认并发1，CLI 可配置有上限的并发与内存预算；不接受无界 Promise.all 多局启动。
+新增通用程序/benchmark 的编译正确性差分夹具，设计见 compiler-and-differential-spec.md；同时测量编译/装载/计算/保存成本，不建立无关的独立性能平台。真实业务运行记录对局吞吐、峰值内存、快照大小/耗时和实际预算用于判断可用性；不以“同 runtime”推断性能已经达标。默认并发1，CLI 可配置有上限的并发与内存预算；不接受无界 Promise.all 多局启动。
 
 ## 14. 实施顺序与预算
 
 先解决受控后端兼容/续延关卡，同时形成正式原生 runtime 和 game-host；随后完成保存、会话和两游戏；再接策略、存储/恢复、实验与分析，最后 viewer/CLI 端到端。普通实验原生路径与受控续延路径使用同源规则，最终交付两者。
 
-首次真正的运行验证：嵌套 async/递归/闭包调用 IO → 保存 → 销毁进程 → 恢复 → 输入 → 与原生轨迹比较；再加 Zod 和真实斗地主。该验证先于大量 UI/分析实现，避免末期才发现执行底座不可用。
+先解决最新版编译库发布元数据与兼容性，再执行首次真正的运行验证：同源程序提前编译并只装载产物，嵌套 async/递归/闭包调用 IO → 保存 → 销毁进程 → 恢复 → 输入 → 与原生轨迹比较；再加通用 benchmark、Zod 和真实斗地主。该验证先于大量 UI/分析实现，避免末期才发现执行底座不可用。
 
 全部计算本地优先，已有 RTX4070 不作为首版脚本系统必须资源。增量计算/API 总上限 $500；初始计划外部API/付费算力为0，留出预算不等于授权购买。自动脚本止于登记预算，外部支出须符合用户具体授权。
 
@@ -255,9 +253,7 @@ viewer 至少有实验进度、条件筛选、关系图、指标表、证据对�
 
 以下用于核对技术能力，不作为已经完成实现的证据：
 
-- [JS-Interpreter 官方说明](https://github.com/NeilFraser/JS-Interpreter/blob/master/docs.html)：ES5、单步及现场序列化；格式/版本和标准 polyfill 开销有局限。
-- [JS-Interpreter 源码与 Apache-2.0 许可](https://github.com/NeilFraser/JS-Interpreter)。实施时固定确切来源版本，不将非官方同名 npm 包当官方发行。
-- [QuickJS 官方文档](https://bellard.org/quickjs/quickjs.html)：字节码、运行时限制；不能由此推出完整等待现场可直接保存。
+- [EffectfulJS 官方源码与 MIT 许可](https://github.com/awto/effectfuljs)，[es-persist 说明](https://github.com/awto/effectfuljs/blob/main/packages/es-persist/README.md)：持久 async 转换；具体适用限制和安装关卡见 compiler-and-differential-spec.md。
 - [Node SQLite 官方文档](https://nodejs.org/api/sqlite.html)：当前同步数据库 API、版本记录。
 - [SQLite 原子提交说明](https://www.sqlite.org/atomiccommit.html)：事务的边界是数据库；外部消息和未入库现场须由本 spec 的提交/outbox 流程处理。
 - TypeScript 7 API 以安装包的 `typescript/unstable/ast`、`typescript/unstable/sync` 类型声明和正式测试为准，不照搬 TypeScript 6 compiler API。

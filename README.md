@@ -48,3 +48,5 @@ npm run check --workspace @bear-forge/doudizhu
 ```
 
 也可以进入模块目录直接运行 `npm run check`。测试输出直接显示，不提交运行日志或验收报告。协议测试夹具可以被依赖方的测试复用，不进入生产导出。
+
+受控执行改用提前编译、运行时装载产物；库选择、通用 benchmark/游戏差分与恢复测试见 [编译与差分规格](docs/compiler-and-differential-spec.md)。

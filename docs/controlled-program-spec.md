@@ -4,6 +4,10 @@
 
 Core 接受经过准入的程序与全部传递依赖。Instance 拥有该程序的完整执行现场，包括调用栈、局部变量、闭包环境和对象引用图。游戏作者使用 TS 纯计算和 IO.call；不手工编写 PC，不将任意宿主函数注入规则计算。
 
+## 编译和装载
+
+受控路径提前编译 TS/JS 与闭合依赖，输出可由 V8 执行的 JavaScript 及显式续延/环境描述；Loader 只装载产物，不运行源码转换或解释作者 AST。首选 EffectfulJS 持久 async 转换，库及适配边界见 [编译与差分规格](compiler-and-differential-spec.md)。准入与完整现场要求不因编译方式改变。
+
 ## 准入边界
 
 采用构造白名单及白名单内部排除规则。依赖图必须封闭；动态导入、eval、Function、宿主对象、环境全局变量与未声明的外部状态不能进入受控计算。真实时间、外部随机熵、网络或用户输入通过声明端口进入；显式 seed 驱动的伪随机计算可以在受控程序内执行。冻结常量与受控局部可变数据可以使用；影响执行的可变模块状态必须实例隔离并纳入现场，不能在实例间共享。
@@ -25,6 +29,8 @@ packages/contracts/tests/support/schema-admission.ts 是正式测试使用的辅
 ## 原生差分
 
 ProgramModule.run 可直接由 V8 调用，IO 由测试绑定提供。同样的 setup 与外部调用返回序列下，原生和受控程序的可观察调用/结果轨迹应一致。NativeCoreLoader 与 ControlledCoreLoader 具有同一外部 Core 形状；原生提供者不必具备完整保存能力。原生游戏及逐玩家消费者在 C01 验收，受控后端和双端轨迹对照在 C02 验收。
+
+差分集同时覆盖无游戏依赖的通用语义/算法 benchmark、SDK/schema 和完整游戏；逐调用比较，并验证每点保存、独立进程恢复及分支隔离。具体 oracle、规范化规则、fixture 矩阵与通过条件见 [compiler-and-differential-spec.md](compiler-and-differential-spec.md)。
 
 ## 服务与快照
 

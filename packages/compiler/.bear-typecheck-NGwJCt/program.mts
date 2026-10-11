@@ -1,0 +1,1 @@
+export async function program(value:number,io:{call:(x:unknown)=>Promise<number>}){return value+await io.call(value);}

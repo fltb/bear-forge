@@ -38,7 +38,7 @@
 
 已有：TypeScript 7.0.2、Zod 4.6.5、@types/node 26.6.5、npm workspaces、Node test runner。新引入的依赖采用实施当天 npm `latest` 对应的稳定版，使用精确版本和 lockfile；不自动安装预发布版。升级必须通过正式检查，不能静默改协议来消除类型错误。
 
-宿主使用 Node.js 最新稳定版；实际支持的最低版本由所选 API 和 CI 验证决定。现有 engines 下限不等于所有后续模块均已经支持该版本。存储使用 Node 内置 SQLite API，通过 storage 模块封装；当前官方 API 名称为 Database，旧名 DatabaseSync 已弃用，不在其他模块散布版本兼容判断。
+宿主使用 Node.js 最新稳定版；实际支持的最低版本由所选 API 和 CI 验证决定。现有 engines 下限不等于所有后续模块均已经支持该版本。实验结果及恢复进度使用本地文件保存，不引入数据库；公开执行协议不依赖具体存储格式。
 
 界面使用 React + Vite + TypeScript；图使用 Cytoscape.js，样本与精确指标使用表格。服务使用 Node HTTP 与只读查询 API；首版绑定 localhost，暂停/运行等可写操作只能通过明确的调度入口，不给浏览器直接暴露 Instance。
 
@@ -51,7 +51,7 @@
 | runtime-controlled | 受控 Loader/Instance、持久快照、fork、capture |
 | game-host | BaseGameBinder；仅消费公开 Instance/contract |
 | policies / session | 策略、独立记忆、动作暂存、时间和输入路由 |
-| experiments / storage | 任务生成、预算、调度、SQLite 提交与恢复 |
+| experiments / storage | 任务生成、预算、调度、文件提交与恢复 |
 | analysis | 领域适配结果、关系估计、覆盖及样本查询 |
 | cli / viewer | 构建、运行、恢复、分析、查看；消费以上公开入口 |
 | examples/doudizhu、examples/forge-duel | 规则、SDK、contract、领域策略及分析适配 |
@@ -70,11 +70,11 @@ NativeCoreLoader 装载 ProgramModule，start 创建独立运行现场，run 通
 
 ### 受控路径与选型关卡
 
-受控路径采用提前编译、运行时装载产物的方式。首选 **Babel + EffectfulJS es-persist / es-persist-serialization**，把顺序 async/await 转换成显式续延和可保存环境，生成 JavaScript 由 V8 执行。运行时不解释作者 AST，也不再做 TS/Babel 转换；不要求作者手写 PC。完整的编译阶段、实例模块工厂、端口适配和差分验收见 [compiler-and-differential-spec.md](compiler-and-differential-spec.md)。
+受控路径采用提前编译、运行时装载产物的方式。首选 **Babel + EffectfulJS core v2 完整续延转换**，把顺序 async/await 转换成显式续延和可保存环境，生成 JavaScript 由 V8 执行。运行时不解释作者 AST，也不再做 TS/Babel 转换；不要求作者手写 PC。完整的编译阶段、实例模块工厂、端口适配和差分验收见 [compiler-and-differential-spec.md](compiler-and-differential-spec.md)。
 
 此库提供可访问的 async 控制状态和序列化接线，不直接提供完整 Core/Instance。本项目仍需实现依赖准入、确定性调度、实例隔离、预算、静态构造器注册和跨进程持久快照。未决宿主 Promise、活动回调和默认事件循环不能成为保存机制；Zod/SDK 的实际可达代码与闭包必须验收。
 
-已核实官方文档、源码与最新 npm 元数据；最新发行存在 workspace:^ peer 元数据导致普通 npm 安装失败，须先修复发行/构建适配，且验证最新版 Babel 兼容性。尚未加入生产依赖或证明完整游戏可恢复。首选路线不通过时报告具体反例与替代编译工作量，不退回解释器、不降低需求、不修改冻结协议。
+已核实官方文档、源码与最新 npm 元数据；最新发行存在 workspace:^ peer 元数据导致普通 npm 安装失败，须先修复发行/构建适配，且验证最新版 Babel 兼容性。现已通过通用程序和完整斗地主的编译执行与恢复测试；完整关卡仍以最终正式检查为准。首选路线不通过时报告具体反例与替代编译工作量，不退回解释器、不降低需求、不修改冻结协议。
 
 同源原生/编译产物差分必须覆盖完整逐调用轨迹、最终结果、通用语义与算法 benchmark、SDK/Zod、完整游戏，以及每个稳定点和独立进程恢复、双分支隔离。详见补充规格；不能仅以游戏胜负一致证明编译正确。
 
@@ -92,7 +92,7 @@ NativeCoreLoader 装载 ProgramModule，start 创建独立运行现场，run 通
 
 外部回调、AbortSignal、网络、策略记忆和活动驱动租约不保存。等待宿主回复时先在线性化点冻结待决调用与前缀，再完成序列化；不能持有宿主 Promise 的回调引用作为恢复机制。
 
-restore/fork 创建新实例身份，保留保存的 CallId 和前缀，清空绑定。快照引用保存到 SQLite 中，引用对应的内容也须持久保存，只有 reference ID 落盘不算恢复。restore 不重新运行已完成规则或外部输入。兼容性由提供者校验；进程重启后重新装载对应产物，再解析持久快照引用。
+restore/fork 创建新实例身份，保留保存的 CallId 和前缀，清空绑定。快照引用保存到检查点文件中，引用对应的内容也须持久保存，只有 reference ID 落盘不算恢复。restore 不重新运行已完成规则或外部输入。兼容性由提供者校验；进程重启后重新装载对应产物，再解析持久快照引用。
 
 首版 fork 可以完整复制，不要求 O(1)/COW。关闭与 release 按现有契约保留有效子实例、快照及记录引用。可重建的 BaseGame 缓存不存入游戏现场。game.save 使用持有的句柄，恢复必须经 persistence.restore → binder.bind，不能从 BaseGame 私取 Instance。
 
@@ -159,9 +159,9 @@ game-host 独立实现 binder/适配器，不导入 tests/support。绑定前核
 
 ## 10. 存储、回执与故障恢复
 
-SQLite 为首版唯一结构化存储，启用外键、WAL 和可靠持久提交配置；单独 writer 串行事务，规则模拟不在数据库事务内 await。大快照首版同库 BLOB，避免跨文件提交。提供者通过自己的存储服务先可靠写入快照，再返回引用；上层事务原子引用该已持久快照，不试图把一次异步 save 包在 SQLite 事务里。未被提交引用的快照是可清理孤儿，不能作为已提交任务进度。以后迁对象存储需明确内容先持久、引用后提交的顺序。数据库含业务版本元数据，不创建独立验收账本。
+实验持久化采用本地目录：快照由现有文件快照提供者保存；每个任务提交一个完整的版本化文件，包含进度、策略记忆、轨迹、领域事实和结果。先写临时文件并同步，再原子替换任务文件并同步目录。提交前的数据不作为实验样本；重启读取已提交任务文件。单机单调度器写入，默认串行、可登记1–4局并发，不引入数据库、SQL 或独立消息服务。
 
-| 表 | 主键与用途 |
+| 文件内容 | 身份与用途 |
 | --- | --- |
 | artifacts | artifactId；可重新装载的内容、schema/引擎/规则版本 |
 | experiments / tasks | experimentId / taskId；登记条件、冻结输入与完成状态 |
@@ -174,11 +174,11 @@ SQLite 为首版唯一结构化存储，启用外键、WAL 和可靠持久提交
 | lineage | 父子任务/检查点及前缀截止位置，区分重试与独立分支 |
 | estimates | 分析配置、条件、样本引用及计算结果，可重算 |
 
-taskId 由冻结实验条件标识，attemptId 只区分重试；commitId=(taskId,logicalStep)，唯一约束防重复。RequestId 是实际运行凭证，恢复后不能作为稳定业务提交键。候选回复保存原始凭证；恢复重试只能由调度方重新读取请求、重新绑定已经登记的逻辑输入，不能让客户端旧凭证直接生效。
+taskId 由冻结实验条件标识，attemptId 只区分重试；commitId=(taskId,logicalStep)，唯一任务/步骤身份防重复。RequestId 是实际运行凭证，恢复后不能作为稳定业务提交键。候选回复保存原始凭证；恢复重试只能由调度方重新读取请求、重新绑定已经登记的逻辑输入，不能让客户端旧凭证直接生效。
 
-原生任务默认整局提交：先持久登记 task；跑完后一次事务写轨迹/事实/结果与 task 完成标记。崩溃重跑未完成整局，事务失败不提交部分样本；无需每步保存游戏。
+原生任务默认整局提交：先持久登记 task；跑完后一次文件提交写轨迹/事实/结果与 task 完成标记。崩溃重跑未完成整局，文件提交失败不发布部分样本；无需每步保存游戏。
 
-要求中途恢复的任务采用受控路径：先持久保存旧检查点；执行一逻辑输入、收集 accepted 与可见事件、保存新稳定现场；随后把已持久新快照的引用、暂存策略状态、轨迹/事实/提交回执和 task 指针放在同一事务提交。事件回调只入本轮暂存队列，提交后经 outbox 对外发布；不能先发不可撤销结果再声称可回滚。
+要求中途恢复的任务采用受控路径：先持久保存旧检查点；执行一逻辑输入、收集 accepted 与可见事件、保存新稳定现场；随后把已持久新快照的引用、暂存策略状态、轨迹/事实/提交回执和 task 指针放在同一检查点文件中原子提交。事件回调只入本轮暂存队列，提交后通过已提交文件的只读查询对外发布；不能先发不可撤销结果再声称可回滚。
 
 若停止在 event 暂停边界，保存该稳定现场和已接收入队的批次信息；按游戏稳定事实键/逻辑检查点及玩家去重，不用恢复后的新 InstanceId 当唯一业务事件身份。若推进后 fault，accepted 保留为执行事实，但本次不形成可恢复成功检查点；记录故障尝试，从旧已提交检查点重试或终止。外部诊断费用可以单独记录，不成为成功样本。
 
@@ -208,17 +208,17 @@ taskId 由冻结实验条件标识，attemptId 只区分重试；commitId=(taskI
 npm ci --ignore-scripts
 npm run check
 npm run build:games
-npm run experiment -- --config examples/forge-duel/experiments/baseline.json --db ./data/forge.sqlite
-npm run experiment -- --resume --db ./data/forge.sqlite
-npm run analyze -- --experiment <id> --db ./data/forge.sqlite
-npm run serve -- --db ./data/forge.sqlite
+npm run experiment -- --config examples/forge-duel/experiments/baseline.json --output ./data/forge
+npm run experiment -- --resume --output ./data/forge
+npm run analyze -- --experiment <id> --output ./data/forge
+npm run serve -- --output ./data/forge
 ```
 
-配置登记通过后提供 `npm run demo -- --db <empty-path>`，串联构建、实验、分析；失败返回非零退出码且保留准确任务状态。相同冻结输入重复执行得到相同语义结果，排除 UUID、耗时、布局坐标等非语义字段。
+配置登记通过后提供 `npm run demo -- --output <empty-path>`，串联构建、实验、分析；失败返回非零退出码且保留准确任务状态。相同冻结输入重复执行得到相同语义结果，排除 UUID、耗时、布局坐标等非语义字段。
 
 viewer 至少有实验进度、条件筛选、关系图、指标表、证据对局四个视图。证据展示按玩家选择合法观察和事件；审计事实明确在独立分析视图，不能当策略当时已知。正常结束、截断和故障用不同标签。图筛选能定位具体样本；空数据不显示为0或没有关系。
 
-读取 API：实验列表/详情、任务与终态、条件关系、机会与覆盖、证据对局分页。接口 schema 定义在对应模块，不塞入 contracts。大量事件按游标分页；不把整库传到浏览器。无需登录的 localhost 首版不开放公网。
+读取 API：实验列表/详情、任务与终态、条件关系、机会与覆盖、证据对局分页。接口 schema 定义在对应模块，不塞入 contracts。大量事件按游标分页；不把全部实验数据传到浏览器。无需登录的 localhost 首版不开放公网。
 
 ## 13. 正式验收
 
@@ -231,13 +231,13 @@ viewer 至少有实验进度、条件筛选、关系图、指标表、证据对�
 | game-host/session | 同一 contract 走两条执行路径；多人竞争、timeoutFirst、事件暂停重交付、非法投影关闭、终态操作 |
 | games | 斗地主完整对局；双潮焚契 K2–K6 及15个压力案例；forge-duel 全规则/隐藏信息/独立合法动作 oracle |
 | policies/trajectories | 错误/过期/竞争失败不提交记忆；动作接受后事件暂停；恢复后回执丢失；逐玩家奖励和事件无漏重 |
-| storage/experiments | kill 发生在推进前、推进后、保存后、事务中、提交后回执前；重启结果无重复样本/部分提交 |
+| storage/experiments | kill 发生在推进前、推进后、保存后、文件提交中、提交后回执前；重启结果无重复样本/部分提交 |
 | analysis/viewer | 已知统计夹具、缺失与未知、配对与分支相关性、2×2交互、确认集隔离；真实数据驱动证据查询 |
 | end-to-end | 干净目录 demo；第二组冻结输入；重启恢复；全套检查；实际成本及局限说明 |
 
 测试按模块进入 npm run check，端到端依赖真实生产代码；不创建持久化验收报告或独立审计脚本。业务实验数据/配置/结果是产品产物，和禁止的测试日志账本区分。
 
-新增通用程序/benchmark 的编译正确性差分夹具，设计见 compiler-and-differential-spec.md；同时测量编译/装载/计算/保存成本，不建立无关的独立性能平台。真实业务运行记录对局吞吐、峰值内存、快照大小/耗时和实际预算用于判断可用性；不以“同 runtime”推断性能已经达标。默认并发1，CLI 可配置有上限的并发与内存预算；不接受无界 Promise.all 多局启动。
+新增通用程序/benchmark 的编译正确性差分夹具，设计见 compiler-and-differential-spec.md；同时测量编译/装载/计算/保存成本，不建立无关的独立性能平台。真实业务运行记录对局吞吐、峰值内存、快照大小/耗时和实际预算用于判断可用性；不以“同 runtime”推断性能已经达标。默认并发1，CLI 通过 --concurrency（1–4）、--memory-mb（进程RSS软预算）和 --compute-steps（计数预算）配置并冻结；RSS在执行边界检查，不是进程堆硬隔离；不接受无界 Promise.all 多局启动。
 
 ## 14. 实施顺序与预算
 
@@ -254,6 +254,4 @@ viewer 至少有实验进度、条件筛选、关系图、指标表、证据对�
 以下用于核对技术能力，不作为已经完成实现的证据：
 
 - [EffectfulJS 官方源码与 MIT 许可](https://github.com/awto/effectfuljs)，[es-persist 说明](https://github.com/awto/effectfuljs/blob/main/packages/es-persist/README.md)：持久 async 转换；具体适用限制和安装关卡见 compiler-and-differential-spec.md。
-- [Node SQLite 官方文档](https://nodejs.org/api/sqlite.html)：当前同步数据库 API、版本记录。
-- [SQLite 原子提交说明](https://www.sqlite.org/atomiccommit.html)：事务的边界是数据库；外部消息和未入库现场须由本 spec 的提交/outbox 流程处理。
 - TypeScript 7 API 以安装包的 `typescript/unstable/ast`、`typescript/unstable/sync` 类型声明和正式测试为准，不照搬 TypeScript 6 compiler API。

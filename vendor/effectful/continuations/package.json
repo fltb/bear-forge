@@ -1,0 +1,10 @@
+{
+  "name": "@bear-forge/effectful-continuations",
+  "version": "2.0.12",
+  "private": true,
+  "main": "apiMin.js",
+  "license": "MIT",
+  "dependencies": {
+    "@effectful/serialization": "2.0.12"
+  }
+}

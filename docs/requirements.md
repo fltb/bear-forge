@@ -1,6 +1,6 @@
 # 目标与边界
 
-此文件定义有效需求。完整交付按 C01–C07 连续推进；具体实施选择见 [implementation-spec.md](implementation-spec.md)。C01 为协议、斗地主作者包及原生消费者；C02/C03 为生产运行底座。当前编写规格，不把尚未实现的模块称为已交付。
+此文件定义有效需求。完整交付按 C01–C07 连续推进；具体实施选择见 [implementation-spec.md](implementation-spec.md)。C01 为协议、斗地主作者包及原生消费者；C02/C03 为生产运行底座。当前代码目录和范围说明见 project-overview.md；完成状态只以 docs/plan.md 和实际验收为准。
 
 ## R01 产品目标
 

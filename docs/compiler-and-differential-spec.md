@@ -4,13 +4,13 @@
 
 ## 1. 编译底座
 
-采用 **Babel + EffectfulJS 的持久 async 转换**作为首选实施路线：`@effectful/es`、`@effectful/es-persist`、`@effectful/es-persist-serialization`、`@effectful/serialization`。源码先由 TypeScript 检查/去类型，再把 await 的后续计算、跨等待点存活的局部变量和闭包环境显式化。生成 JavaScript 由 V8 直接运行，不在运行时逐条解释作者 AST。编译指 JavaScript 到 JavaScript 的提前转换，不要求生成机器码。
+采用 **Babel + EffectfulJS core v2 的完整续延转换**：`@effectful/core/v2/compiler`、v2 debugger preset、裁剪的续延运行库和 `@effectful/serialization`。源码先由 TypeScript 检查/去类型，再把 await 的后续计算、跨等待点存活的局部变量和同步/异步闭包环境显式化。生成 JavaScript 由 V8 直接运行，不在运行时逐条解释作者 AST。编译指 JavaScript 到 JavaScript 的提前转换，不要求生成机器码。
 
-选择理由：es-persist 专门暴露 async/generator 的控制状态；配套序列化绑定注册生成的续延构造器，引用感知的序列化器保留共享/循环引用。项目采用 MIT 许可。相比只把 async 转成 generator，它提供了可保存状态所需的接线。`@effectful/cc` 不是首选：其文档说明目前不改写 async/await，因此不能直接承担现有作者代码的等待现场。
+实测调整：最初的 es-persist 路线不能序列化捕获外部局部变量的嵌套 async 闭包，因此改用同一项目的 v2 完整闭包转换。运行库原来在函数注册时使用 Function 构造器，本项目在构建时生成对应函数工厂，运行时禁止动态代码生成。裁剪包不携带调试 UI、编译器或网络能力。项目采用 MIT 许可。引用感知的序列化器保留共享/循环引用；现成库仍须接受下面的真实恢复验收。
 
 库只提供转换和状态机制。完整实例隔离、模块工厂、端口设备、稳定点判定、预算、格式兼容与持久快照由本项目实现。不能把库的 clone/示例注册宿主对象当成跨进程保存的证明；闭包、SDK、Zod 和实际游戏都须通过下述验收。
 
-2026-10-11 核对 npm latest：es/es-persist/es-persist-serialization 为 **2.0.13**，serialization 为 **2.0.12**。实际尝试最新版本的普通 npm 安装，因已发布 peerDependencies 含 `workspace:^` 得到 `EUNSUPPORTEDPROTOCOL`。所以这是已选定的首选技术路线，**不是已经能直接安装并接入的依赖组合**。实施先解决发布元数据：采用相同最新版上游源码构建受审查的本地适配包，将 workspace 引用解析到确切版本，或使用上游修正发行；不能暗中降版本、忽略 peer 依赖或更换解释器。适配的源版本和实际依赖进入构建配置/lockfile；不得提交包缓存或验收日志。Babel 主版本兼容性需实测，不能假定其最新稳定版与该插件兼容。无法兼容时给出反例，不能声称已满足“全部依赖最新版”。
+2026-10-11 核对并采用 npm latest：core/debugger/serialization 为 **2.0.12**，Babel 为 **8.x**，esbuild 为 **0.28.2**，Zod 为 **4.6.5**，TypeScript 为 **7.0.2**。不同包的版本号不作横向大小比较。最新 es-persist 2.0.13 发布元数据含 workspace:^，并有上述闭包反例，现已退出实际依赖。core/serialization 和裁剪的 debugger 运行库保留相同最新上游源码，修正 workspace 引用及 Babel 主版本，并在 vendor/effectful 中记录必要补丁。lockfile 锁定实际版本。实际采用 core v2 的提前静态工厂路线；产物 ABI 为 effectful-v2-static-2，快照私有格式为 3。程序/schema 共同进入恢复对象图，保持模块变量共享。正式命令为 npm run check；关卡以 docs/plan.md 的实测状态为准。
 
 ## 2. 两条构建与装载路径
 
@@ -27,7 +27,7 @@
 
 1. TS 类型检查与闭合依赖解析，固定版本；检查全部可达源码，拒绝不准入的构造和隐式宿主效果。
 2. 去类型与模块转换；依赖初始化生成实例工厂，可变模块状态在实例内。循环导入、初始化顺序、导入绑定语义须验证；不能把所有模块变量简单复制一遍。
-3. 对可挂起调用链应用 es-persist-serialization 转换。按上游要求分离转换 pass，固定实际顺序。不删 await、不把 SDK IO.call 改成同步函数、不要求作者手写 PC。
+3. 对可挂起调用链应用 core v2 续延转换。按上游要求分离转换 pass，固定实际顺序。不删 await、不把 SDK IO.call 改成同步函数、不要求作者手写 PC。
 4. 在循环、递归入口及批准内建调用插入预算点；随后校验生成代码和所有运行时 helper 的能力边界。纯同步计算可直接使用 V8，但其挂起点可达对象图仍要可保存。
 5. 生成 CompiledProgram.content：JS 执行载荷、模块/续延构造器表、schema/端口描述、source map、编译及适配/runtime/快照 ABI 版本、准入策略身份和内容校验。以上是私有格式，不添加公共字段。
 
@@ -49,7 +49,7 @@ Zod 按可达代码验证，不能整体包名放行；自定义检查、错误�
 
 ## 4. 差分测试 harness
 
-测试归属 `packages/compiler/tests/` 的转换语义和 `packages/runtime-controlled/tests/` 的装载/保存/分支；游戏集成放各游戏 `tests/`。通用夹具不依赖 BaseGame、玩家或合法动作。全部进入各模块 check 和根 npm run check。路径是未来模块约定，当前尚无这些生产模块。
+测试归属 `packages/compiler/tests/` 的转换语义和 `packages/runtime-controlled/tests/` 的装载/保存/分支；游戏集成放各游戏 `tests/`。通用夹具不依赖 BaseGame、玩家或合法动作。全部进入各模块 check 和根 npm run check。这些生产模块及正式测试已经落地，完成验收仍以 docs/plan.md 为准。
 
 每个 fixture 声明源码入口、setup、确定性外部输入规则、预期准入结果、独立算法 oracle、输入 seeds 和允许挂起位置。输入规则以逻辑调用序号、端口名和参数生成响应；两个端点维护独立游标。发现端口/参数不一致立即失败，不能继续分别生成响应掩盖首次分歧。游戏用冻结策略/脚本在原生侧生成合法输入带，受控侧严格消费；另用独立规则 oracle 检查两端共同的规则错误。
 

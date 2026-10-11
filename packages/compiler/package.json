@@ -1,0 +1,36 @@
+{
+  "name": "@bear-forge/compiler",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@babel/core": "8.0.7",
+    "@babel/plugin-transform-typescript": "8.0.6",
+    "@babel/plugin-transform-arrow-functions": "8.0.1",
+    "@babel/plugin-transform-class-properties": "8.0.1",
+    "@babel/plugin-transform-classes": "8.0.5",
+    "@babel/plugin-transform-destructuring": "8.0.5",
+    "@babel/plugin-transform-for-of": "8.0.7",
+    "@babel/plugin-transform-nullish-coalescing-operator": "8.0.1",
+    "@babel/plugin-transform-object-rest-spread": "8.0.1",
+    "@babel/plugin-transform-optional-chaining": "8.0.5",
+    "@babel/plugin-transform-parameters": "8.0.5",
+    "@babel/plugin-transform-shorthand-properties": "8.0.1",
+    "@babel/plugin-transform-spread": "8.0.5",
+    "@babel/plugin-transform-template-literals": "8.0.1",
+    "@babel/types": "8.0.6",
+    "@bear-forge/boundary": "*",
+    "@bear-forge/contracts": "*",
+    "@effectful/core": "2.0.12",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "zod": "4.6.5"
+  }
+}

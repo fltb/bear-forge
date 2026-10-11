@@ -152,3 +152,7 @@ vite.config.ts.timestamp-*
 .DS_Store
 __pycache__/
 *.pyc
+
+# Generated programs and local experiments
+/build/
+/data/

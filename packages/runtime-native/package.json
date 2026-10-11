@@ -1,0 +1,21 @@
+{
+  "name": "@bear-forge/runtime-native",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@bear-forge/contracts": "*",
+    "@bear-forge/boundary": "*",
+    "@bear-forge/runtime": "*"
+  },
+  "devDependencies": {
+    "@bear-forge/compiler": "*"
+  }
+}

@@ -1,0 +1,1 @@
+{"version":1,"game":"forge-duel-v1","id":"forge-baseline-v1","blocks":128,"seed":20261011,"policies":["first","last","random","rule"],"opponents":["first","last","random","rule"],"maxSteps":1000,"maxAttempts":3,"minimumBlocks":64,"margin":0.05,"bootstrap":2000,"analysisSeed":721}

@@ -1,0 +1,26 @@
+{
+  "name": "@bear-forge/runtime-controlled",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build && node --experimental-strip-types --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@bear-forge/contracts": "*",
+    "@bear-forge/boundary": "*",
+    "@bear-forge/runtime": "*",
+    "@bear-forge/effectful-continuations": "2.0.12",
+    "@effectful/serialization": "2.0.12"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "@bear-forge/compiler": "*",
+    "@bear-forge/runtime-native": "*"
+  }
+}

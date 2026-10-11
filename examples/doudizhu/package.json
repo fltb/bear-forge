@@ -8,6 +8,11 @@
     "zod": "4.6.5",
     "@bear-forge/game-sdk": "*"
   },
+  "devDependencies": {
+    "@bear-forge/compiler": "*",
+    "@bear-forge/runtime-controlled": "*",
+    "@bear-forge/session": "*"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",

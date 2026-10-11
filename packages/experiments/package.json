@@ -1,0 +1,23 @@
+{
+  "name": "@bear-forge/experiments",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build --workspace @bear-forge/runtime-controlled && node --experimental-strip-types --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@bear-forge/boundary": "*",
+    "@bear-forge/runtime-native": "*",
+    "@bear-forge/runtime-controlled": "*",
+    "@bear-forge/game-host": "*",
+    "@bear-forge/policies": "*",
+    "@bear-forge/forge-duel": "*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@bear-forge/compiler": "*"
+  }
+}

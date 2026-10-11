@@ -97,4 +97,4 @@ C01 交付公共声明、完整斗地主及原生协议消费者。生产执行�
 
 ## 完整系统实现
 
-生产模块、原生与受控两条路径、游戏领域记录、策略、实验存储和关系展示的实施方案见 [implementation-spec.md](implementation-spec.md)。这些模块通过现有公开接口组合，不修改本页三层边界。当前仍只有 README 所列交付已实现。
+生产模块、原生与受控两条路径、游戏领域记录、策略、实验存储和关系展示的实施方案见 [implementation-spec.md](implementation-spec.md)。这些模块通过现有公开接口组合，不修改本页三层边界。实现目录与审核入口见 project-overview.md；进度以 plan.md 为准。

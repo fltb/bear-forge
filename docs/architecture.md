@@ -94,3 +94,7 @@ C01 交付公共声明、完整斗地主及原生协议消费者。生产执行�
 内侧 lib 与外侧功能的逐项对应、类型关联和语义法则见 protocol.md 的“内侧 lib 与外侧功能配套”。GamePortDeclarations 同时用于 Program 的端口 schema 与内侧函数生成；GameContract 受同一端口类别/输入/返回类型约束。Core/Instance 不依赖该游戏声明或 lib。lib 不持有 BaseGame、Instance 控制句柄或宿主回调。
 
 测试归属对应模块：contracts/tests 验证公共契约；game-sdk/tests 验证内侧库及游戏接口接线；doudizhu/tests 验证具体游戏。contracts/tests/support 的协议夹具由依赖模块的测试复用，不作为生产包导出。
+
+## 完整系统实现
+
+生产模块、原生与受控两条路径、游戏领域记录、策略、实验存储和关系展示的实施方案见 [implementation-spec.md](implementation-spec.md)。这些模块通过现有公开接口组合，不修改本页三层边界。当前仍只有 README 所列交付已实现。

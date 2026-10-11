@@ -10,6 +10,7 @@
 - [斗地主规则和接线](docs/doudizhu.md)
 - [受控程序规范](docs/controlled-program-spec.md)
 - [业务压力场景](docs/scenario-resolution-requirements.md)
+- [完整实施规格](docs/implementation-spec.md)
 - [当前进度与计划](docs/plan.md)
 
 ## 目录

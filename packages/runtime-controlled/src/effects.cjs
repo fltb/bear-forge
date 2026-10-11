@@ -1,4 +1,4 @@
-/* Persistent effects device. Each Instance gets a separate realm and registry. */
+/* Persistent effects device. Each Instance owns registries and jobs in the main runtime. */
 const S=require('@effectful/serialization');
 const D=require('@bear-forge/effectful-continuations/apiMin');
 const State=require('@bear-forge/effectful-continuations/state');
@@ -23,12 +23,15 @@ class Future{
  static reject(value){const f=new Future();reject.call(f,value);return f;}
 }
 S.regOpaqueObject(Future,'Future.class',{props:false});S.regConstructor(Future,{name:'Future'});S.regOpaqueObject(resolve,'Future.resolve',{props:false});S.regOpaqueObject(reject,'Future.reject',{props:false});
-globalThis.Promise=Future;
-Function.prototype.bind=Persist.defaultBind;
+Promise=Future;globalThis.Promise=Future;
 class ArrayIterator{constructor(array,mode='values'){this.array=array;this.index=0;this.mode=mode;}next(){if(this.index>=this.array.length)return {done:true,value:undefined};const index=this.index++;return {done:false,value:this.mode==='keys'?index:this.mode==='entries'?[index,this.array[index]]:this.array[index]};}[Symbol.iterator](){return this;}}
 S.regOpaqueObject(ArrayIterator,'ArrayIterator.class',{props:false});S.regConstructor(ArrayIterator,{name:'ArrayIterator'});
-Array.prototype[Symbol.iterator]=Array.prototype.values=function values(){return new ArrayIterator(this);};
-Array.prototype.keys=function keys(){return new ArrayIterator(this,'keys');};Array.prototype.entries=function entries(){return new ArrayIterator(this,'entries');};
+const values=function values(){return new ArrayIterator(this);};
+const keys=function keys(){return new ArrayIterator(this,'keys');};
+const entries=function entries(){return new ArrayIterator(this,'entries');};
+State.context.methods=new Map([[Array.prototype.values,values],[Array.prototype[Symbol.iterator],values],[Array.prototype.keys,keys],[Array.prototype.entries,entries],[Function.prototype.bind,Persist.defaultBind]]);
+for(const [name,fn] of Object.entries({values,keys,entries}))S.regOpaqueObject(fn,'ArrayIterator.'+name,{props:false});
+S.regOpaqueRec(State.native.Promise,'builtin.NativePromise',{descriptor:{props:false}});
 S.regOpaqueObject(globalThis,'Global',{props:false});
 for(const key of ['Object','Array','Number','String','Boolean','Math','JSON','Map','Set','Symbol','Reflect','Error','TypeError','RangeError','Function','RegExp','Date','Uint8Array','ArrayBuffer','DataView','WeakMap','WeakSet']){const value=globalThis[key];S.regOpaqueRec(value,'builtin.'+key,{descriptor:{props:false}});if(value.prototype){S.regOpaqueObject(value.prototype,'prototype.'+key,{props:false});for(const name of Object.getOwnPropertyNames(value.prototype)){const d=Object.getOwnPropertyDescriptor(value.prototype,name);if(typeof d.value==='function')S.regOpaqueObject(d.value,'prototype.'+key+'.'+name,{props:false});}}}
 S.regOpaqueObject(State.context,'effects.context',{props:false});
@@ -39,4 +42,4 @@ S.regOpaqueObject(Device,'Device.class',{props:false});S.regConstructor(Device,{
 function drain(){let count=0;while(jobs.length){if(++count>1000000)throw new Error('budget exceeded');const {future,listener}=jobs.shift();const callback=future.status===1?listener.yes:listener.no;try{if(typeof callback==='function')resolve.call(listener.child,callback(future.value));else settle(listener.child,future.status,future.value);}catch(e){reject.call(listener.child,e);}}}
 const G=require("@bear-forge/effectful-continuations/generator");
 const AG=require("@bear-forge/effectful-continuations/asyncGenerator");
-module.exports={...D,...G,...AG,Future,Device,S,State,drain,jobs,admitSchema,reply(io,value){const waiting=io.pending;io.pending=null;resolve.call(waiting,value);drain();}};
+module.exports={globals:globalThis,...D,...G,...AG,Future,Device,S,State,drain,jobs,admitSchema,reply(io,value){const waiting=io.pending;io.pending=null;resolve.call(waiting,value);drain();}};

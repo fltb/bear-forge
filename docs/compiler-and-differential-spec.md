@@ -10,7 +10,7 @@
 
 库只提供转换和状态机制。完整实例隔离、模块工厂、端口设备、稳定点判定、预算、格式兼容与持久快照由本项目实现。不能把库的 clone/示例注册宿主对象当成跨进程保存的证明；闭包、SDK、Zod 和实际游戏都须通过下述验收。
 
-2026-10-11 核对并采用 npm latest：core/debugger/serialization 为 **2.0.12**，Babel 为 **8.x**，esbuild 为 **0.28.2**，Zod 为 **4.6.5**，TypeScript 为 **7.0.2**。不同包的版本号不作横向大小比较。最新 es-persist 2.0.13 发布元数据含 workspace:^，并有上述闭包反例，现已退出实际依赖。core/serialization 和裁剪的 debugger 运行库保留相同最新上游源码，修正 workspace 引用及 Babel 主版本，并在 vendor/effectful 中记录必要补丁。lockfile 锁定实际版本。实际采用 core v2 的提前静态工厂路线；产物 ABI 为 effectful-v2-static-2，快照私有格式为 3。程序/schema 共同进入恢复对象图，保持模块变量共享。正式命令为 npm run check；关卡以 docs/plan.md 的实测状态为准。
+2026-10-11 核对并采用 npm latest：core/debugger/serialization 为 **2.0.12**，Babel 为 **8.x**，esbuild 为 **0.28.2**，Zod 为 **4.6.5**，TypeScript 为 **7.0.2**。不同包的版本号不作横向大小比较。最新 es-persist 2.0.13 发布元数据含 workspace:^，并有上述闭包反例，现已退出实际依赖。core/serialization 和裁剪的 debugger 运行库保留相同最新上游源码，修正 workspace 引用及 Babel 主版本，并在 vendor/effectful 中记录必要补丁。lockfile 锁定实际版本。实际采用 core v2 的提前静态工厂路线；产物 ABI 为 effectful-v2-main-3，快照私有格式为 4。程序/schema 共同进入恢复对象图，保持模块变量共享。正式命令为 npm run check；关卡以 docs/plan.md 的实测状态为准。
 
 ## 2. 两条构建与装载路径
 
@@ -33,7 +33,7 @@
 
 Loader 只做格式、版本、完整性和能力校验以及装载执行，不再读取 TS 源码、做 Babel 转换或解释 AST。V8 正常解析/JIT 生成 JS 属于执行引擎行为。运行部署不携带 TypeScript/Babel/转换插件；以仅产物和 runtime 的子进程执行测试证明这一点。恢复须使用与快照匹配的产物；不提供任意新代码热迁移。
 
-生成程序使用固定的模块解析表和批准能力；不得允许作者 require 任意包。Node vm 单独不构成安全隔离证明。续延转换本身也不构成沙箱，准入、能力封闭和执行预算是独立必需项。
+生成程序使用固定的模块解析表和批准能力；不得允许作者 require 任意包。产物为主 runtime 直接加载的普通模块工厂，实例不使用 VM、Worker 或独立进程；原生 ABI 为 native-main-2。不提供硬超时。续延转换本身也不构成沙箱，准入、能力封闭和执行预算是独立必需项。
 
 ## 3. IO 与现场适配
 

@@ -1,10 +1,12 @@
-import vm from 'node:vm';
+import { loadProgramFactory, programCapabilities } from '@bear-forge/runtime';
 import { copy } from '@bear-forge/boundary';
 import type { ProgramModule, PortShape } from '@bear-forge/contracts/core';
 export class NativeBudgetError extends Error {}
 export class NativeHostError extends Error {}
-const hostChecks=new WeakMap<object,()=>boolean>();
-export function nativeHostViolation(program:object){return hostChecks.get(program)?.()??false;}
+const hostChecks = new WeakMap<object, () => boolean>();
+export function nativeHostViolation(program: object) {
+  return hostChecks.get(program)?.() ?? false;
+}
 const budgetChecks = new WeakMap<object, () => boolean>();
 export function nativeBudgetExceeded(program: object) {
   return budgetChecks.get(program)?.() ?? false;
@@ -23,56 +25,45 @@ export function nativeProgram<S, P extends { [K in keyof P]: PortShape }, R>(art
   stepBudget?: number;
 } = {}): ProgramModule<S, P, R> {
   if (options.stepBudget !== undefined && (!Number.isSafeInteger(options.stepBudget) || options.stepBudget < 1)) throw Error('Invalid step budget');
-  if (artifact.format !== 1 || artifact.abi !== 'native-module-1' || typeof artifact.code !== 'string' || artifact.code.length > 32 * 1024 * 1024) throw Error('Invalid native artifact');
-  const script = new vm.Script(artifact.code);
+  if (artifact.format !== 1 || artifact.abi !== 'native-main-2' || typeof artifact.code !== 'string' || artifact.code.length > 32 * 1024 * 1024) throw Error('Invalid native artifact');
+  const factory = loadProgramFactory(artifact.code);
   function instantiate() {
-    const realm = vm.createContext({}, {
-      codeGeneration: {
-        strings: false,
-        wasm: false
+    const state = {
+      __remaining: options.stepBudget ?? 100000000,
+      __bearBudgetExceeded: false,
+      __bearHostViolation: false
+    };
+    const capabilities = programCapabilities(() => {
+      if (--state.__remaining < 0) {
+        state.__bearBudgetExceeded = true;
+        throw new NativeBudgetError('Native budget exceeded');
       }
+    }, () => {
+      state.__bearHostViolation = true;
+      throw new NativeHostError('Undeclared host effect');
     });
-    realm.__remaining = options.stepBudget ?? 100000000;
-    vm.runInContext('module={exports:{}};exports=module.exports;__bearBudgetExceeded=false;function unavailable(){__bearHostViolation=true;throw Error("Undeclared host effect");}__bearHostViolation=false;Math.random=unavailable;Date.now=unavailable;setTimeout=clearTimeout=setInterval=clearInterval=setImmediate=clearImmediate=queueMicrotask=unavailable;Object.defineProperty(globalThis,"__tick",{value:function(){if(--__remaining<0){__bearBudgetExceeded=true;throw Error("budget exceeded");}},writable:false,configurable:false});', realm);
-    script.runInContext(realm, {
-      timeout: 10000
-    });
-    if(realm.__bearHostViolation)throw new NativeHostError('Undeclared host effect');
-    const program = realm.module.exports[artifact.exportName];
+    const module = factory(undefined, capabilities);
+    if (state.__bearHostViolation) throw new NativeHostError('Undeclared host effect');
+    const program = module.exports[artifact.exportName];
     if (!program?.schemas || typeof program.run !== 'function') throw Error('Missing native ProgramModule');
     return {
       program,
-      realm
+      state
     };
   }
   function create(): ProgramModule<S, P, R> {
     const {
       program,
-      realm
+      state
     } = instantiate();
     const wrap = (schema: any) => new Proxy(schema, {
       get(target, key) {
         if (key !== 'parse') return Reflect.get(target, key);
         return (value: unknown) => {
-          realm.__validationSchema = target;
-          realm.__validationValue = copy(value);
-          try {
-            const result = vm.runInContext('__validationSchema.parse(__validationValue)', realm, {
-              timeout: 1000
-            });
-            if (realm.__bearBudgetExceeded) throw new NativeBudgetError('Native budget exceeded');
-            if(realm.__bearHostViolation)throw new NativeHostError('Undeclared host effect');
-            return result;
-          } catch (error) {
-            if ((error as any)?.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') {
-              realm.__bearBudgetExceeded = true;
-              throw new NativeBudgetError('Native budget exceeded');
-            }
-            throw error;
-          } finally {
-            delete realm.__validationSchema;
-            delete realm.__validationValue;
-          }
+          const result = target.parse(copy(value));
+          if (state.__bearBudgetExceeded) throw new NativeBudgetError('Native budget exceeded');
+          if (state.__bearHostViolation) throw new NativeHostError('Undeclared host effect');
+          return result;
         };
       }
     });
@@ -97,17 +88,17 @@ export function nativeProgram<S, P extends { [K in keyof P]: PortShape }, R>(art
             }
           });
         } catch (error) {
-          if (realm.__bearBudgetExceeded) throw new NativeBudgetError('Native budget exceeded');
-            if(realm.__bearHostViolation)throw new NativeHostError('Undeclared host effect');
+          if (state.__bearBudgetExceeded) throw new NativeBudgetError('Native budget exceeded');
+          if (state.__bearHostViolation) throw new NativeHostError('Undeclared host effect');
           throw error;
         }
-        if (realm.__bearBudgetExceeded) throw new NativeBudgetError('Native budget exceeded');
-            if(realm.__bearHostViolation)throw new NativeHostError('Undeclared host effect');
+        if (state.__bearBudgetExceeded) throw new NativeBudgetError('Native budget exceeded');
+        if (state.__bearHostViolation) throw new NativeHostError('Undeclared host effect');
         return copy(result);
       }
     };
-    hostChecks.set(active,()=>Boolean(realm.__bearHostViolation));
-    budgetChecks.set(active, () => Boolean(realm.__bearBudgetExceeded));
+    hostChecks.set(active, () => Boolean(state.__bearHostViolation));
+    budgetChecks.set(active, () => Boolean(state.__bearBudgetExceeded));
     return active;
   }
   const initial = create();

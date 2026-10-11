@@ -14,3 +14,19 @@ export function factorySource(name: string, callee: string | null, params: strin
     ${flags & 2 ? `return ${prefix}.iter;` : `try{${prefix}pushFrame(${prefix},${f});return ${prefix}.meta.handler(${prefix},${prefix}.$,null);}catch(e){return ${prefix}M.handle(${prefix},e);}`}
     }];return ${prefix}clos(${prefix}x);};}`;
 }
+
+/** A normal module exports a factory; each invocation owns the source module variables. */
+export function programFactory(code: string, controlled: boolean): string {
+  return `"use strict";module.exports=function(effects,__bearCapabilities){
+    const __tick=__bearCapabilities.tick, Math=__bearCapabilities.Math;
+    const globalThis={__zod_globalConfig:{jitless:true}};
+    const require=name=>{if(name==='effects')return effects;throw Error('Undeclared module '+name);};
+    const Function=__bearCapabilities.Function;
+    const Date=__bearCapabilities.unavailable;
+    const setTimeout=Date,clearTimeout=Date,setInterval=Date,clearInterval=Date,setImmediate=Date,clearImmediate=Date,queueMicrotask=Date;
+    ${controlled ? 'const Promise=effects.Future;' : ''}
+    const module={id:'program',exports:{}};let exports=module.exports;
+    ${code}
+    return {get exports(){return module.exports;},set exports(value){module.exports=value;exports=value;}};
+  };`;
+}

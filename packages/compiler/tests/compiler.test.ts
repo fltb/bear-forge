@@ -4,7 +4,7 @@ import { compileJavaScript, compileTypeScript, admitSource } from '../src/index.
 test('emits ahead-of-time function factories rather than dynamic constructors', () => {
   const p = compileJavaScript('module.exports.program=async function run(n,io){function next(){return ++n;}await io.call({port:"read",input:next()});return next();}');
   const x = JSON.parse(new TextDecoder().decode(p.content));
-  assert.equal(x.abi, 'effectful-v2-static-2');
+  assert.equal(x.abi, 'effectful-v2-main-3');
   assert.match(x.code, /function \(module, exports,/);
   assert.match(x.code, /__tick\(\)/);
   assert.doesNotMatch(x.code, /new Function|eval\(/);

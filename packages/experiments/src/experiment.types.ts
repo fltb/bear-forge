@@ -61,6 +61,8 @@ export type Registration = {
   seed: number;
   policies: Script[];
   opponents: Script[];
+  /** 0 commits only the complete task; positive values checkpoint every N decisions. */
+  checkpointEvery?: number;
   concurrency?: number;
   memoryBudgetMB?: number;
   computeStepBudget?: number;

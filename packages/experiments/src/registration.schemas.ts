@@ -8,6 +8,7 @@ export const RegistrationSchema = z.strictObject({
   seed: z.number().int().min(0).max(4294967295),
   policies: z.array(z.enum(['first', 'last', 'random', 'rule'])).min(1).max(4),
   opponents: z.array(z.enum(['first', 'last', 'random', 'rule'])).min(1).max(4),
+  checkpointEvery: z.number().int().min(0).max(10000).default(0),
   concurrency: z.number().int().min(1).max(4).default(1),
   memoryBudgetMB: z.number().int().min(32).max(32768).default(4096),
   computeStepBudget: z.number().int().min(1000).max(1000000000).default(100000000),

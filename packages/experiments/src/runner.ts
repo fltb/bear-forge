@@ -126,7 +126,7 @@ async function runTaskImplementation(task: TaskInput, config: Registration, atte
         accepted: next.accepted,
         proposal: staged.candidate.proposal
       });
-      if (controlled && next.state.kind !== 'fault') {
+      if (controlled && (config.checkpointEvery ?? 0) > 0 && (steps + 1) % config.checkpointEvery! === 0 && next.state.kind !== 'fault' && next.state.kind !== 'ended') {
         const snapshotStart = performance.now(),
           snapshot = unwrap(await game.save());
         snapshotMilliseconds += performance.now() - snapshotStart;

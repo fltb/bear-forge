@@ -13,6 +13,7 @@ test('compiled Forge Duel checkpoints resume with policy state, trace prefix and
       version: 1,
       game: 'forge-duel-v1',
       engine: 'controlled',
+      checkpointEvery: 1,
       id: 'controlled',
       blocks: 1,
       seed: 87,
@@ -49,6 +50,21 @@ test('compiled Forge Duel checkpoints resume with policy state, trace prefix and
   assert.equal(resumed.status, 'ended', resumed.error ?? '');
   assert.deepEqual(resumed.result, native.result);
   assert.deepEqual(resumed.facts, native.facts);
+  for (const checkpointEvery of [0, 5]) {
+    const fresh = new ExperimentFiles(await mkdtemp(join(tmpdir(), 'bear-checkpoint-frequency-')));
+    await fresh.write('artifact', {
+      content: Buffer.from(content).toString('base64'),
+      digest: programDigest(content)
+    });
+    const uninterrupted = await runTask(input, {
+      ...config,
+      checkpointEvery
+    }, 1, fresh);
+    assert.equal(uninterrupted.status, 'ended', uninterrupted.error ?? '');
+    assert.deepEqual(uninterrupted.result, native.result);
+    assert.deepEqual(uninterrupted.facts, native.facts);
+    if (checkpointEvery === 0) assert.equal(uninterrupted.cost.snapshotBytes, 0);else assert.ok(uninterrupted.cost.snapshotBytes! > 0);
+  }
   const traces = trajectories(resumed);
   for (const seat of ['0', '1']) assert.equal(traces[seat]!.transitions.reduce((s: number, t: any) => s + t.reward, 0), resumed.result.scores[seat]);
   assert.equal(new Set(resumed.facts.map(e => e.key)).size, resumed.facts.length);

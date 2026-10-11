@@ -2,6 +2,7 @@ import { transformSync } from '@babel/core';
 import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { typecheckEntry } from './typecheck.ts';
+import { programFactory } from './factories.ts';
 import { sourceAdmission } from './compile.ts';
 const require = createRequire(import.meta.url),
   types = require('@babel/types');
@@ -41,8 +42,8 @@ export async function compileNativeEntry(entry: string, exportName = 'program') 
   })!.code!;
   return {
     format: 1 as const,
-    abi: 'native-module-1',
-    code: '"use strict";\n' + converted,
+    abi: 'native-main-2',
+    code: programFactory(converted, false),
     exportName,
     sourceMap: JSON.parse(bundle.outputFiles!.find(f => f.path.endsWith('.map'))!.text)
   };

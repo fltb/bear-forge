@@ -1,3 +1,4 @@
+const persistentBind = require("./persist").defaultBind;
 "use strict";
 
 exports.__esModule = true;
@@ -27,7 +28,7 @@ function frameA(closure, newTarget) {
   const frame = (0, _engine.frame)(closure, newTarget);
   const savedCall = context.call;
   context.call = Promise;
-  frame.promise = new Promise(scopeInit.bind(frame));
+  frame.promise = new Promise(persistentBind.call(scopeInit,frame));
   context.call = savedCall;
   return frame;
 }
@@ -70,7 +71,7 @@ function awt(asyncValue) {
   const top = context.top;
   context.suspended.add(top);
   top.awaiting = asyncValue;
-  (0, _engine.then)(asyncValue, awtOnResolve.bind(top), awtOnReject.bind(top));
+  (0, _engine.then)(asyncValue, persistentBind.call(awtOnResolve,top), persistentBind.call(awtOnReject,top));
   if (!context.enabled && top.restoreEnabled !== State.undef) context.enabled = true;
   (0, _engine.popFrame)(top);
   top.next = null;

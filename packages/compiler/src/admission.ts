@@ -21,7 +21,7 @@ export function admitSource(source: string, filename: string): void {
       Program(path: any) {
         path.traverse({
           enter(child: any) {
-            if (child.node.type === 'Identifier' && ['__tick', '__remaining', '__bearBudgetExceeded','__bearHostViolation'].includes(child.node.name)) throw child.buildCodeFrameError('Reserved execution identifier');
+            if (child.node.type === 'Identifier' && ['__tick', '__remaining', '__bearBudgetExceeded', '__bearHostViolation', '__bearCapabilities'].includes(child.node.name)) throw child.buildCodeFrameError('Reserved execution identifier');
             if (!syntax.has(child.node.type) && !child.node.type.startsWith('TS')) throw child.buildCodeFrameError('Unsupported author syntax ' + child.node.type);
           }
         });

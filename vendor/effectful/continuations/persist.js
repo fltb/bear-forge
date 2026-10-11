@@ -51,10 +51,7 @@ function regModule(exp, name) {
   // They must use their real object/function descriptors, not opaque names.
 }
 
-if (typeof MessagePort !== "undefined") {
-  S.regAutoOpaqueConstr(MessagePort);
-  S.regAutoOpaqueConstr(MessageChannel);
-}
+// Host message ports/channels are not capabilities; never patch their prototypes.
 const ModuleDescriptor = exports.ModuleDescriptor = S.regDescriptor({
   name: "@effectful/debugger/module",
   create(_ctx, json) {

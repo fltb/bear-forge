@@ -1,3 +1,4 @@
+const persistentBind = require("./persist").defaultBind;
 "use strict";
 
 exports.__esModule = true;
@@ -38,16 +39,16 @@ function runQueue(step, value, rs, rj) {
 }
 (0, _serialization.regOpaqueObject)(runQueue, "@effectful/debugger/ag#runQueue");
 function enqueue(step, value, rs, rj) {
-  this.queue.push(runQueue.bind(this, step, value, rs, rj));
+  this.queue.push(persistentBind.call(runQueue,this, step, value, rs, rj));
 }
 function asyncGeneratorMethod(step) {
   return function (value) {
     const frame = this._frame;
     context.call = Promise;
-    if ((frame.flags & State.FrameFlags.Running) !== 0) return new Promise(enqueue.bind(frame, step, value));
+    if ((frame.flags & State.FrameFlags.Running) !== 0) return new Promise(persistentBind.call(enqueue,frame, step, value));
     frame.flags |= State.FrameFlags.Running;
     frame.sent = value;
-    frame.promise = new Promise(_async.scopeInit.bind(frame));
+    frame.promise = new Promise(persistentBind.call(_async.scopeInit,frame));
     return step(frame, value);
   };
 }
@@ -124,3 +125,6 @@ function unhandledAG(reason) {
   dequeue(context.top);
   return (0, _async.unhandledA)(reason);
 }
+// Immutable runtime prototypes are code references, never mutable game state.
+_serialization.regOpaqueObject(AsyncGenerator.prototype, 'runtime.AsyncGenerator.prototype', {props:false});
+_serialization.regOpaqueObject(AsyncIterableThis.prototype, 'runtime.AsyncIterableThis.prototype', {props:false});

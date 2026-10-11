@@ -128,3 +128,6 @@ function unhandledG(e) {
   frame.flags = frame.flags & ~State.FrameFlags.Running | State.FrameFlags.Done;
   return (0, _engine.unhandled)(e);
 }
+// Immutable runtime prototypes are code references, never mutable game state.
+_serialization.regOpaqueObject(Generator.prototype, 'runtime.Generator.prototype', {props:false});
+_serialization.regOpaqueObject(IterableThis.prototype, 'runtime.IterableThis.prototype', {props:false});

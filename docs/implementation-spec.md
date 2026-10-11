@@ -66,7 +66,7 @@ NativeCoreLoader 装载 ProgramModule，start 创建独立运行现场，run 通
 
 原生路径使用同一份游戏程序和 SDK。模块级可变状态必须拒绝或由构建重写为实例局部；不能仅因为 Program.run 每次调用就假定模块状态已经隔离。跨边界仍必须值隔离、检查 schema、阻止旧租约回复。Native Promise 不作为可持久快照。
 
-同进程原生运行限于经过准入的本地程序。有限工作量检查可在编译阶段插入计数器，循环/函数入口和批准内建调用均计费；终态预算标记在执行器外侧锁定，不能被作者 catch 清除。不能中断的宿主调用不得接入。故障进程隔离可使用 worker，普通运行不强制每个端口跨 worker。该路径不承诺保存/fork，也不承担运行任意恶意 JS 的职责。
+同进程原生运行限于经过准入的本地程序。有限工作量检查可在编译阶段插入计数器，循环/函数入口和批准内建调用均计费；终态预算标记在执行器外侧锁定，不能被作者 catch 清除。所有实例在主 runtime 内直接执行预编译模块工厂，不使用 VM、Worker 或子进程承载实例。不提供硬超时；无法插桩的原生调用等待返回。该路径不承诺保存/fork，也不承担运行任意恶意 JS 的职责。
 
 ### 受控路径与选型关卡
 
@@ -255,3 +255,9 @@ viewer 至少有实验进度、条件筛选、关系图、指标表、证据对�
 
 - [EffectfulJS 官方源码与 MIT 许可](https://github.com/awto/effectfuljs)，[es-persist 说明](https://github.com/awto/effectfuljs/blob/main/packages/es-persist/README.md)：持久 async 转换；具体适用限制和安装关卡见 compiler-and-differential-spec.md。
 - TypeScript 7 API 以安装包的 `typescript/unstable/ast`、`typescript/unstable/sync` 类型声明和正式测试为准，不照搬 TypeScript 6 compiler API。
+
+### 主 runtime 执行约束（2026-10-11 更新）
+
+两种执行器共享当前 Node runtime，通过普通模块工厂隔离可变模块变量。受控运行库的注册表、续延帧、Future 队列和预算属于实例；不修改宿主 Promise、Function/Array 原型或 MessagePort/MessageChannel 原型。代码产物以 CommonJS 工厂加载并缓存；临时模块文件加载后立即移除，不在运行时做 TS/Babel 转换或生成函数源码。存档代码位置引用同版本静态工厂，恢复和 fork 重建独立对象图。计算预算为协作式检查，移除 vm 超时。
+
+实验登记 checkpointEvery=0（默认）表示仅完整对局提交；正整数 N 表示每 N 个已完成决策保存检查点。受控能力本身不强制写盘。没有检查点时崩溃重跑未提交的完整局；有检查点则恢复最近的已提交现场。配置和预算一起冻结，resume 不修改频率。单 runtime 的有界并发用于交替推进，不宣称多核加速。

@@ -1,19 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { copy, read, admitSchema } from '@bear-forge/boundary';
+import { copy, read } from '@bear-forge/boundary';
 import { Controller, ok, fail, createCapture } from '@bear-forge/runtime';
 import type { Execution, RawStop } from '@bear-forge/runtime';
 import type { CompiledProgram, ControlledCoreLoader, LoadedCore } from '@bear-forge/contracts/loading';
 import type { Instance, InstanceStop, Outcome } from '@bear-forge/contracts/instance';
 import type { ProgramSchemas, PortShape } from '@bear-forge/contracts/core';
-import type { InstanceSnapshot } from '@bear-forge/contracts/persistence';
 import { deserialize, serialize } from 'node:v8';
 import { InstanceSnapshotSchema } from '@bear-forge/contracts/persistence';
-import { Realm, decode, digest } from './realm.ts';
+import { ProgramExecution, decode, digest } from './execution.ts';
 import { memorySnapshotStore } from './store.ts';
 import type { SnapshotStore } from './store.ts';
 export { fileSnapshotStore, memorySnapshotStore } from './store.ts';
 export type { SnapshotStore } from './store.ts';
-export { digest as programDigest } from './realm.ts';
+export { digest as programDigest } from './execution.ts';
 export function createControlledLoader(options: {
   trustedDigests: ReadonlySet<string>;
   snapshots?: SnapshotStore;
@@ -48,22 +47,22 @@ export function createControlledLoader(options: {
         state: InstanceStop<P, R>;
         records: any[];
       }): Instance<P, R> {
-        const realm = new Realm(artifact, options.stepBudget);
-        realm.context.__exportName = artifact.exportName;
-        let schemas = realm.boundarySchemas() as ProgramSchemas<S, P, R>;
+        const execution = new ProgramExecution(artifact, options.stepBudget);
+        let schemas = execution.boundarySchemas() as ProgramSchemas<S, P, R>;
+        const checkedSetup = data ? setup : read(schemas.setup, setup);
         let initialFault: RawStop | undefined;
         try {
           if (data) {
-            realm.restore(data.engine);
-            schemas = realm.boundarySchemas();
-          } else realm.start(setup);
+            execution.restore(data.engine);
+            schemas = execution.boundarySchemas();
+          } else execution.start(checkedSetup);
         } catch (e) {
           if (data) throw e;
           initialFault = {
             kind: 'fault',
             error: {
               kind: 'fault',
-              code: String(e).includes('budget') || String(e).includes('timed out') ? 'budget_exceeded' : 'program_failed',
+              code: String(e).includes('budget') ? 'budget_exceeded' : 'program_failed',
               message: String(e)
             }
           };
@@ -71,7 +70,7 @@ export function createControlledLoader(options: {
         const engine: Execution = {
           current() {
             if (initialFault) return initialFault;
-            if (realm.fault) return {
+            if (execution.fault) return {
               kind: 'fault',
               error: {
                 kind: 'fault',
@@ -79,7 +78,7 @@ export function createControlledLoader(options: {
                 message: 'Budget exhausted'
               }
             };
-            if (realm.hostViolation) return {
+            if (execution.hostViolation) return {
               kind: 'fault',
               error: {
                 kind: 'fault',
@@ -87,29 +86,29 @@ export function createControlledLoader(options: {
                 message: 'Undeclared host effect'
               }
             };
-            if (realm.io?.fault || realm.result?.status === 1 && realm.io?.pending) return {
+            if (execution.io?.fault || execution.result?.status === 1 && execution.io?.pending) return {
               kind: 'fault',
               error: {
                 kind: 'fault',
                 code: 'program_failed',
-                message: realm.io?.fault ?? 'Returned with pending IO'
+                message: execution.io?.fault ?? 'Returned with pending IO'
               }
             };
-            if (realm.result?.status === 2) return {
+            if (execution.result?.status === 2) return {
               kind: 'fault',
               error: {
                 kind: 'fault',
                 code: 'program_failed',
-                message: String(realm.result.value)
+                message: String(execution.result.value)
               }
             };
-            if (realm.result?.status === 1) return {
+            if (execution.result?.status === 1) return {
               kind: 'done',
-              result: realm.result.value
+              result: execution.result.value
             };
-            if (realm.io?.pending) return {
+            if (execution.io?.pending) return {
               kind: 'call',
-              call: realm.io.callData
+              call: execution.io.callData
             };
             return {
               kind: 'fault',
@@ -121,14 +120,14 @@ export function createControlledLoader(options: {
             };
           },
           async advance(output) {
-            realm.resume(output);
+            execution.resume(output);
           },
           dispose() {
-            realm.context.__io = undefined;
+            execution.io = undefined;
           },
-          snapshot: () => realm.snapshot()
+          snapshot: () => execution.snapshot()
         };
-        const controller = new Controller(engine, schemas, setup, data);
+        const controller = new Controller(engine, schemas, checkedSetup, data);
         controller.forkHandler = async () => {
           try {
             return ok(instantiate(setup, {
@@ -143,11 +142,9 @@ export function createControlledLoader(options: {
         controllers.set(controller.id, controller);
         return remember(controller.handle(), controller);
       }
-      let checkedSchemas: ProgramSchemas<S, P, R>;
       try {
-        const r = new Realm(artifact, options.stepBudget);
+        const r = new ProgramExecution(artifact, options.stepBudget);
         r.admitSchemas();
-        checkedSchemas = r.boundarySchemas();
       } catch (e) {
         return fail('invalid_argument', String(e));
       }
@@ -155,7 +152,7 @@ export function createControlledLoader(options: {
         core: {
           async start(setup) {
             try {
-              return ok(instantiate(read(checkedSchemas.setup, setup)));
+              return ok(instantiate(setup));
             } catch (e) {
               return fail('invalid_input', String(e));
             }
@@ -174,7 +171,7 @@ export function createControlledLoader(options: {
             try {
               const id = randomUUID();
               const content = {
-                format: 3,
+                format: 4,
                 hash,
                 engine: c.engine.snapshot!(),
                 state: c.state,
@@ -194,7 +191,7 @@ export function createControlledLoader(options: {
                 bytes = await store.get(ref.snapshotId);
               if (!bytes) return fail('snapshot_not_found');
               const data = deserialize(bytes);
-              if (data.format !== 3 || data.hash !== hash) return fail('snapshot_incompatible');
+              if (data.format !== 4 || data.hash !== hash) return fail('snapshot_incompatible');
               return ok(instantiate(undefined as S, data));
             } catch (e) {
               return fail('snapshot_incompatible', (e as any)?.stack ?? String(e));

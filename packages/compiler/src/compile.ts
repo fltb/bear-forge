@@ -9,7 +9,7 @@ import { transformSync } from '@babel/core';
 import type { CompiledProgram } from '@bear-forge/contracts/loading';
 import type { PortShape } from '@bear-forge/contracts/core';
 import { lowerAccessors } from './accessors.ts';
-import { factorySource } from './factories.ts';
+import { factorySource, programFactory } from './factories.ts';
 import { typecheckEntry, typecheckSource } from './typecheck.ts';
 const require = createRequire(import.meta.url);
 const compiler = require('@effectful/core/v2/compiler');
@@ -32,7 +32,7 @@ export const sourceAdmission: Plugin = {
 };
 export type Artifact = {
   format: 1;
-  abi: 'effectful-v2-static-2';
+  abi: 'effectful-v2-main-3';
   code: string;
   digest: string;
   exportName: string;
@@ -111,6 +111,12 @@ function emit<S, P extends { [K in keyof P]: PortShape }, R>(source: string, exp
   });
   const budget = () => ({
     visitor: {
+      CatchClause(path: any) {
+        // An exhausted execution must unwind past generated exception machinery.
+        // Otherwise the continuation dispatcher can repeatedly catch its own budget fault.
+        const check = types.ifStatement(types.memberExpression(types.memberExpression(types.memberExpression(types.identifier('effects'), types.identifier('State')), types.identifier('context')), types.identifier('__budgetExceeded')), types.throwStatement(types.newExpression(types.identifier('Error'), [types.stringLiteral('budget exceeded')])));
+        path.get('body').unshiftContainer('body', check);
+      },
       Loop(path: any) {
         const body = path.get('body');
         const call = types.expressionStatement(types.callExpression(types.identifier('__tick'), []));
@@ -127,10 +133,10 @@ function emit<S, P extends { [K in keyof P]: PortShape }, R>(source: string, exp
     inputSourceMap: JSON.parse(JSON.stringify(result.map)),
     plugins: [staticFactories, budget]
   })!;
-  const code = '"use strict";\n' + generated.code!;
+  const code = programFactory(generated.code!, true);
   const artifact: Artifact = {
     format: 1,
-    abi: 'effectful-v2-static-2',
+    abi: 'effectful-v2-main-3',
     code,
     digest: createHash('sha256').update(code).digest('hex'),
     exportName,

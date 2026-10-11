@@ -407,7 +407,9 @@ function popScope() {
   return top.$ = top.$[0];
 }
 function __effectful_mcall(prop, ...args) {
-  const func = args[0][prop];
+  if ((prop === 'call' || prop === 'apply') && context.methods?.has(args[0])) args[0] = context.methods.get(args[0]);
+  const original = args[0][prop];
+  const func = context.methods?.get(original) ?? original;
   if (!func) throw new TypeError(`${prop} isn't a function`);
   return __effectful__reflectApply(__effectful__nativeCall, context.call = func, args);
 }
@@ -1015,10 +1017,10 @@ function brk() {
   throw token;
 }
 function iterator(v) {
-  return context.call = v[Symbol.iterator], v[Symbol.iterator]();
+  return __effectful_mcall(Symbol.iterator, v);
 }
 function iteratorM(v) {
-  return v[Symbol.asyncIterator] ? (context.call = v[Symbol.asyncIterator], v[Symbol.asyncIterator]()) : (context.call = v[Symbol.iterator], v[Symbol.iterator]());
+  return __effectful_mcall(v[Symbol.asyncIterator] ? Symbol.asyncIterator : Symbol.iterator, v);
 }
 function then(p, onResolve, onReject) {
   if (p && typeof p.then === "function") {

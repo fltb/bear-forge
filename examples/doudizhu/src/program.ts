@@ -1,7 +1,9 @@
+import { createResolution, invoke, request } from '@bear-forge/card-engine';
+import { inputEffect } from './effects.ts';
 import type { Program } from '@bear-forge/contracts';
 import type { ProgramSetup, Frame } from './schemas.ts';
 import { StateSchema, ProgramSetupSchema, InputSchema } from './schemas.ts';
-import { apply, frame } from './rules.ts';
+import { frame } from './rules.ts';
 import { createSDK } from './sdk.ts';
 import type { DouDizhuPorts } from './types.ts';
 
@@ -16,15 +18,16 @@ export const program: Program<ProgramSetup,DouDizhuPorts,Frame> = async (input, 
     now: setup.initialGameTime, stageSequence: 0, boundarySequence: 0, stage: null,
     delta: { consumed: [], invalidated: [] }, events: [], result: null,
   });
+  const context = createResolution(state, toolkit);
   let published = 0;
   while (true) {
     if (state.phase === 'dealing') await sdk.deal(state);
     const output = frame(state, published);
-    if (output.events.length > 0) await sdk.event(output.events);
+    if (output.events.length > 0) await request(context, { port: 'event', input: output.events });
     published = state.events.length;
     output.events = [];
     if (state.phase === 'ended') return output;
-    const reply = await sdk.decision(output);
-    apply(state, InputSchema.parse(reply));
+    const reply = await request(context, { port: 'decision', input: output });
+    await invoke(context, inputEffect, InputSchema.parse(reply));
   }
 };

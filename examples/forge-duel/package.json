@@ -23,7 +23,8 @@
     "zod": "4.6.5",
     "@bear-forge/policies": "*",
     "@bear-forge/experiments": "*",
-    "@bear-forge/analysis": "*"
+    "@bear-forge/analysis": "*",
+    "@bear-forge/card-engine": "*"
   },
   "devDependencies": {
     "@bear-forge/compiler": "*",

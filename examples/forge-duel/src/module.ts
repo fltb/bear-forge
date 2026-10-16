@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { createGameSDK } from '@bear-forge/game-sdk';
+import { createResolution, invoke } from '@bear-forge/card-engine';
+import { gameEffect } from './effects.ts';
 import type { GameModule } from '@bear-forge/contracts/authoring';
-import type { Types, Ports } from './game.types.ts';
+import type { Types } from './game.types.ts';
 import { SetupSchema, StateSchema, SeatSchema, ObservationSchema, EventSchema, ResultSchema, ActionSchema, RequestSchema, OptionsSchema, gamePorts } from './forge.schemas.ts';
-import { create, apply, legal, sameAction, available, decisionKey, observe, project } from './rules.ts';
+import { create, legal, sameAction, decisionKey, observe, project } from './rules.ts';
 export const game: GameModule<Types> = {
   program: {
     schemas: {
@@ -11,17 +12,8 @@ export const game: GameModule<Types> = {
       result: StateSchema,
       ports: gamePorts
     },
-    async run(setup, io) {
-      const state = create(setup),
-        sdk = createGameSDK<Ports>(io, gamePorts);
-      while (!state.result) {
-        available(state);
-        if (state.pending.length) await sdk.event(state.pending.splice(0));
-        const action = await sdk.decision(state);
-        apply(state, action);
-      }
-      if (state.pending.length) await sdk.event(state.pending.splice(0));
-      return state;
+    run: async function runGame(setup, io) {
+      return await invoke(createResolution(create(setup), io), gameEffect, undefined);
     }
   },
   contract: {

@@ -11,14 +11,25 @@ test('real game snapshots exclude dependency initialization frames and forks reu
   instance.start({profile:'forge-duel-v1',seed:9,first:'0',decks:{'0':baseDeck,'1':baseDeck}});
   const serializer=instance.loaded.effects.S, write=serializer.write;
   const visited=new Map();
+  const retainedFunctions: string[] = [];
   let snapshot: string;
   try {
-    serializer.write=(root: unknown)=>write(root,{sharedRefsMap:visited});
+    serializer.write=(root: unknown)=>{
+      const encoded=write(root,{sharedRefsMap:visited});
+      for(const value of visited.keys()) if(value&&typeof value==='object'
+        &&serializer.getObjectDescriptor(value)?.name==='runtime.ContextFrame') {
+        retainedFunctions.push(instance.loaded.effects.stateOf(value).meta.origName);
+      }
+      return encoded;
+    };
     snapshot=instance.snapshot();
   } finally {serializer.write=write;}
   const frames=[...visited.keys()].filter(value=>value&&typeof value==='object'
     &&serializer.getObjectDescriptor(value)?.name==='runtime.ContextFrame');
-  assert.equal(frames.length,1,'only the suspended game entry frame is retained');
+  // Only the live entry → invoke → game → repeat → invoke → decision →
+  // invoke → publish → request chain may survive. Module/dependency setup
+  // activations must not appear; an arbitrary larger frame cap would hide them.
+  assert.deepEqual(retainedFunctions.sort(), ['invoke','invoke','invoke','repeat','request','publishEvents','decisionTurn','resolveGame','runGame'].sort());
   assert.ok(Buffer.byteLength(snapshot)<1_500_000,'dependency initialization graph must not return');
   const initializations=instance.loaded.statistics.initializations;
   const samples: Record<string,number[]>={fork:[],save:[],restore:[]};

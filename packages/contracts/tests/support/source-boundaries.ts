@@ -40,7 +40,7 @@ for(const path of paths){
           }
         } else if(isSDK){
           if(!['@bear-forge/contracts/core','@bear-forge/contracts/authoring'].includes(name)||!ts.isImportDeclaration(node)||node.importClause?.phaseModifier!==ts.SyntaxKind.TypeKeyword)errors.push(`${label}: SDK may import only public IO/authoring types`);
-        } else if(name!=='zod'&&(isContract||!['@bear-forge/contracts','@bear-forge/contracts/core','@bear-forge/contracts/authoring','@bear-forge/contracts/game','@bear-forge/contracts/loading','@bear-forge/game-sdk'].includes(name)))errors.push(`${label}: external dependency ${name}`);
+        } else if(name!=='zod'&&(isContract||!['@bear-forge/contracts','@bear-forge/contracts/core','@bear-forge/contracts/authoring','@bear-forge/contracts/game','@bear-forge/contracts/loading','@bear-forge/game-sdk','@bear-forge/card-engine'].includes(name)))errors.push(`${label}: external dependency ${name}`);
       }
     }
     if(ts.isInterfaceDeclaration(node))errors.push(`${label}: use explicit type aliases for capabilities`);

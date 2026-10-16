@@ -55,43 +55,68 @@ export function validateInput(s: State, input: Exclude<Input,{kind:'clock'}>): {
   const action: Action = s.phase === 'bidding' ? { kind: 'bid', value: 0 } : s.phase === 'doubling' ? { kind: 'double', value: false } : s.phase === 'redoubling' ? { kind: 'redouble', value: false } : s.last ? { kind: 'pass' } : { kind: 'play', cards: [Math.min(...s.hands[actor])], pattern: { kind: 'single', high: Math.min(...s.hands[actor]), length: 1 } };
   return { actor, action, at: input.gameTime, slotId: slot.slotId };
 }
-/** Mutates only this program's owned game state, after complete validation. */
+export type ResolvedInput = ReturnType<typeof validateInput>;
+export function advanceClock(s: State, input: Extract<Input, { kind: 'clock' }>) {
+  if (!Number.isSafeInteger(input.at) || input.at < s.now) throw new RuleViolation('clock moved backwards');
+  s.now = input.at;
+}
+export function consumeInput(s: State, input: ResolvedInput) {
+  s.now = input.at; s.boundarySequence++; s.delta = { consumed: [input.slotId], invalidated: [] };
+  s.stage!.slots = s.stage!.slots.filter(x => x.slotId !== input.slotId);
+  s.stage!.boundaryKey = `boundary${s.boundarySequence}`;
+}
+export function resolveBid(s: State, input: ResolvedInput) {
+  const { actor, action: a } = input;
+  if (a.kind !== 'bid') throw new RuleViolation('expected bid');
+  s.bidCount++; event(s, { type: 'bid', actor, value: a.value });
+  if (a.value > s.highBid) { s.highBid = a.value; s.landlord = actor; }
+  if (a.value === 3 || s.bidCount === 3) {
+    if (s.landlord === null) { event(s, { type: 'redeal' }); s.firstBidder = next(s.firstBidder); s.phase = 'dealing'; s.stage = null; }
+    else { event(s, { type: 'landlord', actor: s.landlord, bid: s.highBid }); s.phase = 'doubling'; stage(s, seats.filter(x => x !== s.landlord)); }
+  } else { s.turn = next(actor); stage(s, [s.turn]); }
+}
+export function resolveDouble(s: State, input: ResolvedInput) {
+  const { actor, action: a } = input;
+  if (a.kind !== 'double') throw new RuleViolation('expected double');
+  s.doubles[actor] = a.value; event(s, { type: 'doubleChosen', actor, value: a.value }, actor);
+  if (seats.filter(x => x !== s.landlord).every(x => s.doubles[x] !== null)) {
+    s.doublesRevealed = true; event(s, { type: 'doublesRevealed', values: { ...s.doubles } });
+    if (seats.some(x => s.doubles[x])) { s.phase = 'redoubling'; stage(s, [s.landlord!]); } else revealBottom(s);
+  }
+}
+export function resolveRedouble(s: State, input: ResolvedInput) {
+  const { actor, action: a } = input;
+  if (a.kind !== 'redouble') throw new RuleViolation('expected redouble');
+  s.redoubled = a.value; event(s, { type: 'redouble', actor, value: a.value }); revealBottom(s);
+}
+export function resolvePass(s: State, input: ResolvedInput) {
+  const { actor } = input;
+  event(s, { type: 'pass', actor }); s.passes++;
+  if (s.passes === 2) { s.turn = s.last!.actor; s.last = null; s.passes = 0; } else s.turn = next(actor);
+  stage(s, [s.turn]);
+}
+export function resolvePlay(s: State, input: ResolvedInput) {
+  const { actor, action: a } = input;
+  if (a.kind !== 'play') throw new RuleViolation('expected play');
+  for (const rank of a.cards) s.hands[actor].splice(s.hands[actor].indexOf(rank), 1);
+  s.playCounts[actor]++; s.passes = 0; s.last = { actor, play: a };
+  if (a.pattern.kind === 'bomb') s.bombs++;
+  if (a.pattern.kind === 'rocket') s.rockets++;
+  event(s, { type: 'play', actor, play: a });
+  if (s.hands[actor].length < 2) event(s, { type: 'lastCard', actor, count: s.hands[actor].length });
+  if (!s.hands[actor].length) { s.phase = 'ended'; s.stage = null; s.result = settle(s, actor); event(s, { type: 'result', result: s.result }); }
+  else { s.turn = next(actor); stage(s, [s.turn]); }
+}
+/** Synchronous compatibility entry uses the same validated rule primitives. */
 export function apply(s: State, input: Input) {
-  if(input.kind==='clock'){
-    if(!Number.isSafeInteger(input.at)||input.at<s.now)throw new RuleViolation('clock moved backwards');
-    s.now=input.at;return;
-  }
-  const { actor, action: a, at, slotId } = validateInput(s, input);
-  s.now = at; s.boundarySequence++; s.delta = { consumed: [slotId], invalidated: [] };
-  s.stage!.slots = s.stage!.slots.filter(x => x.slotId !== slotId); s.stage!.boundaryKey = `boundary${s.boundarySequence}`;
-  if (a.kind === 'bid') {
-    s.bidCount++; event(s, { type: 'bid', actor, value: a.value });
-    if (a.value > s.highBid) { s.highBid = a.value; s.landlord = actor; }
-    if (a.value === 3 || s.bidCount === 3) {
-      if (s.landlord === null) { event(s, { type: 'redeal' }); s.firstBidder = next(s.firstBidder); s.phase = 'dealing'; s.stage = null; }
-      else { event(s, { type: 'landlord', actor: s.landlord, bid: s.highBid }); s.phase = 'doubling'; stage(s, seats.filter(x => x !== s.landlord)); }
-    } else { s.turn = next(actor); stage(s, [s.turn]); }
-  } else if (a.kind === 'double') {
-    s.doubles[actor] = a.value; event(s, { type: 'doubleChosen', actor, value: a.value }, actor);
-    if (seats.filter(x => x !== s.landlord).every(x => s.doubles[x] !== null)) {
-      s.doublesRevealed = true; event(s, { type: 'doublesRevealed', values: { ...s.doubles } });
-      if (seats.some(x => s.doubles[x])) { s.phase = 'redoubling'; stage(s, [s.landlord!]); } else revealBottom(s);
-    }
-  } else if (a.kind === 'redouble') { s.redoubled = a.value; event(s, { type: 'redouble', actor, value: a.value }); revealBottom(s); }
-  else if (a.kind === 'pass') {
-    event(s, { type: 'pass', actor }); s.passes++;
-    if (s.passes === 2) { s.turn = s.last!.actor; s.last = null; s.passes = 0; } else s.turn = next(actor);
-    stage(s, [s.turn]);
-  } else {
-    for (const rank of a.cards) s.hands[actor].splice(s.hands[actor].indexOf(rank), 1);
-    s.playCounts[actor]++; s.passes = 0; s.last = { actor, play: a };
-    if (a.pattern.kind === 'bomb') s.bombs++;
-    if (a.pattern.kind === 'rocket') s.rockets++;
-    event(s, { type: 'play', actor, play: a });
-    if (s.hands[actor].length < 2) event(s, { type: 'lastCard', actor, count: s.hands[actor].length });
-    if (!s.hands[actor].length) { s.phase = 'ended'; s.stage = null; s.result = settle(s, actor); event(s, { type: 'result', result: s.result }); }
-    else { s.turn = next(actor); stage(s, [s.turn]); }
-  }
+  if (input.kind === 'clock') { advanceClock(s, input); return; }
+  const resolved = validateInput(s, input);
+  consumeInput(s, resolved);
+  if (resolved.action.kind === 'bid') resolveBid(s, resolved);
+  else if (resolved.action.kind === 'double') resolveDouble(s, resolved);
+  else if (resolved.action.kind === 'redouble') resolveRedouble(s, resolved);
+  else if (resolved.action.kind === 'pass') resolvePass(s, resolved);
+  else resolvePlay(s, resolved);
 }
 export function frame(s: State, eventOffset: number): Frame {
   return FrameSchema.parse({state:s,events:s.events.slice(eventOffset)});

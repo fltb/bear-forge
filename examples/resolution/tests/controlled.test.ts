@@ -131,6 +131,11 @@ test('K2–K6 save and restore complete continuations; public binder rejects sta
     player: '1',
     reply
   })), { valid: false, reason: 'request_mismatch' });
+  for (const invalid of [
+    { kind: 'take', value: 'U' },
+    { kind: 'prevent', value: 'F' },
+    { kind: 'prevent', value: ['U', 'other'] },
+  ]) assert.equal(unwrap(await a.validate({ player: '1', reply: { ...reply, action: invalid } })).valid, false);
   assert.deepEqual(unwrap(await a.inspect()), aBefore);
   assert.deepEqual(unwrap(await b.inspect()), bBefore);
   assert.equal(unwrap(await b.observe({
@@ -267,4 +272,71 @@ test('K2–K6 save and restore complete continuations; public binder rejects sta
     await game.close();
   }
   for (const save of saves) unwrap(await loaded.persistence.release(save.snapshot));
+
+  async function reach(variant: string, kind: string) {
+    const candidate = unwrap(await loaded.core.start({ variant }));
+    for (let step = 0; step < 30; step++) {
+      const stop = unwrap(await candidate.inspect());
+      assert.equal(stop.kind, 'call');
+      if (stop.call.input.kind === kind) return candidate;
+      unwrap(await candidate.bind({ decision: async ({ input }: any) => ({ kind: 'reply', value:
+        variant === 'return-wolf' && input.kind === 'spell-response' && input.player === '1'
+          ? { kind: 'return', value: 'L' } : action(input) }) }));
+      unwrap(await candidate.run());
+    }
+    throw Error('expected choice not reached');
+  }
+  // Case 11: identical world objects do not imply identical continuations.
+  const full = await reach('normal', 'wave-0-target');
+  const shortened = await reach('empty-first', 'wave-1-target');
+  const fullCall = unwrap(await full.inspect()), shortenedCall = unwrap(await shortened.inspect());
+  for (const key of ['hp','mana','hands','deck','discard','board','damage','triggers']) {
+    assert.deepEqual(fullCall.call.input.state[key], shortenedCall.call.input.state[key], key);
+  }
+  for (const [original, nextKind] of [[full, 'wave-1-target'], [shortened, 'take']] as const) {
+    const snapshot = unwrap(await loaded.persistence.save(original));
+    unwrap(await original.close());
+    const resumed = unwrap(await loaded.persistence.restore(snapshot));
+    for (const value of [{ kind: 'target', value: 'L' }, { kind: 'prevent', value: null }]) {
+      unwrap(await resumed.bind({ decision: async () => ({ kind: 'reply', value }) }));
+      unwrap(await resumed.run());
+    }
+    assert.equal(unwrap(await resumed.inspect()).call.input.kind, nextKind);
+    unwrap(await resumed.close());
+    unwrap(await loaded.persistence.release(snapshot));
+  }
+  const returned = await reach('return-wolf', 'wave-0-target');
+  const returnedStop = unwrap(await returned.inspect());
+  assert.ok(returnedStop.call.input.options.some((option: any) => option.value === 'L2'));
+  assert.ok(!returnedStop.call.input.options.some((option: any) => option.value === 'L'));
+  const returnedGame = unwrap(await createGameBinder().bind({ instance: returned, contract: module.contract }));
+  const returnedBefore = unwrap(await returnedGame.inspect());
+  const targetRequest = returnedBefore.requests[0];
+  for (const [value, valid] of [['L', false], ['L2', true]] as const) {
+    assert.equal(unwrap(await returnedGame.validate({ player: '0', reply: {
+      requestId: targetRequest.id, type: 'choice', action: { kind: 'target', value },
+    } })).valid, valid);
+  }
+  assert.deepEqual(unwrap(await returnedGame.inspect()), returnedBefore);
+  await returnedGame.close();
+  // Case 12: a partial mutation followed by failure is terminal, not another
+  // valid choice. Only the earlier, valid checkpoint can be restored.
+  const failing = await reach('fail-discard', 'wave-1-prevent');
+  const beforeFailure = unwrap(await failing.inspect());
+  const safe = unwrap(await loaded.persistence.save(failing));
+  unwrap(await failing.bind({ decision: async () => ({ kind: 'reply', value: { kind: 'prevent', value: 'U' } }) }));
+  const failed = unwrap(await failing.run());
+  assert.equal(failed.state.kind, 'fault');
+  assert.equal(failed.state.error.code, 'program_failed');
+  assert.deepEqual(unwrap(await failing.inspect()), failed.state);
+  assert.equal((await loaded.persistence.save(failing)).ok, false);
+  const retry = unwrap(await loaded.persistence.restore(safe));
+  assert.deepEqual(unwrap(await retry.inspect()), beforeFailure);
+  unwrap(await retry.bind({ decision: async () => ({ kind: 'reply', value: { kind: 'prevent', value: null } }) }));
+  const continued = unwrap(await retry.run());
+  assert.equal(continued.state.kind, 'call');
+  assert.equal(continued.state.call.input.kind, 'take');
+  assert.deepEqual(continued.state.call.input.state.hands[1], ['U']);
+  await retry.close(); await failing.close();
+  unwrap(await loaded.persistence.release(safe));
 });

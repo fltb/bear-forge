@@ -6,14 +6,16 @@
   "dependencies": {
     "@bear-forge/contracts": "*",
     "zod": "4.6.5",
-    "@bear-forge/game-sdk": "*"
+    "@bear-forge/game-sdk": "*",
+    "@bear-forge/card-engine": "*"
   },
   "devDependencies": {
     "@bear-forge/compiler": "*",
     "@bear-forge/runtime-controlled": "*",
     "@bear-forge/session": "*",
     "@bear-forge/experiments": "*",
-    "@bear-forge/policies": "*"
+    "@bear-forge/policies": "*",
+    "@bear-forge/game-host": "*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

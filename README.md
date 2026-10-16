@@ -21,6 +21,7 @@
 | --- | --- |
 | packages/contracts | 公共 TS 类型与 Zod schema |
 | packages/game-sdk | 程序内使用的类型化端口薄封装 |
+| packages/card-engine | 两游戏共用的效果组合、嵌套调用和选择等待；复用原执行续延 |
 | examples/doudizhu | 真实斗地主规则、循环、领域 SDK 与外侧适配 |
 | packages/contracts/tests | 协议类型、schema、依赖边界测试；support 存放可复用的协议测试夹具 |
 | packages/game-sdk/tests | SDK 调用、类型及与外侧游戏接口的接线测试 |

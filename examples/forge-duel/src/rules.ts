@@ -291,57 +291,71 @@ function damage(s: State, target: string, amount: number) {
   }
   throw Error('Unknown target');
 }
-export function apply(s: State, action: Action) {
+export function validateAction(s: State, action: Action): Action {
   const checked = ActionSchema.safeParse(action);
   if (!checked.success || !legal(s).some(candidate => sameAction(candidate, checked.data))) throw Error('Illegal action');
-  action = checked.data;
-  const seat = s.active,
-    hero = s.heroes[seat];
-  s.cause = 'action:' + s.step;
-  if (action.kind === 'end') {
-    if (hero.turns >= 30) finish(s, null, 'turn-limit');else begin(s, other(seat));
-  } else if (action.kind === 'play') {
-    const index = hero.hand.findIndex(c => c.id === action.cardId),
-      card = hero.hand.splice(index, 1)[0]!,
-      rule = cards[card.definition];
-    hero.mana -= rule.cost;
-    emit(s, 'play', seat, {
-      definition: card.definition,
-      cardId: card.id,
-      target: action.target
-    });
-    if (rule.attack) hero.board.push({
-      id: 'unit:' + s.entity++,
-      card,
-      attack: rule.attack,
-      hp: rule.hp,
-      ready: false
-    });else {
-      hero.discard.push(card);
-      if (card.definition === 'spark' || card.definition === 'blast') {
-        damage(s, action.target!, card.definition === 'spark' ? 2 : 4);
-        deaths(s);
-      } else if (card.definition === 'supply') {
-        draw(s, seat);
-        draw(s, seat);
-      } else heal(s, seat, 3);
-    }
+  return checked.data;
+}
+export function startAction(s: State) { s.cause = 'action:' + s.step; }
+export function finishAction(s: State) { settle(s); s.step++; s.cause = null; }
+export function endTurn(s: State) {
+  if (s.heroes[s.active].turns >= 30) finish(s, null, 'turn-limit');
+  else begin(s, other(s.active));
+}
+export function payCard(s: State, action: Extract<Action, { kind: 'play' }>) {
+  const seat = s.active, hero = s.heroes[seat];
+  const index = hero.hand.findIndex(c => c.id === action.cardId), card = hero.hand.splice(index, 1)[0]!;
+  hero.mana -= cards[card.definition].cost;
+  emit(s, 'play', seat, { definition: card.definition, cardId: card.id, target: action.target });
+  return card;
+}
+export function placeCard(s: State, card: State['heroes']['0']['hand'][number]) {
+  const rule = cards[card.definition], hero = s.heroes[s.active];
+  if (rule.attack) hero.board.push({ id: 'unit:' + s.entity++, card, attack: rule.attack, hp: rule.hp, ready: false });
+  else hero.discard.push(card);
+}
+export type CardStep = 'damage' | 'deaths' | 'draw' | 'heal';
+export type CardEffectInput = { seat: Seat; target: string | null; amount: number };
+const damageSteps: readonly CardStep[] = ['damage', 'deaths'];
+export const cardEffects: Record<Definition, { amount: number; steps: readonly CardStep[] }> = {
+  scout: { amount: 0, steps: [] }, guard: { amount: 0, steps: [] },
+  beast: { amount: 0, steps: [] }, witness: { amount: 0, steps: [] },
+  spark: { amount: 2, steps: damageSteps }, blast: { amount: 4, steps: damageSteps },
+  supply: { amount: 0, steps: ['draw', 'draw'] }, repair: { amount: 3, steps: ['heal'] },
+};
+export function runCardStep(s: State, step: CardStep, input: CardEffectInput) {
+  if (step === 'damage') damage(s, input.target!, input.amount);
+  else if (step === 'deaths') deaths(s);
+  else if (step === 'draw') draw(s, input.seat);
+  else heal(s, input.seat, input.amount);
+}
+export function startAttack(s: State, action: Extract<Action, { kind: 'attack' }>) {
+  const unit = s.heroes[s.active].board.find(u => u.id === action.unitId)!;
+  unit.ready = false;
+  emit(s, 'attack', s.active, { cardId: unit.card.id, definition: unit.card.definition, target: action.target });
+  const enemy = s.heroes[other(s.active)].board.find(u => u.id === action.target);
+  return { target: action.target, amount: unit.attack, counterTarget: unit.id, counterAmount: enemy ? enemy.attack : null };
+}
+export function attackDamage(s: State, input: ReturnType<typeof startAttack>) { damage(s, input.target, input.amount); }
+export function counterDamage(s: State, input: ReturnType<typeof startAttack>) {
+  if (input.counterAmount !== null) damage(s, input.counterTarget, input.counterAmount);
+}
+/** Synchronous compatibility entry shares the exact primitives with the effects. */
+export function apply(s: State, raw: Action) {
+  const action = validateAction(s, raw);
+  startAction(s);
+  if (action.kind === 'end') endTurn(s);
+  else if (action.kind === 'play') {
+    const card = payCard(s, action);
+    placeCard(s, card);
+    const definition = cardEffects[card.definition];
+    const input = { seat: s.active, target: action.target, amount: definition.amount };
+    for (const step of definition.steps) runCardStep(s, step, input);
   } else {
-    const unit = hero.board.find(u => u.id === action.unitId)!;
-    unit.ready = false;
-    emit(s, 'attack', seat, {
-      cardId: unit.card.id,
-      definition: unit.card.definition,
-      target: action.target
-    });
-    const enemy = s.heroes[other(seat)].board.find(u => u.id === action.target);
-    damage(s, action.target, unit.attack);
-    if (enemy) damage(s, unit.id, enemy.attack);
-    deaths(s);
+    const input = startAttack(s, action);
+    attackDamage(s, input); counterDamage(s, input); deaths(s);
   }
-  settle(s);
-  s.step++;
-  s.cause = null;
+  finishAction(s);
 }
 export function project(event: Event, player: Seat): {
   event: Event;

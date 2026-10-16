@@ -8,6 +8,7 @@ type FunctionInfo = {
   depth: number;
   stateDepths: number[];
   captures: Map<string, number[]>;
+  writes: Map<string, number[]>;
   children: Set<string>;
   scopeTransitions: boolean;
 };
@@ -30,12 +31,13 @@ export function lexicalCaptures() {
             }
             if (!t.isCallExpression(init) || !t.isMemberExpression(init.callee) || init.callee.property.name !== 'fun' || init.arguments.length !== 15) return;
             functions.set(id.name, { path: path.get('init'), depth: init.arguments[12].value,
-              stateDepths: [], captures: new Map(), children: new Set(), scopeTransitions: false });
+              stateDepths: [], captures: new Map(), writes: new Map(), children: new Set(), scopeTransitions: false });
           }});
-          const add = (info: FunctionInfo, path: number[]) => {
+          const add = (info: FunctionInfo, path: number[], write = false) => {
             const key = path.join('.');
-            if (info.captures.has(key)) return false;
-            info.captures.set(key, path); return true;
+            const paths = write ? info.writes : info.captures;
+            if (paths.has(key)) return false;
+            paths.set(key, path); return true;
           };
           function slot(node: any, name: string): number[] | null {
             if (t.isIdentifier(node, { name })) return [];
@@ -87,7 +89,19 @@ export function lexicalCaptures() {
                   if (!chain?.length || chain.at(-1) === 0 || info.depth === 0) return;
                   for (const depth of depthAt(path)) {
                     const target=depth-(chain.length-1);
-                    if(target<info.depth)add(info,[...Array(info.depth-1-target).fill(0),chain.at(-1)!]);
+                    if(target<info.depth){
+                      const capture=[...Array(info.depth-1-target).fill(0),chain.at(-1)!];
+                      add(info,capture);
+                      // A slot's object can be mutated without rebinding the slot.
+                      // Only assignment targets update the private Cell itself.
+                      let targetPath=path;
+                      while(targetPath.parentPath?.isArrayPattern() || targetPath.parentPath?.isObjectPattern() ||
+                        targetPath.parentPath?.isRestElement() || targetPath.parentPath?.isObjectProperty() && targetPath.parentPath.parentPath?.isObjectPattern() ||
+                        targetPath.parentPath?.isAssignmentPattern() && targetPath.key==='left')targetPath=targetPath.parentPath;
+                      const parent=targetPath.parentPath;
+                      if(parent?.isAssignmentExpression() && targetPath.key==='left' || parent?.isUpdateExpression() ||
+                        (parent?.isForInStatement() || parent?.isForOfStatement()) && targetPath.key==='left')add(info,capture,true);
+                    }
                   }
                 },
                 CallExpression(path: any) {
@@ -103,9 +117,12 @@ export function lexicalCaptures() {
             changed = false;
             for (const info of functions.values()) {
               if (!info.depth) continue;
-              for (const name of info.children) for (const path of functions.get(name)!.captures.values()) {
-                const target=functions.get(name)!.depth-path.length;
-                if(target<info.depth)changed=add(info,[...Array(info.depth-1-target).fill(0),path.at(-1)!])||changed;
+              for (const name of info.children) for (const write of [false,true]) {
+                const child=functions.get(name)!;
+                for (const path of (write?child.writes:child.captures).values()) {
+                  const target=child.depth-path.length;
+                  if(target<info.depth)changed=add(info,[...Array(info.depth-1-target).fill(0),path.at(-1)!],write)||changed;
+                }
               }
             }
           }
@@ -116,6 +133,19 @@ export function lexicalCaptures() {
               capturedAtAnyDepth.add(path.at(-1)!);
               if (functions.get(name)!.depth - path.length === info.depth) protectedSlots.add(path.at(-1)!);
             }
+            const writtenSlots = new Set<number>();
+            const writtenAtAnyDepth = new Set<number>();
+            for (const name of info.children) for (const path of functions.get(name)!.writes.values()) {
+              writtenAtAnyDepth.add(path.at(-1)!);
+              if (functions.get(name)!.depth - path.length === info.depth) writtenSlots.add(path.at(-1)!);
+            }
+            // The owning synchronous invocation finishes before any external
+            // snapshot. Only descendant writes can change these cells afterwards.
+            // Scope transitions reuse slot numbers at multiple depths: exclude
+            // every index written at any depth, even when that is conservative.
+            info.path.node.bearReadonlyCapturedLocals = synchronousLocals(info.path.node.arguments[8].value)
+              ? [...(info.scopeTransitions ? capturedAtAnyDepth : protectedSlots)]
+                .filter(slot=>!(info.scopeTransitions ? writtenAtAnyDepth : writtenSlots).has(slot)) : [];
             releaseDeadLocals(info.path, info.depth, info.stateDepths, protectedSlots);
             // A private compiler annotation consumed by staticFactories.
             info.path.node.bearCaptures = [...info.captures.values()];
@@ -134,7 +164,7 @@ export function lexicalCaptures() {
             // only those root slots require shared cell identities.
             const capturedLocals = !info.scopeTransitions ? [...protectedSlots] : undefined;
             info.path.node.bearCapturedLocals = capturedLocals;
-            const groupedLocals = info.scopeTransitions ? {cells: [...capturedAtAnyDepth], transient: synchronousLocals(info.path.node.arguments[8].value)} : undefined;
+            const groupedLocals = info.scopeTransitions ? {cells: [...capturedAtAnyDepth], transient: synchronousLocals(info.path.node.arguments[8].value), readonly: info.path.node.bearReadonlyCapturedLocals} : undefined;
             info.path.node.bearGroupedLocals = groupedLocals;
             for (const index of [9, 10, 11]) {
               const handler = info.path.get(`arguments.${index}`);

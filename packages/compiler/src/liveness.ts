@@ -94,38 +94,75 @@ export function releaseDeadLocals(registration: any, depth: number, stateDepths:
     for (const state of [...flow.states]) for (const dispatch of dispatches) merge(flow, dispatch(state));
     graph.set(branch.node.test.value, flow);
   }
+  // Direct synchronous helpers let the state machine keep an await inside an
+  // if branch. Follow only the lexical path to that await when selecting its
+  // exception state; a sibling branch's state assignments have not executed.
+  function awaitStates(last: any, branch: any): Set<number> | undefined {
+    const ancestors = [];
+    for (let path = last; path !== branch; path = path.parentPath) ancestors.push(path);
+    let states = new Set<number>([branch.node.test.value]);
+    const advance = (path: any) => {
+      const node = path.node;
+      const expression = t.isExpressionStatement(node) ? node.expression : node;
+      if (t.isAssignmentExpression(expression) && t.isMemberExpression(expression.left)
+        && t.isIdentifier(expression.left.object, {name: frame})
+        && t.isIdentifier(expression.left.property, {name: 'state'})) {
+        if (!t.isNumericLiteral(expression.right)) return false;
+        states = new Set([expression.right.value]);
+        return true;
+      }
+      const flow = inspect(path, frame, vars);
+      if (flow.unknown) return false;
+      for (const state of flow.states) states.add(state);
+      return true;
+    };
+    for (const child of ancestors.reverse()) {
+      const parent = child.parentPath;
+      if (parent.isSwitchCase() || parent.isBlockStatement()) {
+        const siblings = parent.get(parent.isSwitchCase() ? 'consequent' : 'body');
+        for (const sibling of siblings) {if (sibling === child) break; if (!advance(sibling)) return undefined;}
+      } else if (parent.isIfStatement()) {if (!advance(parent.get('test'))) return undefined;}
+      else return undefined;
+    }
+    return states;
+  }
   for (const branch of cases) {
-    const statements = branch.get('consequent');
-    const last = statements.at(-1), previous = statements.at(-2)?.node;
-    const call = last?.node.argument;
-    if (!last?.isReturnStatement() || !t.isCallExpression(call) || !t.isIdentifier(call.callee, {name: frame + 'awt'}) || call.arguments.length !== 1 || !t.isIdentifier(call.arguments[0], {name: parameter})) continue;
-    if (!t.isExpressionStatement(previous) || !t.isAssignmentExpression(previous.expression)) continue;
-    const {left, right} = previous.expression;
-    if (!t.isMemberExpression(left) || !t.isIdentifier(left.object, {name: frame}) || !t.isIdentifier(left.property, {name: 'goto'}) || !t.isNumericLiteral(right)) continue;
-    const live = new Set(protectedSlots), seen = new Set<number>(), pending = [right.value];
-    let unknown = false;
-    // Await rejection uses the suspended state's exception route, whereas normal
-    // fulfillment enters goto. Its catch/finally reads must survive too.
-    for (const state of graph.get(branch.node.test.value)!.states) for (const dispatch of dispatches) {
-      const flow = dispatch(state);
-      for (const slot of flow.slots) live.add(slot);
-      pending.push(...flow.edges);
-      unknown ||= flow.unknown;
+    const awaits: any[] = [];
+    branch.traverse({noScope:true, Function(path: any) {path.skip();}, ReturnStatement(path: any) {awaits.push(path);}});
+    for (const last of awaits) {
+      const previous = last.getPrevSibling()?.node;
+      const call = last?.node.argument;
+      if (!last?.isReturnStatement() || !t.isCallExpression(call) || !t.isIdentifier(call.callee, {name: frame + 'awt'}) || call.arguments.length !== 1 || !t.isIdentifier(call.arguments[0], {name: parameter})) continue;
+      if (!t.isExpressionStatement(previous) || !t.isAssignmentExpression(previous.expression)) continue;
+      const {left, right} = previous.expression;
+      if (!t.isMemberExpression(left) || !t.isIdentifier(left.object, {name: frame}) || !t.isIdentifier(left.property, {name: 'goto'}) || !t.isNumericLiteral(right)) continue;
+      const live = new Set(protectedSlots), seen = new Set<number>(), pending = [right.value];
+      let unknown = false;
+      // Await rejection uses the suspended state's exception route, whereas normal
+      // fulfillment enters goto. Its catch/finally reads must survive too.
+      const suspendedStates = awaitStates(last, branch);
+      if (!suspendedStates) continue;
+      for (const state of suspendedStates) for (const dispatch of dispatches) {
+        const flow = dispatch(state);
+        for (const slot of flow.slots) live.add(slot);
+        pending.push(...flow.edges);
+        unknown ||= flow.unknown;
+      }
+      while (!unknown && pending.length) {
+        const state = pending.pop()!;
+        if (seen.has(state)) continue;
+        seen.add(state);
+        const node = graph.get(state);
+        if (!node || node.unknown) { unknown = true; break; }
+        for (const slot of node.slots) live.add(slot);
+        pending.push(...node.edges);
+      }
+      if (unknown) continue;
+      const clears = [];
+      for (let slot = 1; slot < args[6].value; slot++) {
+        if (!live.has(slot)) clears.push(t.expressionStatement(t.assignmentExpression('=', t.memberExpression(t.identifier(vars), t.numericLiteral(slot), true), t.unaryExpression('void', t.numericLiteral(0)))));
+      }
+      last.insertBefore(clears);
     }
-    while (!unknown && pending.length) {
-      const state = pending.pop()!;
-      if (seen.has(state)) continue;
-      seen.add(state);
-      const node = graph.get(state);
-      if (!node || node.unknown) { unknown = true; break; }
-      for (const slot of node.slots) live.add(slot);
-      pending.push(...node.edges);
-    }
-    if (unknown) continue;
-    const clears = [];
-    for (let slot = 1; slot < args[6].value; slot++) {
-      if (!live.has(slot)) clears.push(t.expressionStatement(t.assignmentExpression('=', t.memberExpression(t.identifier(vars), t.numericLiteral(slot), true), t.unaryExpression('void', t.numericLiteral(0)))));
-    }
-    last.insertBefore(clears);
   }
 }

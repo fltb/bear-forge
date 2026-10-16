@@ -20,7 +20,16 @@ export function runtimeHelpers() {
 /** Run after syntax lowering and before continuation conversion. Temporary
  * references are plain data and therefore survive IO inside an expression. */
 export function guardedOperations(_api?: unknown, options: {allocations?: boolean; script?: boolean} = {}) {
-  const op = (name: string, args: any[]) => t.callExpression(t.memberExpression(t.identifier('__bearOps'), t.identifier(name)), args);
+  let fixedReadSite = 0;
+  const op = (name: string, args: any[]) => {
+    const call = t.callExpression(t.memberExpression(t.identifier('__bearOps'), t.identifier(name)), args);
+    // Runtime operations return synchronously, including calls into authored
+    // functions: async calls return a Future, while await is lowered separately.
+    // Keep guards and conversion inside the operation, without a second
+    // continuation and generic invocation around the helper itself.
+    call.extra = { bearSynchronousIntrinsic: true };
+    return call;
+  };
   // Author modules always use strict writes. Script mode is for the trusted
   // Test262 harness adapter, not an additional source-admission mode.
   const strict = (path: any) => t.booleanLiteral(!options.script || path.isInStrictMode());
@@ -32,7 +41,13 @@ export function guardedOperations(_api?: unknown, options: {allocations?: boolea
     return id;
   }
   function list(path: any, elements: any[]) {
-    if (!elements.some(element => t.isSpreadElement(element))) return t.arrayExpression(elements);
+    if (!elements.some(element => t.isSpreadElement(element))) {
+      // This private vector is created only after all argument expressions
+      // finish. Invoke/construct consume it synchronously and never expose it.
+      const vector = t.arrayExpression(elements);
+      vector.extra = {bearArgumentVector: true};
+      return vector;
+    }
     const result = temporary(path);
     return t.sequenceExpression([
       t.assignmentExpression('=', t.cloneNode(result), allocation(t.arrayExpression([]))),
@@ -42,6 +57,12 @@ export function guardedOperations(_api?: unknown, options: {allocations?: boolea
       t.cloneNode(result)
     ]);
   }
+  const alreadyAllocated = (path: any) => {
+    const parent = path.parentPath.node;
+    return t.isCallExpression(parent) && t.isMemberExpression(parent.callee)
+      && t.isIdentifier(parent.callee.object, {name: '__bearOps'})
+      && t.isIdentifier(parent.callee.property, {name: 'allocation'}) && parent.arguments[0] === path.node;
+  };
   return { visitor: {
     SwitchStatement: { exit(path: any) {
       if (path.node.extra?.bearSwitchBudgeted) return;
@@ -66,6 +87,7 @@ export function guardedOperations(_api?: unknown, options: {allocations?: boolea
       path.scope.crawl();
     },
     ArrayExpression: { exit(path: any) {
+      if (path.node.extra?.bearArgumentVector || alreadyAllocated(path)) return;
       if (!path.node.elements.some((element: any) => t.isSpreadElement(element))) {
         if (options.allocations) { path.replaceWith(allocation(path.node)); path.skip(); }
         return;
@@ -73,9 +95,11 @@ export function guardedOperations(_api?: unknown, options: {allocations?: boolea
       path.replaceWith(list(path, path.node.elements)); path.skip();
     } },
     ObjectExpression: { exit(path: any) {
+      if (alreadyAllocated(path)) return;
       if (options.allocations) { path.replaceWith(allocation(path.node)); path.skip(); }
     } },
     RegExpLiteral: { exit(path: any) {
+      if (alreadyAllocated(path)) return;
       if (options.allocations) { path.replaceWith(allocation(path.node)); path.skip(); }
     } },
     ObjectProperty: { exit(path: any) {
@@ -143,7 +167,9 @@ export function guardedOperations(_api?: unknown, options: {allocations?: boolea
     } },
     CallExpression: { exit(path: any) {
       const { callee, arguments: args } = path.node;
-      if (t.isMemberExpression(callee) && t.isIdentifier(callee.object, { name: '__bearOps' })) return;
+      if (t.isMemberExpression(callee) && t.isIdentifier(callee.object, { name: '__bearOps' })) {
+        path.node.extra = {...path.node.extra, bearSynchronousIntrinsic: true}; return;
+      }
       if (t.isMemberExpression(callee)) {
         const id = temporary(path);
         path.replaceWith(t.sequenceExpression([
@@ -161,7 +187,9 @@ export function guardedOperations(_api?: unknown, options: {allocations?: boolea
       const parent = path.parentPath;
       if (parent.isAssignmentExpression() && parent.node.left === path.node || parent.isUpdateExpression()
         || parent.isUnaryExpression({ operator: 'delete' }) || parent.isCallExpression() && parent.node.callee === path.node) return;
-      path.replaceWith(op('get', [reference(path.node)])); path.skip();
+      if (!path.node.computed) path.replaceWith(op('getFixed', [path.node.object, t.stringLiteral(path.node.property.name), t.numericLiteral(fixedReadSite++)]));
+      else path.replaceWith(op('get', [reference(path.node)]));
+      path.skip();
     } },
   } };
 }

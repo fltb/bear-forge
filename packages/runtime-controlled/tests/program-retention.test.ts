@@ -280,3 +280,29 @@ test('Program cache does not retain code after all execution handles are release
     {cwd:new URL('..',import.meta.url),encoding:'utf8',timeout:10000});
   assert.equal(child.status,0,child.stderr||child.error?.message||'GC child failed');
 });
+
+test('a missing-property cache does not retain a replaced mutable prototype', () => {
+  const source = `
+    import assert from 'node:assert/strict';
+    import {CowHeap} from './src/cow-heap.ts';
+    import {setImmediate} from 'node:timers/promises';
+    const invoke=(fn,self,args)=>Reflect.apply(fn,self,args);
+    function prepare(){
+      const heap=new CowHeap(),prototype=heap.create(),object=heap.create(prototype),cache={slots:[]};
+      assert.equal(heap.get(object,'missing',object,invoke,cache),undefined);
+      const reference=new WeakRef(prototype);
+      heap.setPrototypeOf(object,null);
+      return {heap,object,cache,reference};
+    }
+    const retained=prepare();
+    for(let attempt=0;attempt<20&&retained.reference.deref();attempt++){
+      await setImmediate();globalThis.gc();new Array(10000).fill(attempt);
+    }
+    assert.equal(retained.reference.deref(),undefined,'cached prototype remains strongly reachable');
+    assert.equal(retained.heap.get(retained.object,'missing',retained.object,invoke,retained.cache),undefined);
+  `;
+  const child = spawnSync(process.execPath,
+    ['--expose-gc', '--experimental-strip-types', '--input-type=module', '-e', source],
+    {cwd: new URL('..', import.meta.url), encoding: 'utf8', timeout: 10000});
+  assert.equal(child.status, 0, child.stderr || child.error?.message || 'Child failed');
+});

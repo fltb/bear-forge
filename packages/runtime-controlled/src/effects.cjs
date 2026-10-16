@@ -106,20 +106,24 @@ class Cell{
  // group's values are mutable and must be resolved through the active Context.
  #group;
  #index;
- constructor(value,group,index){
+ constructor(value,group,index,readonly=false){
   if(group){this.#group=group;this.#index=index;return;}
-  if(State.context.intrinsicSlots)intrinsicState.initialize(this,'LexicalCell',{value});
+  // The compiler proves that no descendant rebinds this slot. Its owner
+  // finishes synchronously before a snapshot; referenced objects remain COW.
+  if(readonly){Object.defineProperty(this,'value',{value,writable:true,enumerable:true,configurable:true});return;}
+  if(State.context.intrinsicSlots?.setIdentity)State.context.intrinsicSlots.setIdentity(this,value);
+  else if(State.context.intrinsicSlots)intrinsicState.initialize(this,'LexicalCell',{value});
   else Object.defineProperty(this,'value',{value,writable:true,enumerable:true,configurable:true});
  }
- get value(){return this.#group?intrinsicState.state(this.#group).slots.get(this.#index):intrinsicState.state(this).value;}
- set value(value){if(this.#group)intrinsicState.edit(this.#group).slots.set(this.#index,value);else intrinsicState.edit(this).value=value;}
+ get value(){if(this.#group)return intrinsicState.state(this.#group).slots.get(this.#index);const slots=State.context.intrinsicSlots;return slots.getIdentity?slots.getIdentity(this):intrinsicState.state(this).value;}
+ set value(value){if(this.#group)intrinsicState.edit(this.#group).slots.set(this.#index,value);else if(State.context.intrinsicSlots.writeIdentity)State.context.intrinsicSlots.writeIdentity(this,value);else intrinsicState.edit(this).value=value;}
 }
 S.regConstructor(Cell,{name:'lexical.cell',props:false,
  create(){return cell(undefined);},write(ctx,cell){const out={};out.v=ctx.step(cell.value,out,'v');return out;},
  readContent(ctx,data,cell){cell.value=ctx.step(data.v);}});
 // Cells are private runtime values with a fixed prototype and shared codec.
 // Only COW contexts register their values in the branch slot store.
-function cell(value){return new Cell(value);}
+function cell(value,readonly=false){return new Cell(value,undefined,undefined,readonly);}
 const scopeDescriptor=S.regDescriptor({name:'lexical.scope',props:false,
  create(){return environment([]);},
  write(ctx,values){const out={length:values.length,slots:[]};for(const key of Object.keys(values)){const pair=[+key,null];out.slots.push(pair);pair[1]=ctx.step(values[key],pair,1);}return out;},
@@ -146,7 +150,7 @@ function environment(values){
 function scope(values,uncapturedLocals=false){
  if(uncapturedLocals?.transient){
   for(let i=1;i<values.length;i++){
-   if(uncapturedLocals.cells.includes(i))values[i]=cell(values[i]);
+   if(uncapturedLocals.cells.includes(i))values[i]=cell(values[i],uncapturedLocals.readonly?.includes(i));
    else if(!uncapturedLocals.direct)values[i]={value:values[i]};
   }
   return values;
@@ -268,18 +272,19 @@ class ArrayIterator{
   if(typed&&!nativeValues.types.isTypedArray(array))throw new TypeError('Invalid typed array iterator receiver');
   intrinsicState.initialize(this,'ArrayIterator',{array:Object(array),index:0,mode,done:false,typed});
  }
- next(){const state=iteratorState(this,'ArrayIterator');if(state.done)return allocate({done:true,value:undefined});
+ next(){return arrayNext(this,allocate);}
+ [Symbol.iterator](){return this;}
+}
+function arrayNext(receiver,result){const state=iteratorState(receiver,'ArrayIterator');if(state.done)return result({done:true,value:undefined});
   const operations=State.context.operations;
   const number=state.typed?operations.invoke(typedLength,state.array,[])
    :operations.numericUnary('+',operations.get(operations.ref(state.array,'length')));
   const length=Number.isNaN(number)||number<=0?0:Math.min(Math.floor(number),Number.MAX_SAFE_INTEGER);
-  if(state.index>=length){state.done=true;state.array=null;return allocate({done:true,value:undefined});}
+  if(state.index>=length){state.done=true;state.array=null;return result({done:true,value:undefined});}
   const index=state.index++;
   const value=state.mode==='keys'?index:operations.get(operations.ref(state.array,String(index)));
-  return allocate({done:false,value:state.mode==='entries'?allocate([index,value]):value});
+  return result({done:false,value:state.mode==='entries'?allocate([index,value]):value});
  }
- [Symbol.iterator](){return this;}
-}
 intrinsicState.register(ArrayIterator,'ArrayIterator',undefined,true);
 class StringIterator{
  constructor(value){if(value===null||value===undefined||typeof value==='symbol')throw new TypeError('Invalid string iterator receiver');intrinsicState.initialize(this,'StringIterator',{text:String(value),index:0});}
@@ -359,20 +364,20 @@ function collectionState(table,isMap,mode){
  if(State.context.collectionMemory){State.context.collectionMemory.data(table,isMap,false,tick);return {table,isMap,mode,index:0,done:false};}
  return {table,isMap,mode,data:journal(table,isMap),index:0,done:false};
 }
-function collectionNext(receiver,kind){
+function collectionNext(receiver,kind,result=allocate){
  const state=iteratorState(receiver,kind);
- if(state.done)return allocate({done:true,value:undefined});
+ if(state.done)return result({done:true,value:undefined});
  if(State.context.collectionMemory){
   tick();const entry=State.context.collectionMemory.data(state.table,state.isMap,false,tick).next(state.index);
-  if(!entry){state.done=true;state.table=null;return allocate({done:true,value:undefined});}
+  if(!entry){state.done=true;state.table=null;return result({done:true,value:undefined});}
   state.index=entry.cursor;
-  return allocate({done:false,value:state.mode==='entries'?allocate([entry.key,entry.value]):state.mode==='keys'?entry.key:entry.value});
+  return result({done:false,value:state.mode==='entries'?allocate([entry.key,entry.value]):state.mode==='keys'?entry.key:entry.value});
  }
  while(state.index<state.data.entries.length){tick();const entry=state.data.entries[state.index++];if(!entry.live)continue;
   const key=entry.key,value=state.isMap?mapGet.call(state.table,key):key;
-  return allocate({done:false,value:state.mode==='entries'?allocate([key,value]):state.mode==='keys'?key:value});
+  return result({done:false,value:state.mode==='entries'?allocate([key,value]):state.mode==='keys'?key:value});
  }
- state.done=true;state.table=state.data=null;return allocate({done:true,value:undefined});
+ state.done=true;state.table=state.data=null;return result({done:true,value:undefined});
 }
 class MapIterator{
  constructor(table,mode){intrinsicState.initialize(this,'MapIterator',collectionState(table,true,mode));}
@@ -382,6 +387,8 @@ class SetIterator{
  constructor(table,mode){intrinsicState.initialize(this,'SetIterator',collectionState(table,false,mode));}
  next(){return collectionNext(this,'SetIterator');}
 }
+const arrayIteratorNext=ArrayIterator.prototype.next,mapIteratorNext=MapIterator.prototype.next,setIteratorNext=SetIterator.prototype.next;
+const transientIteratorResult=value=>value;
 intrinsicState.register(MapIterator,'MapIterator',undefined,true);
 intrinsicState.register(SetIterator,'SetIterator',undefined,true);
 for(const [type,isMap]of [[Map,true],[Set,false]]){
@@ -493,6 +500,11 @@ function tick(){
 function installOperations(createOperations){const operations=createOperations({
  record:(kind,fields)=>State.context.intrinsicSlots?new internalRecords[kind](fields):fields,
  allocate:nativeValues.registerObject,
+ iteratorResult(next,receiver){
+  if(next===arrayIteratorNext)return arrayNext(receiver,transientIteratorResult);
+  if(next===mapIteratorNext)return collectionNext(receiver,'MapIterator',transientIteratorResult);
+  if(next===setIteratorNext)return collectionNext(receiver,'SetIterator',transientIteratorResult);
+ },
  objects:()=>State.context.objects??State.context.memory?.objects,
  memory:()=>State.context.memory,
  global:()=>State.context.globals,

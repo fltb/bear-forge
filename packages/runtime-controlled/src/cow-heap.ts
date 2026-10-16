@@ -1,22 +1,24 @@
+import type {PropertyReadCache} from '../../runtime/src/operations.ts';
 import {CowIdentityStore} from './cow-identities.ts';
-import {CowStore} from './cow-store.ts';
+import {CowProperties, propertyPageWidth, dataProperty, writableProperty} from './cow-properties.ts';
 
 // Runtime bookkeeping must retain native ephemeron storage even when the
 // language global exposes the controlled WeakMap constructor.
 const NativeWeakMap = WeakMap;
+const NativeWeakRef = WeakRef;
 
-type StoredProperty = {key: PropertyKey; order: number; descriptor: PropertyDescriptor};
 type ObjectState = {
   array: boolean;
   prototype: object | null;
   extensible: boolean;
-  properties: CowStore<StoredProperty>;
+  properties: CowProperties;
   nextOrder: number;
 };
-type Identity = {id: number; keys: Map<PropertyKey, number>; nextKey: number; noNativePreparation: boolean};
-type Identities = {objects: WeakMap<object, Identity>; nextId: number};
+type Identity = {id: number; keys: Map<PropertyKey, number>; nextKey: number; noNativePreparation: boolean; prototype: boolean};
+type Identities = {objects: WeakMap<object, Identity>; nextId: number; nextEpoch: number};
 export type HeapInvoke = (fn: Function, receiver: unknown, args: unknown[]) => unknown;
 const arrayLimit = 2 ** 32 - 1;
+const cloneState = (state: ObjectState): ObjectState => ({...state, properties: state.properties.fork()});
 function arrayIndex(key: PropertyKey): number | undefined {
   if (typeof key !== 'string') return undefined;
   const index = Number(key);
@@ -35,7 +37,11 @@ export class CowHeap {
   private states = new CowIdentityStore<ObjectState>();
   private identities: Identities;
   private tick: () => void;
-  constructor(identities: Identities = {objects: new NativeWeakMap(), nextId: 0}, tick: () => void = () => {}) {
+  private prototypeEpoch = 0;
+  private changedPrototype(object: object): void {
+    if (this.identities.objects.get(object)!.prototype) this.prototypeEpoch = this.identities.nextEpoch++;
+  }
+  constructor(identities: Identities = {objects: new NativeWeakMap(), nextId: 0, nextEpoch: 1}, tick: () => void = () => {}) {
     this.identities = identities; this.tick = tick;
   }
 
@@ -57,8 +63,8 @@ export class CowHeap {
       // semantic check and allocates another object for every initial field.
       if (!descriptor) throw new TypeError('Missing property during registration');
       const slot = this.slot(identity, key, true)!;
-      const previous = state.properties.get(slot);
-      state.properties.set(slot, {key, order: previous?.order ?? state.nextOrder++, descriptor});
+      const previous = state.properties.layout(slot);
+      state.properties.define(slot, key, previous?.order ?? state.nextOrder++, descriptor);
       // The native shell supplies identity/brand, not a second object graph.
       // An obsolete baseline reference must not pin a value after the logical
       // property is replaced or deleted in every surviving branch.
@@ -83,10 +89,10 @@ export class CowHeap {
     return identity;
   }
   private allocate(identity: object, prototype: object | null, array: boolean): object {
-    const meta = {id: this.identities.nextId++, keys: new Map<PropertyKey, number>(), nextKey: 1, noNativePreparation: false};
+    const meta = {id: this.identities.nextId++, keys: new Map<PropertyKey, number>(), nextKey: 1, noNativePreparation: false, prototype: false};
     this.identities.objects.set(identity, meta);
     this.states.register(meta.id, identity);
-    this.states.set(meta.id, {array, prototype, extensible: true, properties: new CowStore(), nextOrder: 0}, identity);
+    this.states.set(meta.id, {array, prototype, extensible: true, properties: new CowProperties(), nextOrder: 0}, identity);
     return identity;
   }
 
@@ -110,8 +116,7 @@ export class CowHeap {
     return state;
   }
   private edit(object: object): ObjectState {
-    this.state(object);
-    return this.states.edit(this.identities.objects.get(object)!.id, state => ({...state, properties: state.properties.fork()}), object);
+    return this.states.edit(this.identities.objects.get(object)!.id, cloneState, object);
   }
   private slot(object: object, key: PropertyKey, create = false): number | undefined {
     const index = arrayIndex(key);
@@ -129,17 +134,17 @@ export class CowHeap {
   fork(): CowHeap {
     const branch = new CowHeap(this.identities, this.tick);
     branch.states = this.states.fork();
+    branch.prototypeEpoch = this.prototypeEpoch;
     return branch;
   }
   clear(): void { this.states.clear(); }
 
   private descriptor(object: object, key: PropertyKey): Readonly<PropertyDescriptor> | undefined {
     const state = this.state(object), slot = this.slot(object, key);
-    return slot === undefined ? undefined : state.properties.get(slot)?.descriptor;
+    return slot === undefined ? undefined : state.properties.descriptor(slot);
   }
   getOwnPropertyDescriptor(object: object, key: PropertyKey): PropertyDescriptor | undefined {
-    const descriptor = this.descriptor(object, key);
-    return descriptor && {...descriptor};
+    return this.descriptor(object, key);
   }
   ownKeys(object: object): (string | symbol)[] {
     const properties = [...this.state(object).properties.entries()].map(([, property]) => property);
@@ -163,6 +168,7 @@ export class CowHeap {
       if (++links % 16 === 0) this.tick();
     }
     this.edit(object).prototype = prototype;
+    this.changedPrototype(object);
     return true;
   }
 
@@ -213,8 +219,9 @@ export class CowHeap {
     if (!Reflect.defineProperty(probe, key, descriptor)) return false;
     const complete = Object.getOwnPropertyDescriptor(probe, key)!;
     const state = this.edit(object), slot = this.slot(object, key, true)!;
-    const old = state.properties.get(slot);
-    state.properties.set(slot, {key, order: old?.order ?? state.nextOrder++, descriptor: complete});
+    const old = state.properties.layout(slot);
+    state.properties.define(slot, key, old?.order ?? state.nextOrder++, complete);
+    if (!old) this.changedPrototype(object);
     return true;
   }
   deleteProperty(object: object, key: PropertyKey): boolean {
@@ -222,33 +229,89 @@ export class CowHeap {
     if (!previous) return true;
     if (!previous.configurable) return false;
     this.edit(object).properties.delete(this.slot(object, key)!);
+    this.changedPrototype(object);
     return true;
   }
 
-  get(object: object, key: PropertyKey, receiver: unknown, invoke: HeapInvoke): unknown {
-    this.state(object);
-    const descriptor = this.lookup(object, key);
+  get(object: object, key: PropertyKey, receiver: unknown, invoke: HeapInvoke, cache?: PropertyReadCache): unknown {
+    const state = this.state(object), slots = cache?.slots;
+    const missing = cache?.missing?.get(state.properties);
+    if (missing && missing.key === key && missing.version === state.properties.shapeVersion && missing.epoch === this.prototypeEpoch && (missing.prototype?.deref() ?? null) === state.prototype) return undefined;
+    if (slots) for (const hint of slots) {
+      const page = state.properties.read(hint), offset = hint % propertyPageWidth, layout = page?.layout[offset];
+      if (layout?.key !== key) continue;
+      const value = page!.values[offset];
+      return layout.flags & dataProperty ? value : value ? invoke(value as Function, receiver, []) : undefined;
+    }
+    const slot = this.slot(object, key);
+    if (slot !== undefined) {
+      const page = state.properties.read(slot), offset = slot % propertyPageWidth, layout = page?.layout[offset];
+      if (layout) {
+        if (slots && !slots.includes(slot)) {
+          if (slots.length < 4) slots.push(slot);
+          else slots[3] = slot;
+        }
+        const value = page!.values[offset];
+        return layout.flags & dataProperty ? value : value ? invoke(value as Function, receiver, []) : undefined;
+      }
+    }
+    const descriptor = this.lookup(object, key, state);
+    if (!descriptor && cache) {
+      let prototype = state.prototype;
+      while (prototype !== null) {
+        const meta = this.identities.objects.get(prototype);
+        const parent = meta && this.states.get(meta.id, prototype);
+        if (parent) {
+          // Every mutable link is registered before caching its absence. Later
+          // structural edits invalidate this heap's epoch without scanning it.
+          meta!.prototype = true;
+          prototype = parent.prototype;
+        } else if (cache.immutablePrototype?.(prototype)) prototype = Object.getPrototypeOf(prototype);
+        else break;
+      }
+      if (prototype === null) (cache.missing ??= new NativeWeakMap()).set(state.properties,
+        {key, version: state.properties.shapeVersion, epoch: this.prototypeEpoch,
+          prototype: state.prototype === null ? null : new NativeWeakRef(state.prototype)});
+    }
     return !descriptor ? undefined : 'value' in descriptor ? descriptor.value
       : descriptor.get ? invoke(descriptor.get, receiver, []) : undefined;
   }
-  private lookup(object: object, key: PropertyKey): PropertyDescriptor | undefined {
+  private lookup(object: object, key: PropertyKey, state: ObjectState | undefined): PropertyDescriptor | undefined {
     let links = 0;
     for (let current: object | null = object; current !== null;) {
-      const managed = this.has(current);
-      const descriptor = managed ? this.descriptor(current, key) : Object.getOwnPropertyDescriptor(current, key);
+      const slot = state ? this.slot(current, key) : undefined;
+      const descriptor = state ? (slot === undefined ? undefined : state.properties.descriptor(slot))
+        : Object.getOwnPropertyDescriptor(current, key);
       if (descriptor) return descriptor;
-      current = managed ? this.getPrototypeOf(current) : Object.getPrototypeOf(current);
-      if (current !== null && ++links % 16 === 0) this.tick();
+      current = state ? state.prototype : Object.getPrototypeOf(current);
+      if (current === null) break;
+      if (++links % 16 === 0) this.tick();
+      const meta = this.identities.objects.get(current);
+      state = meta && this.states.get(meta.id, current);
     }
     return undefined;
   }
   hasProperty(object: object, key: PropertyKey): boolean {
-    this.state(object);
-    return this.lookup(object, key) !== undefined;
+    const state = this.state(object), slot = this.slot(object, key);
+    if (slot !== undefined && state.properties.layout(slot)) return true;
+    return this.lookup(object, key, state) !== undefined;
   }
   set(object: object, key: PropertyKey, value: unknown, receiver: unknown, invoke: HeapInvoke, number?: (value: any) => number): boolean {
-    this.state(object);
-    const descriptor = this.lookup(object, key) ?? {value: undefined, writable: true, enumerable: true, configurable: true};
+    const initial = this.state(object);
+    // Own data writes with the normal receiver need neither prototype lookup
+    // nor another membership/descriptor/state lookup for the same identity.
+    if (receiver === object) {
+      const slot = this.slot(object, key);
+      const own = slot === undefined ? undefined : initial.properties.layout(slot);
+      if (own && own.flags & dataProperty) {
+        if (!(own.flags & writableProperty)) return false;
+        if (!(initial.array && key === 'length')) {
+          this.edit(object).properties.setValue(slot!, value);
+          return true;
+        }
+      }
+    }
+    const descriptor = this.lookup(object, key, initial) ?? {value: undefined, writable: true, enumerable: true, configurable: true};
     if (!('value' in descriptor)) {
       if (!descriptor.set) return false;
       invoke(descriptor.set, receiver, [value]);
@@ -261,13 +324,10 @@ export class CowHeap {
     const existing = managed ? this.descriptor(receiver, key) : Reflect.getOwnPropertyDescriptor(receiver, key);
     if (existing && (!('value' in existing) || !existing.writable)) return false;
     if (managed && existing && !(this.state(receiver).array && key === 'length')) {
-      // Ordinary Set on an existing writable data property changes only its
-      // value. All descriptor checks have already passed; array length keeps
-      // its conversion/truncation path below. Replace, never mutate, the
-      // descriptor because another branch may still reference it.
+      // Detach only the containing value page on its first shared write.
+      // Attribute layout stays shared and later writes reuse the owned page.
       const state = this.edit(receiver), slot = this.slot(receiver, key)!;
-      const property = state.properties.get(slot)!;
-      state.properties.set(slot, {...property, descriptor: {...existing, value}});
+      state.properties.setValue(slot, value);
       return true;
     }
     const replacement = existing ? {value} : {value, writable: true, enumerable: true, configurable: true};

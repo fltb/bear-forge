@@ -160,7 +160,7 @@ function emit<S, P extends { [K in keyof P]: PortShape }, R>(source: string, exp
           const name = args[1].value ?? '';
           const callee = args[2].value ?? null;
           const parameters = args[4].elements.map((x: any) => x.value);
-          const code = factorySource(name, callee, parameters, args[6].value, args[8].value, prefix, node.bearCaptures, node.bearUncapturedLocals, node.bearRawLocals, node.bearCapturedLocals, node.bearGroupedLocals);
+          const code = factorySource(name, callee, parameters, args[6].value, args[8].value, prefix, node.bearCaptures, node.bearUncapturedLocals, node.bearRawLocals, node.bearCapturedLocals, node.bearGroupedLocals, node.bearReadonlyCapturedLocals);
           // Factory text is already generated JavaScript. Parsing supplies its AST;
           // running a transform would create redundant traversal scopes for every
           // inserted factory and retain them throughout the outer transformation.

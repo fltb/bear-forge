@@ -1675,3 +1675,131 @@ test('literal initialization does not resolve generated intrinsics through autho
     return [value.answer,other.read(),Object];
   }`);
 });
+
+test('direct internal operations preserve suspended operands, coercion order and thrown reads',async()=>{
+  await compare(`async function run(_,io){
+    const trace=[];
+    const key={ [Symbol.toPrimitive](){trace.push('key');return 'x';} };
+    const object={get x(){trace.push('get');return 3;}};
+    const value=object[(trace.push('before'),await io.call({port:'step',input:0}),key)];
+    const equal=value===await io.call({port:'step',input:1});
+    const array=[await io.call({port:'step',input:2})];
+    const record={value:await io.call({port:'step',input:3})};
+    try{null[await io.call({port:'step',input:4})];}catch(error){trace.push(error.name);}
+    const converted={valueOf(){trace.push('convert');return 3;}};
+    const loose=converted==3;
+    await io.call({port:'step',input:5});
+    return [equal,loose,value,array[0],record.value,trace];
+  }`);
+});
+
+test('private call vectors and suspended spread builders preserve arguments across fork and restore',async()=>{
+  await compare(`async function run(_,io){
+    const trace=[];
+    function take(a,b,c){arguments[0]='changed';return [a,b,c,arguments[0]];}
+    class Box{constructor(a,b){this.values=[a,b];}}
+    const held={value:1};
+    const first=take((trace.push('first'),held),await io.call({port:'step',input:0}),
+      (held.value++,await io.call({port:'step',input:1})));
+    const second=take(...[held],await io.call({port:'step',input:2}),...[held.value]);
+    const box=new Box(await io.call({port:'step',input:3}),held);
+    await io.call({port:'step',input:4});
+    return [first,second,box.values,first[0]===second[0],box.values[1]===held,trace];
+  }`);
+});
+
+test('internal iterator results preserve cached next methods and exposed result isolation',async()=>{
+  await compare(`async function run(_,io){
+    const trace=[],cursor=[2,4].values(),next=cursor.next;
+    const exposed=[8,9].values().next();
+    exposed.value=await io.call({port:'step',input:0});
+    Object.defineProperty(cursor,'next',{configurable:true,get(){trace.push('get-next');return next;}});
+    for(const value of {[Symbol.iterator](){return cursor;}}){
+      trace.push(value);
+      Object.defineProperty(cursor,'next',{configurable:true,value(){trace.push('replacement');return {done:true};}});
+      await io.call({port:'step',input:value});
+    }
+    const pairs=[];
+    for(const pair of new Map([['a',1],['b',2]])){
+      pair[1]+=await io.call({port:'step',input:pair[1]});pairs.push(pair);
+    }
+    const values=[];for(const value of new Set([3,5]))values.push(value);
+    await io.call({port:'step',input:1});
+    return [exposed,trace,pairs,values];
+  }`);
+});
+
+test('synchronous captured bindings distinguish reads from transitive writes across branches', async () => {
+  await compare(`async function(_,io){
+    function create(seed){
+      let value=seed; const object={value:seed};
+      const read=()=>[value,object.value];
+      const nested=()=>()=>{value+=2;object.value+=3;return read();};
+      const before=read(); value+=1;
+      return {read,nested,before};
+    }
+    function readonly(seed){
+      let value=seed;
+      const read=()=>value;
+      const early=read(); value+=5;
+      const object={value};
+      return {read,early,object,mutate:delta=>object.value+=delta};
+    }
+    function parameter(value){
+      return {read:()=>value, make:()=>delta=>{value+=delta;return value;},
+        assign:next=>{[value]=[next];return value;},
+        iterate:next=>{for(value of [next,next+1]){}return value;}};
+    }
+    const param=parameter(100),change=param.make();
+    const a=create(1),b=create(10),c=readonly(20);
+    const write=a.nested();
+    const first=await io.call({port:'step',input:null});
+    const one=[write(),b.read(),c.read(),c.mutate(first),c.early,change(first),param.assign(first+10)];
+    const second=await io.call({port:'step',input:null});
+    return [one,write(),b.nested()(),c.mutate(second),a.before,c.read(),change(second),param.read(),param.iterate(second)];
+  }`);
+});
+
+test('captured loop scopes retain independent reads and transitive writes after synchronous return', async () => {
+  await compare(`async function(_,io){
+    function create(seed){
+      const reads=[],writes=[],objects=[];
+      for(let i=0;i<3;i++){
+        let value=seed+i; const object={value}; objects.push(object);
+        reads.push(()=>[i,value,object.value]);
+        writes.push(()=>delta=>{value+=delta;seed+=delta;object.value+=delta;});
+      }
+      return {reads,writes,objects,seed:()=>seed};
+    }
+    function readers(seed){
+      const reads=[];
+      for(let i=0;i<3;i++){const object={value:seed+i};reads.push(()=>[i,object]);}
+      return reads;
+    }
+    const a=create(5),b=create(50),read=readers(100),write=a.writes[1]();
+    const first=await io.call({port:'step',input:null});
+    write(first);read[0]()[1].value+=first;
+    const before=[a.reads.map(fn=>fn()),b.reads.map(fn=>fn()),read.map(fn=>fn())];
+    const second=await io.call({port:'step',input:null});
+    a.writes[0]()(second);read[1]()[1].value+=second;
+    return [before,a.reads.map(fn=>fn()),a.seed(),b.seed(),read.map(fn=>fn())];
+  }`);
+});
+
+test('fixed missing reads observe later insertion, accessors and prototype replacement across IO', async () => {
+  await compare(`async function(_,io){
+    const object={};const read=()=>object.optional;
+    const trace=[];
+    for(let i=0;i<4;i++)trace.push(read()===undefined);
+    const first=await io.call({port:'step',input:null});
+    object.optional=first;trace.push(read());
+    delete object.optional;trace.push(read()===undefined);
+    const second=await io.call({port:'step',input:null});
+    Object.defineProperty(object,'optional',{get(){return second*2;},configurable:true});
+    trace.push(read());delete object.optional;
+    const prototype={optional:second*3};Object.setPrototypeOf(object,prototype);
+    trace.push(read());delete prototype.optional;trace.push(read()===undefined);
+    prototype.optional=second*4;trace.push(read());
+    return trace;
+  }`);
+});

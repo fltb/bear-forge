@@ -181,3 +181,59 @@ test('JavaScript admission retains module early errors instead of using TypeScri
   }
   admitSource('const x=1;export {x};', 'module.js');
 });
+
+test('only synchronous captures without descendant reassignments use readonly cells', () => {
+  const artifact=JSON.parse(new TextDecoder().decode(compileJavaScript(`
+    export function readFactory(value){return ()=>value;}
+    export function writeFactory(value){return ()=>()=>++value;}
+    export async function asyncFactory(value){await 0;return ()=>value;}
+    export function loopFactory(value){const reads=[];for(let i=0;i<3;i++)reads.push(()=>[value,i]);return reads;}
+  `).content));
+  const modes=new Map<string,any>();
+  transformSync(artifact.code,{configFile:false,babelrc:false,plugins:[()=>({visitor:{
+    CallExpression(path:any){
+      const node=path.node;
+      if(node.callee.type!=='MemberExpression'||node.callee.property.name!=='fun'||node.arguments.length!==16)return;
+      const name=node.arguments[1].value;
+      path.get('arguments.14').traverse({VariableDeclarator(local:any){
+        if(!local.node.id.name?.endsWith('locals'))return;
+        const init=local.node.init;
+        if(init.type==='ObjectExpression')modes.set(name,Object.fromEntries(init.properties.map((p:any)=>[
+          p.key.value??p.key.name,p.value.type==='ArrayExpression'?p.value.elements.map((e:any)=>e.value):p.value.value
+        ])));
+        else modes.set(name,null);
+      }});
+    }
+  }})]});
+  assert.deepEqual(modes.get('readFactory').readonly,[1]);
+  assert.deepEqual(modes.get('writeFactory').readonly,[]);
+  assert.equal(modes.get('asyncFactory')?.readonly,undefined);
+  assert.equal(modes.get('loopFactory').direct,false);
+  assert.ok(modes.get('loopFactory').readonly.length>0);
+});
+
+test('proven synchronous nonescaping locals use a transient frame and direct value slots', () => {
+  const artifact=JSON.parse(new TextDecoder().decode(compileJavaScript(`
+    export function syncPure(input){let total=input+1;total+=2;return total;}
+  `).content));
+  let scopeCalls=0, bindingRecords=0, transient=false, direct=false, found=false;
+  transformSync(artifact.code,{configFile:false,babelrc:false,plugins:[()=>({visitor:{
+    CallExpression(path:any){
+      const node=path.node;
+      if(node.callee.type!=='MemberExpression'||node.callee.property.name!=='fun'||node.arguments[1]?.value!=='syncPure')return;
+      found=true;
+      path.get('arguments.9').traverse({CallExpression(call:any){
+        if(call.node.callee.type==='MemberExpression'&&call.node.callee.property.name==='lexicalCreate')bindingRecords++;
+      }});
+      path.get('arguments.14').traverse({
+        CallExpression(call:any){
+          const n=call.node;
+          if(n.callee.type==='MemberExpression'&&n.callee.property.name==='scope')scopeCalls++;
+          if(n.callee.type==='Identifier'&&n.callee.name.endsWith('frame'))transient=n.arguments[2]?.value===true;
+        },
+        AssignmentExpression(assignment:any){const n=assignment.node;if(n.left.type==='MemberExpression'&&n.left.property.name==='$'&&n.right.type==='ArrayExpression')direct=true;}
+      });
+    }
+  }})]});
+  assert.ok(found);assert.ok(transient);assert.ok(direct);assert.equal(scopeCalls,0);assert.equal(bindingRecords,0);
+});

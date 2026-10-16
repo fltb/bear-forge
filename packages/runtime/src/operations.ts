@@ -29,9 +29,14 @@ export type MemoryStorage = {
 };
 /** Internal storage adapter; absent for the native backend. It operates on
  * stable identities, and must never expose branch backing objects to authors. */
+export type PropertyReadCache = {
+  slots: number[];
+  immutablePrototype?: (value: object) => boolean;
+  missing?: WeakMap<object, {key: PropertyKey; version: number; epoch: number; prototype: WeakRef<object> | null}>;
+};
 export type ObjectStorage = {
   has(object: object): boolean;
-  get(object: object, key: PropertyKey, receiver: unknown, invoke: (fn: Function, receiver: unknown, args: unknown[]) => unknown): unknown;
+  get(object: object, key: PropertyKey, receiver: unknown, invoke: (fn: Function, receiver: unknown, args: unknown[]) => unknown, cache?: PropertyReadCache): unknown;
   set(object: object, key: PropertyKey, value: unknown, receiver: unknown, invoke: (fn: Function, receiver: unknown, args: unknown[]) => unknown, number?: (value: any) => number): boolean;
   hasProperty(object: object, key: PropertyKey): boolean;
   deleteProperty(object: object, key: PropertyKey): boolean;
@@ -58,6 +63,7 @@ export type OperationHooks = {
   bind?: (fn: Function, self: unknown, args: unknown[]) => Function;
   binding?: (fn: Function) => Binding | undefined;
   compiled?: (fn: Function) => boolean;
+  iteratorResult?: (next: Function, receiver: object) => {done: boolean; value: unknown} | undefined;
   functionSource?: (fn: Function) => string | undefined;
   regexpStringIterator?: (matcher: object, text: string, global: boolean, fullUnicode: boolean) => object;
 };
@@ -2404,8 +2410,19 @@ export function createOperations(hooks: OperationHooks = {}) {
     // Failed next/done/value operations finish this record: destructuring does
     // not subsequently close it. Defaults and bindings run after this returns.
     record.done = true;
-    if (typeof record.next !== 'function') invalidIteratorNext(record.next);
-    const result = iteratorStageObject(invoke(record.next, record.iterator, []), 'next');
+    const next = record.next;
+    if (typeof next !== 'function') invalidIteratorNext(next);
+    // Exact runtime-owned iterators can produce a private, immediately consumed
+    // result. Authored next methods and exposed next() results keep the general
+    // operation path, including their getters and branch-owned result objects.
+    const direct = hooks.iteratorResult?.(next, record.iterator);
+    if (direct !== undefined) {
+      if (direct.done) return undefined;
+      const value = readValue ? admittedValue(direct.value) : undefined;
+      record.done = false;
+      return value;
+    }
+    const result = iteratorStageObject(invoke(next, record.iterator, []), 'next');
     if (get(ref(result, 'done'))) return undefined;
     const value = readValue ? get(ref(result, 'value')) : undefined;
     record.done = false;
@@ -2529,7 +2546,18 @@ export function createOperations(hooks: OperationHooks = {}) {
       if (cursor !== null && ++links % 16 === 0) hooks.tick?.();
     }
   }
-  function get(reference: Reference): any {
+  // Hints contain only numeric positions, never object identities or values.
+  // The heap validates the current branch's property key before using a hint.
+  const fixedReadSlots: {key: PropertyKey; cache: PropertyReadCache}[] = [];
+  // Object.prototype is already protected by writable(); arbitrary native or
+  // authored prototype objects do not acquire an immutability exemption.
+  const immutablePrototype = (value: object) => value === Object.prototype;
+  function getFixed(object: unknown, key: string, site: number): any {
+    let entry = fixedReadSlots[site];
+    if (!entry || entry.key !== key) fixedReadSlots[site] = entry = {key, cache: {slots: [], immutablePrototype}};
+    return get(memberReference(object, key), entry.cache);
+  }
+  function get(reference: Reference, cache?: PropertyReadCache): any {
     reference = resolveReference(reference);
     const indexed = memoryIndex(reference.object, reference.key);
     if (indexed) return admittedValue(indexed.storage.readElement(reference.object, indexed.index));
@@ -2543,7 +2571,7 @@ export function createOperations(hooks: OperationHooks = {}) {
     }
     const storage = objectStorage(reference.object);
     if (storage) return admittedValue(storage.get(reference.object, reference.key, reference.object,
-      (fn, receiver, args) => { accessor(fn, 'get'); return invoke(fn, receiver, args); }));
+      (fn, receiver, args) => { accessor(fn, 'get'); return invoke(fn, receiver, args); }, cache));
     const debugStack=defaultDebugStack(reference.object,reference.key);
     if(debugStack && writtenDebugStacks.has(debugStack))return admittedValue(writtenDebugStacks.get(debugStack));
     chargePropertyLookup(reference.object,reference.key);
@@ -2744,7 +2772,7 @@ export function createOperations(hooks: OperationHooks = {}) {
     set(reference, result.value,strict);
     return prefix ? result.value : result.old;
   }
-  const operations = Object.freeze({ originalNewTarget, forInKeys, allocation, globalRead: globalEnvironment.readName, globalTarget, globalReferenceRead, globalReferenceWrite, globalReference: globalEnvironment.reference, globalGet: globalEnvironment.get, globalSet: globalEnvironment.set, globalTypeof: globalEnvironment.typeOf, nativeEntry, rememberSource, rememberObjectSources, numericUnary, numericBinary, comparisonValue, compare, has, add, collectionInitialize, moduleNamespace: hooks.namespace ?? createNamespaceRegistry().create, lexicalReference, lexicalReferenceRead, lexicalReferenceWrite, immutableWrite, immutableUpdate, lexicalCreate, lexicalInitialize, lexicalRead, lexicalWrite, lexicalCopy, lexicalUpdate, memberReference, ref, get, set, remove, update, increment, invoke, instanceOf, propertyKey, toPrimitive, objectRest, objectSpread, literalProperty, literalPrototype, defineMethod, nameFunction, nameClass, nameMethod, classCall, arrayAppend, arrayHole, arraySpread, iteratorOpen, consumerIteratorOpen, iteratorStep, iteratorClose, iteratorPush, iteratorFinish, iteratorDrain, iteratorRest, uninitializedBinding, uninitializedCell, superConstructor, superConstruct, superProperty, superApply, isConstructor, construct: create });
+  const operations = Object.freeze({ originalNewTarget, forInKeys, allocation, globalRead: globalEnvironment.readName, globalTarget, globalReferenceRead, globalReferenceWrite, globalReference: globalEnvironment.reference, globalGet: globalEnvironment.get, globalSet: globalEnvironment.set, globalTypeof: globalEnvironment.typeOf, nativeEntry, rememberSource, rememberObjectSources, numericUnary, numericBinary, comparisonValue, compare, has, add, collectionInitialize, moduleNamespace: hooks.namespace ?? createNamespaceRegistry().create, lexicalReference, lexicalReferenceRead, lexicalReferenceWrite, immutableWrite, immutableUpdate, lexicalCreate, lexicalInitialize, lexicalRead, lexicalWrite, lexicalCopy, lexicalUpdate, memberReference, ref, get, getFixed, set, remove, update, increment, invoke, instanceOf, propertyKey, toPrimitive, objectRest, objectSpread, literalProperty, literalPrototype, defineMethod, nameFunction, nameClass, nameMethod, classCall, arrayAppend, arrayHole, arraySpread, iteratorOpen, consumerIteratorOpen, iteratorStep, iteratorClose, iteratorPush, iteratorFinish, iteratorDrain, iteratorRest, uninitializedBinding, uninitializedCell, superConstructor, superConstruct, superProperty, superApply, isConstructor, construct: create });
   protectIntrinsics(operations);
   return operations;
 }

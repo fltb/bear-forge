@@ -253,6 +253,7 @@ function fun(name, origName, calleeName, parentConstr, params, localsNum, varsNu
   for (const [flags, loc, scope] of states) {
     const [line, column, endLine, endColumn] = location(loc);
     const id = memo.length;
+    let resolvedScope;
     const brk = {
       flags,
       id,
@@ -261,7 +262,11 @@ function fun(name, origName, calleeName, parentConstr, params, localsNum, varsNu
       column,
       endLine,
       endColumn,
-      scope: scope ? buildScope(scope, evalContext) : evalContext,
+      // Debug/eval metadata is static Program data, not an execution operand.
+      // Preserve the complete flattened view, but materialize it only on read.
+      get scope() {
+        return resolvedScope || (resolvedScope = scope ? buildScope(scope, evalContext) : evalContext);
+      },
       scopeDepth: scope[2],
       location: strLoc(line, column, endLine, endColumn),
       breakpoint: null,

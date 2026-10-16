@@ -6,8 +6,8 @@ module.exports=function intrinsicState(S,State){
  let nextId=0;
  const storage=()=>State?.context.intrinsicSlots;
  function identity(value){let id=identities.get(value);if(id===undefined){id=nextId++;identities.set(value,id);}return id;}
- function record(value){const slots=storage();const id=identities.get(value);return slots?(id===undefined?undefined:slots.get(id,value)):records.get(value);}
- function put(value,payload){const slots=storage();if(slots){const id=identity(value);slots.register?.(id,value);slots.set(id,payload,value);}else records.set(value,payload);}
+ function record(value){const slots=storage();if(slots?.getIdentity)return slots.getIdentity(value);const id=identities.get(value);return slots?(id===undefined?undefined:slots.get(id,value)):records.get(value);}
+ function put(value,payload){const slots=storage();if(slots?.setIdentity){slots.setIdentity(value,payload);return;}if(slots){const id=identity(value);slots.register?.(id,value);slots.set(id,payload,value);}else records.set(value,payload);}
 
  function objectHeap(){return State?.context.objects??State?.context.memory?.objects;}
  function propertyStorage(value){const heap=objectHeap();return heap?.has(value)?heap:undefined;}
@@ -39,10 +39,12 @@ module.exports=function intrinsicState(S,State){
  }
  // Runtime callers explicitly acquire a writable payload. Registered clone
  // functions may fork nested persistent roots, never recursively copy data.
+ const clonePayload=entry=>({kind:entry.kind,state:cloners.has(entry.kind)?cloners.get(entry.kind)(entry.state):{...entry.state}});
  function edit(value){
+  const direct=storage();if(direct?.editIdentity)return direct.editIdentity(value,clonePayload).state;
   const payload=record(value);if(!payload)throw new TypeError('Incompatible intrinsic receiver');
   const slots=storage();
-  return slots?slots.edit(identities.get(value),entry=>({kind:entry.kind,state:cloners.has(entry.kind)?cloners.get(entry.kind)(entry.state):{...entry.state}}),value).state:payload.state;
+  return slots?slots.edit(identities.get(value),clonePayload,value).state:payload.state;
  }
  return {initialize,state,edit,register,cloneWith:(kind,clone)=>cloners.set(kind,clone),has:value=>record(value)!==undefined,record,create,
   install(value,payload){const previous=record(value);if(!previous)throw new TypeError('Incompatible intrinsic receiver');put(value,{kind:previous.kind,state:payload});}};

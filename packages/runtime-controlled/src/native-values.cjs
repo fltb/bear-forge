@@ -64,6 +64,10 @@ module.exports=function nativeValues(S,namespaces,State,Persist,tick,intrinsicSt
   if(!isError(value)){heap?.nativePreparationUnneeded(value,true);return;}
   const d=Object.getOwnPropertyDescriptor(value,'stack');
   if(d&&d.get===stack?.get&&d.set===stack?.set&&typeof stack.set==='function'){
+   // Native debug frames can retain constructor closures and their old
+   // prototypes. The controlled accessor rejects this non-resumable stack,
+   // so discard its native backing before installing the logical accessor.
+   Reflect.apply(stack.set,value,[undefined]);
    Object.defineProperty(value,'stack',{...d,get:stackGet,set:stackSet});
   }
   registerObject(value);

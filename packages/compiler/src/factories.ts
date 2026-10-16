@@ -5,7 +5,7 @@ export function synchronousLocals(flags: number): boolean {
 }
 /** Static closure factories for EffectfulJS v2. Upstream constructs these with
  * Function at registration time; ours emits them into the compilation artifact. */
-export function factorySource(name: string, callee: string | null, params: string[], vars: number, flags: number, prefix: string, captures: number[][] = [], uncapturedLocals = false, rawLocals = false, capturedLocals?: number[], groupedLocals?: {cells: number[]}): string {
+export function factorySource(name: string, callee: string | null, params: string[], vars: number, flags: number, prefix: string, captures: number[][] = [], uncapturedLocals = false, rawLocals = false, capturedLocals?: number[], groupedLocals?: {cells: number[]}, readonlyCapturedLocals: number[] = []): string {
   const functionName = /^[a-zA-Z_$][\w$]*$/.test(name) && !params.includes(name) ? name : prefix + name.replace(/\W/g, '_');
   const f = functionName || prefix + 'anonymous';
   const values = [`${prefix}.$`, ...(callee ? [f] : []), ...params];
@@ -14,7 +14,7 @@ export function factorySource(name: string, callee: string | null, params: strin
   // closures retain independent captured cells, never these temporary slots.
   const transient = synchronousLocals(flags) && (rawLocals || capturedLocals !== undefined || groupedLocals !== undefined);
   const localValues = rawLocals && transient;
-  const localMode = transient ? {cells: capturedLocals ?? groupedLocals?.cells ?? [], transient: true, direct: !groupedLocals}
+  const localMode = transient ? {cells: capturedLocals ?? groupedLocals?.cells ?? [], transient: true, direct: !groupedLocals, readonly: readonlyCapturedLocals}
     : capturedLocals ?? groupedLocals ?? null;
   const head = [`${prefix}.$=${localValues ? `[${values.join(',')}]` : `${prefix}M.scope([${values.join(',')}],${rawLocals ? '"values"' : capturedLocals || groupedLocals ? prefix + 'locals' : uncapturedLocals})`};`];
   if (flags & 8) head.push(`${prefix}.self=${flags & 4 ? prefix + 'x[0].self' : 'this'};`);

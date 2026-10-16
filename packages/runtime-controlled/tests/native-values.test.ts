@@ -316,3 +316,23 @@ test('native preparation checks current prototypes and keeps forked collection s
     enter(parent,()=>assert.equal(ops.invoke(native.Map.prototype.get,values.map,[1]),7));
   } finally {parent.dispose();sibling?.dispose();}
 });
+
+
+test('object preparation without COW storage still checks changed prototypes and native collections',async()=>{
+  const {Script}=await import('node:vm');
+  const execution=new ProgramExecution(decode(compileJavaScript('export const program={schemas:{},async run(_,io){await io.call({port:"step",input:null});return null;}};').content));
+  execution.start(null);
+  const loaded=execution.loaded,ops=loaded.effects.operations,native=loaded.effects.globals;
+  const values=new Script('({ordinary:{},map:new Map([[1,2]]),cursorPrototype:Object.getPrototypeOf([][Symbol.iterator]())})').runInContext(loaded.realm);
+  const context={...(execution as any).context,objects:undefined,memory:undefined,intrinsicSlots:undefined,collectionMemory:undefined,weakMemory:undefined};
+  try {loaded.enter(context,()=>{
+    // The raw backend uses an explicit weak index instead of collectionMemory.
+    loaded.effects.State.context.collections=new loaded.effects.WeakMap();
+    for(let i=0;i<3;i++)assert.equal(ops.invoke(native.Object.prototype.valueOf,values.ordinary,[]),values.ordinary);
+    Object.setPrototypeOf(values.ordinary,values.cursorPrototype);
+    assert.throws(()=>ops.invoke(native.Object.prototype.valueOf,values.ordinary,[]),/Unsupported native iterator/);
+    for(let i=0;i<3;i++)ops.invoke(native.Object.prototype.valueOf,values.map,[]);
+    ops.invoke(native.Map.prototype.set,values.map,[1,7]);
+    assert.equal(ops.invoke(native.Map.prototype.get,values.map,[1]),7);
+  });}finally{execution.dispose();}
+});

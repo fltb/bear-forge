@@ -126,12 +126,14 @@ test('large object local writes share untouched property paths across forks', ()
   const parent = new CowHeap(), object = parent.create();
   for (let index = 0; index < 10000; index++) parent.defineProperty(object, String(index), data(index));
   const child = parent.fork();
-  const meta = (parent as any).identities.objects.get(object);
-  const before = (parent as any).states.get(meta.id, object);
+  const before = (parent as any).states.getIdentity(object);
   child.set(object, '1', -1, object, invoke);
-  const after = (child as any).states.get(meta.id, object);
+  const after = (child as any).states.getIdentity(object);
   assert.notStrictEqual(before.properties, after.properties);
-  assert.strictEqual(before.properties.root.slots[1], after.properties.root.slots[1]);
+  assert.strictEqual(before.properties.pages.root.slots[1], after.properties.pages.root.slots[1]);
+  assert.notStrictEqual(before.properties.read(2), after.properties.read(2));
+  assert.strictEqual(before.properties.read(2).layout, after.properties.read(2).layout);
+  assert.strictEqual(before.properties.read(64), after.properties.read(64));
   assert.equal(parent.get(object, '1', object, invoke), 1);
   assert.equal(child.get(object, '1', object, invoke), -1);
   assert.equal(child.get(object, '9999', object, invoke), 9999);
@@ -266,8 +268,8 @@ test('COW JSON and legacy prototype reflection observe branch state rather than 
 test('small named objects use a shallow index without collisions with array indices',()=>{
   const heap=new CowHeap(),object=heap.create(),symbol=Symbol('key');
   heap.defineProperty(object,'value',data(1));heap.defineProperty(object,'other',data(2));
-  const id=(heap as any).identities.objects.get(object).id;
-  assert.equal((heap as any).states.get(id,object).properties.height,0);
+  assert.equal((heap as any).states.getIdentity(object).properties.pages,undefined);
+  assert.ok((heap as any).states.getIdentity(object).properties.read(1));
   heap.defineProperty(object,'0',data(3));heap.defineProperty(object,'1',data(4));heap.defineProperty(object,symbol,data(5));
   heap.defineProperty(object,'4294967294',data(6));heap.defineProperty(object,'4294967295',data(7));
   const branch=heap.fork();branch.set(object,'value',8,object,invoke);branch.deleteProperty(object,'1');
@@ -296,4 +298,91 @@ test('fresh registration copies complete descriptors without executing accessors
     assert.ok(heap.getOwnPropertyDescriptor(object,'hidden'));assert.equal(child.deleteProperty(object,'8'),false);
     assert.equal(child.defineProperty(object,'added',data(5)),extensible);
   }
+});
+
+
+test('repeated owned writes detach again after a later fork without changing descriptor attributes', () => {
+  const parent = new CowHeap(), object = parent.create();
+  parent.defineProperty(object, 'value', {value: 0, writable: true, enumerable: false, configurable: false});
+  const first = parent.fork();
+  for (let i = 1; i <= 20; i++) parent.set(object, 'value', i, object, invoke);
+  const second = parent.fork();
+  for (let i = 21; i <= 40; i++) parent.set(object, 'value', i, object, invoke);
+  for (let i = 41; i <= 60; i++) second.set(object, 'value', i, object, invoke);
+  assert.equal(first.get(object, 'value', object, invoke), 0);
+  assert.equal(parent.get(object, 'value', object, invoke), 40);
+  assert.deepEqual(second.getOwnPropertyDescriptor(object, 'value'),
+    {value: 60, writable: true, enumerable: false, configurable: false});
+  first.set(object, 'value', 100, object, invoke);
+  assert.equal(parent.get(object, 'value', object, invoke), 40);
+  assert.equal(second.get(object, 'value', object, invoke), 60);
+});
+
+test('fixed read hints bypass name lookup and validate layouts after branch mutations', () => {
+  const parent = new CowHeap(), object = parent.create(), other = parent.create(), prototype = parent.create();
+  parent.defineProperty(object, 'value', data(1));
+  parent.defineProperty(other, 'different', data(2)); parent.defineProperty(other, 'value', data(3));
+  parent.defineProperty(prototype, 'value', data(99)); parent.setPrototypeOf(object, prototype);
+  const cache = {slots: [] as number[]};
+  const hints = cache.slots;
+  assert.equal(parent.get(object, 'value', object, invoke, cache), 1);
+  assert.equal(parent.get(other, 'value', other, invoke, cache), 3);
+  assert.equal(hints.length, 2);
+  const child = parent.fork();
+  child.set(object, 'value', 4, object, invoke);
+  child.defineProperty(other, 'value', {get() {return this === other ? 5 : -1;}, configurable: true});
+  const original = (child as any).slot;
+  (child as any).slot = () => {throw new Error('A cached own read must not resolve a name');};
+  assert.equal(child.get(object, 'value', object, invoke, cache), 4);
+  assert.equal(child.get(other, 'value', other, invoke, cache), 5);
+  (child as any).slot = original;
+  child.deleteProperty(object, 'value');
+  assert.equal(child.get(object, 'value', object, invoke, cache), 99, 'deleted own fields fall back to the current prototype');
+  assert.equal(parent.get(object, 'value', object, invoke, cache), 1);
+  child.defineProperty(object, 'value', data(undefined));
+  assert.equal(child.get(object, 'value', object, invoke, cache), undefined);
+  assert.ok(hints.every(value => typeof value === 'number'), 'hints never retain author values');
+});
+
+test('missing fixed fields invalidate on insertion, prototype changes and forked layouts', () => {
+  const parent = new CowHeap(), object = parent.create(), cache = {slots: [] as number[]};
+  assert.equal(parent.get(object, 'optional', object, invoke, cache), undefined);
+  const original = (parent as any).slot;
+  (parent as any).slot = () => {throw new Error('A cached absence must not resolve a name');};
+  assert.equal(parent.get(object, 'optional', object, invoke, cache), undefined);
+  (parent as any).slot = original;
+  parent.defineProperty(object, 'different', data(7));
+  assert.equal(parent.get(object, 'optional', object, invoke, cache), undefined);
+  assert.equal(parent.get(object, 'different', object, invoke, cache), 7, 'absence entries also validate the requested key');
+  const child = parent.fork();
+  child.defineProperty(object, 'optional', data(4));
+  assert.equal(child.get(object, 'optional', object, invoke, cache), 4);
+  assert.equal(parent.get(object, 'optional', object, invoke, cache), undefined);
+  const prototype = parent.create(); parent.defineProperty(prototype, 'optional', data(5));
+  parent.setPrototypeOf(object, prototype);
+  assert.equal(parent.get(object, 'optional', object, invoke, cache), 5);
+  parent.deleteProperty(prototype, 'optional');
+  assert.equal(parent.get(object, 'optional', object, invoke, cache), undefined);
+  parent.defineProperty(prototype, 'optional', data(6));
+  assert.equal(parent.get(object, 'optional', object, invoke, cache), 6, 'prototype changes invalidate cached misses');
+});
+
+test('cached absence on mutable prototypes invalidates independently in sibling branches', () => {
+  const parent = new CowHeap(), prototype = parent.create(), object = parent.create(prototype);
+  const cache = {slots: [] as number[]};
+  assert.equal(parent.get(object, 'field', object, invoke, cache), undefined);
+  const child = parent.fork(), sibling = parent.fork();
+  parent.defineProperty(prototype, 'field', data(1));
+  child.defineProperty(prototype, 'other', data(2));
+  assert.equal(child.get(object, 'field', object, invoke, cache), undefined);
+  assert.equal(parent.get(object, 'field', object, invoke, cache), 1);
+  assert.equal(sibling.get(object, 'field', object, invoke, cache), undefined);
+  const ancestor = child.create(); child.defineProperty(ancestor, 'field', data(3));
+  child.setPrototypeOf(prototype, ancestor);
+  assert.equal(child.get(object, 'field', object, invoke, cache), 3);
+  assert.equal(sibling.get(object, 'field', object, invoke, cache), undefined);
+  child.deleteProperty(ancestor, 'field');
+  assert.equal(child.get(object, 'field', object, invoke, cache), undefined);
+  child.defineProperty(ancestor, 'field', data(4));
+  assert.equal(child.get(object, 'field', object, invoke, cache), 4);
 });

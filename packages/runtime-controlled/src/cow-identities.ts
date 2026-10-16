@@ -5,6 +5,7 @@ const NativeWeakRef = WeakRef;
 const NativeFinalizationRegistry = FinalizationRegistry;
 type Versions<T> = {id: number; values: WeakMap<object, T>};
 class Registry<T> {
+  nextId = 0;
   readonly identities = new NativeWeakMap<object, Versions<T>>();
   readonly ids = new Set<number>();
   readonly stores = new Set<WeakRef<CowIdentityStore<T>>>();
@@ -34,16 +35,20 @@ export class CowIdentityStore<T> {
   private cache = new NativeWeakMap<object, {id: number; value: T; owned: boolean}>();
   private registry: Registry<T>;
   private reference: WeakRef<CowIdentityStore<T>>;
+  private attached = false;
   constructor(registry = new Registry<T>()) {
     this.registry = registry;
     this.reference = new NativeWeakRef(this);
   }
   private attach(): void {
-    if (this.registry.stores.has(this.reference)) return;
+    if (this.attached) return;
+    this.attached = true;
     this.registry.stores.add(this.reference);
     this.registry.collectedStore.register(this, this.reference, this.reference);
   }
   private detach(): void {
+    if (!this.attached) return;
+    this.attached = false;
     this.registry.stores.delete(this.reference);
     this.registry.collectedStore.unregister(this.reference);
   }
@@ -57,10 +62,49 @@ export class CowIdentityStore<T> {
       return;
     }
     if (this.registry.ids.has(id)) throw new TypeError('Identity index already registered');
+    this.registerVersion(id, identity);
+  }
+  private registerVersion(id: number, identity: object): Versions<T> {
+    this.registry.nextId = Math.max(this.registry.nextId, id + 1);
     const versions = {id, values: new NativeWeakMap<object, T>()};
     this.registry.identities.set(identity, versions);
     this.registry.ids.add(id);
     this.registry.collectedIdentity.register(identity, id);
+    return versions;
+  }
+  /** Intrinsic state uses this registry directly instead of maintaining a
+   * second identity-to-index WeakMap in the adapter. Forks share the registry. */
+  getIdentity(identity: object): T | undefined {
+    const cached = this.cache.get(identity);
+    if (cached) return cached.value;
+    const versions = this.registry.identities.get(identity);
+    if (!versions) return undefined;
+    const token = this.tokens.get(versions.id);
+    if (!token) return undefined;
+    const value = versions.values.get(token)!;
+    this.cache.set(identity, {id: versions.id, value, owned: false});
+    return value;
+  }
+  setIdentity(identity: object, value: T): void {
+    const versions = this.registry.identities.get(identity)
+      ?? this.registerVersion(this.registry.nextId, identity);
+    this.install(versions, identity, value);
+  }
+  /** Replace a scalar/reference slot without allocating a wrapper payload.
+   * Shared versions are never modified; an owned version can be reused. */
+  writeIdentity(identity: object, value: T): void {
+    const cached = this.cache.get(identity);
+    if (!cached?.owned) {this.setIdentity(identity, value); return;}
+    const versions = this.registry.identities.get(identity)!;
+    versions.values.set(this.tokens.get(versions.id)!, value);
+    cached.value = value;
+  }
+  editIdentity(identity: object, clone: (value: T) => T): T {
+    const cached = this.cache.get(identity);
+    if (cached?.owned) return cached.value;
+    const versions = this.registry.identities.get(identity);
+    if (!versions || !cached && !this.tokens.has(versions.id)) throw new TypeError('Incompatible intrinsic receiver');
+    return this.edit(versions.id, clone, identity);
   }
   private versions(id: number, identity: object): Versions<T> | undefined {
     const versions = this.registry.identities.get(identity);
@@ -82,6 +126,10 @@ export class CowIdentityStore<T> {
   set(id: number, value: T, identity: object): void {
     const versions = this.versions(id, identity);
     if (!versions) throw new TypeError('Unknown state identity');
+    this.install(versions, identity, value);
+  }
+  private install(versions: Versions<T>, identity: object, value: T): void {
+    const id = versions.id;
     this.attach();
     const token = {};
     versions.values.set(token, value);

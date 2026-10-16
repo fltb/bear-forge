@@ -5,17 +5,18 @@
   "exports": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "npm run build --workspace @bear-forge/runtime-controlled && node --experimental-strip-types --test tests/*.test.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm run typecheck && npm test"
   },
   "dependencies": {
+    "@babel/parser": "8.0.7",
     "@bear-forge/boundary": "*",
-    "@bear-forge/runtime-native": "*",
-    "@bear-forge/runtime-controlled": "*",
+    "@bear-forge/contracts": "*",
     "@bear-forge/game-host": "*",
     "@bear-forge/policies": "*",
-    "@bear-forge/forge-duel": "*",
-    "zod": "4.6.5"
+    "@bear-forge/runtime": "*",
+    "@bear-forge/runtime-controlled": "*",
+    "@bear-forge/runtime-native": "*"
   },
   "devDependencies": {
     "@bear-forge/compiler": "*"

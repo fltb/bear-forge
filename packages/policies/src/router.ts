@@ -1,4 +1,4 @@
-import { copy } from '@bear-forge/boundary';
+import { copy, sameData } from '@bear-forge/boundary';
 import type { JsonValue, EventDelivery } from '@bear-forge/contracts/game';
 import type { Policy, PolicyRequest, Proposal, RandomCursor } from './policy.types.ts';
 export type ActorState = {
@@ -20,8 +20,8 @@ type Candidate = {
   proposal: Proposal;
   eventCursor: number;
 };
-const requestKey = (r: PolicyRequest) => r.id.instanceId + '/' + r.id.callId + '/' + r.id.key;
-const deliveryKey = (e: EventDelivery<unknown>) => typeof (e.event as any)?.key === 'string' ? 'game:' + String((e.event as any).key) : e.id.instanceId + '/' + e.id.callId + '/' + e.id.index;
+const requestKey = (r: Pick<PolicyRequest, 'id'>) => JSON.stringify([r.id.instanceId, r.id.callId, r.id.key]);
+const deliveryKey = (e: EventDelivery<unknown>) => JSON.stringify([e.id.instanceId, e.id.callId, e.id.index]);
 /** Candidate generation never updates committed policy memory or random cursors. */
 export class PolicyRouter {
   private state: RouterState;
@@ -66,6 +66,19 @@ export class PolicyRouter {
     }
     return memory;
   }
+  private visibleHistoryAt(player: string, cursor: number): EventDelivery<unknown>[] {
+    const history = copy(this.state.actors[player]!.history);
+    const seen = new Set(history.map(deliveryKey));
+    for (const packet of this.events.slice(0, cursor)) {
+      if (packet.player !== player) continue;
+      const event = packet.value as EventDelivery<unknown>;
+      const key = deliveryKey(event);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      history.push(copy(event));
+    }
+    return history;
+  }
   binding(player: string): any {
     if (!this.policies[player]) throw Error('Unknown policy actor');
     return {
@@ -82,10 +95,9 @@ export class PolicyRouter {
         });
         const actor = this.state.actors[player]!,
           cursor = this.events.length;
-        const history = [...copy(actor.history), ...this.events.slice(0, cursor).filter(e => e.player === player).map(e => copy(e.value))];
         const proposal = await this.policies[player]!.decide({
           request: saved,
-          visibleHistory: history,
+          visibleHistory: this.visibleHistoryAt(player, cursor),
           memory: this.memoryAt(player, cursor),
           random: copy(actor.random),
           signal: control.signal
@@ -131,9 +143,9 @@ export class PolicyRouter {
     const next = copy(this.state);
     let selected: Candidate | null = null;
     if (accepted?.kind === 'action') {
-      const key = accepted.reply.requestId.instanceId + '/' + accepted.reply.requestId.callId + '/' + accepted.reply.requestId.key;
+      const key = requestKey({ id: accepted.reply.requestId });
       selected = this.candidates.get(key) ?? null;
-      if (!selected || selected.request.player !== accepted.player || selected.request.type !== accepted.reply.type || JSON.stringify(selected.proposal.action) !== JSON.stringify(accepted.reply.action)) throw Error('Accepted action has no matching staged candidate');
+      if (!selected || selected.request.player !== accepted.player || selected.request.type !== accepted.reply.type || !sameData(selected.proposal.action, accepted.reply.action)) throw Error('Accepted action has no matching staged candidate');
       const actor = next.actors[accepted.player]!;
       actor.memory = copy(selected.proposal.nextMemory);
       actor.random = copy(selected.proposal.nextRandom);

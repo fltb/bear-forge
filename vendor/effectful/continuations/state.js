@@ -103,7 +103,6 @@ const context = exports.context = {
   call: null,
   needsBreak: nop,
   value: void 0,
-  suspended: new Set(),
   moduleId: null,
   brkOnAnyException: false,
   brkOnUncaughtException: false,
@@ -326,6 +325,10 @@ let Flag = exports.Flag = /*#__PURE__*/function (Flag) {
   Flag[Flag["HAS_DICTIONARY_SCOPE"] = 1024] = "HAS_DICTIONARY_SCOPE";
   // report uncaught
   Flag[Flag["EXCEPTION_BOUNDARY"] = 2048] = "EXCEPTION_BOUNDARY";
+  Flag[Flag["METHOD_FUNCTION"] = 4096] = "METHOD_FUNCTION";
+  Flag[Flag["GENERATOR_WRAPPER"] = 8192] = "GENERATOR_WRAPPER";
+  Flag[Flag["ASYNC_GENERATOR_WRAPPER"] = 16384] = "ASYNC_GENERATOR_WRAPPER";
+  Flag[Flag["ASYNC_WRAPPER"] = 32768] = "ASYNC_WRAPPER";
   return Flag;
 }({});
 function defaultErrHandler(f) {

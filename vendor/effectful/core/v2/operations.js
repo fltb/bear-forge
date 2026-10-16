@@ -27,129 +27,22 @@ const {
 } = Kit;
 const forceSym = exports.forceSym = Scope.sysSym("force");
 const dynImportSym = exports.dynImportSym = Scope.sysSym("dynImport");
-function needsResult(doc) {
-  switch (doc.pos) {
-    case Tag.update:
-    case Tag.expression:
-      return false;
-    case Tag.push:
-      const parent = doc.parent;
-      if (parent.parent.type === Tag.SequenceExpression) return doc.nextSibling === parent.firstChild && needsResult(parent.parent);
-  }
-  return true;
-}
-
-/**
- * converts update expressions and assignments without `=` operation into
- * assignments with `=`
+/** The front-end lowers all assignment operations before continuation splitting.
+ * Re-expanding updates as addition changes ToNumeric and evaluation order.
+ * An unlowered operation here is a compiler pipeline error, not author admission.
  */
 function normalizeAssign() {
   const file = Ctx.root;
   file.nextSymStr = file.prevSymStr = file;
-  for (let i = file.nextUpdateExpression, n; i !== file; i = n) {
-    n = i.nextUpdateExpression;
-    const operator = i.node.operator[0];
-    const p = i.prevUpdateExpression;
-    (p.nextUpdateExpression = n).prevUpdateExpression = p;
-    i.nextAssignmentExpression = file;
-    file.prevAssignmentExpression = (i.prevAssignmentExpression = file.prevAssignmentExpression).nextAssignmentExpression = i;
-    op(i, i.firstChild, num(Tag.right, 1), operator[0], !i.node.prefix && needsResult(i));
+  if (file.nextUpdateExpression !== file) {
+    throw Kit.error("Internal compiler stage error: update expression was not lowered", file.nextUpdateExpression);
   }
   for (let i = file.nextAssignmentExpression; i !== file; i = i.nextAssignmentExpression) {
-    const {
-      operator
-    } = i.node;
-    if (operator === "=") continue;
-    const arg = i.firstChild;
-    const rarg = Kit.detach(arg.nextSibling);
-    op(i, arg, rarg, operator.substr(0, operator.length - 1), false);
-  }
-  function op(i, arg, rarg, operator, retOld) {
-    const seq = arr(Tag.expressions);
-    const seqExpr = node(i.pos, Tag.SequenceExpression);
-    i.pos = Tag.push;
-    Kit.replace(i, seqExpr);
-    append(seq, i);
-    append(seqExpr, seq);
-    let lhs, larg;
-    const scope = Scope.parentScope(i);
-    const root = i.parentFunc.funcDef;
-    if (arg.type === Tag.MemberExpression) {
-      let tempObj, tempProp;
-      const obj = arg.firstChild;
-      const prop = obj.nextSibling;
-      const {
-        computed
-      } = arg.node;
-      if (computed && !isPure(prop)) tempProp = absTemp(root, prop, i);
-      if (!isPure(obj)) tempObj = absTemp(root, obj, i);
-      lhs = memExpr(computed, prop, tempProp, obj, tempObj, scope);
-      Kit.replace(arg, lhs);
-      larg = memExpr(computed, prop, tempProp, obj, tempObj, scope);
-      larg.nextGetterExpression = file;
-      file.prevGetterExpression = (larg.prevGetterExpression = file.prevGetterExpression).nextGetterExpression = larg;
-    } else if (arg.type === Tag.Identifier) {
-      lhs = arg;
-      lhs.pos = Tag.left;
-      larg = Scope.id0(Tag.left, arg.sym, arg.scope);
-    } else {
-      throw Kit.error(`Invalid left-hand side expression`, i);
+    if (i.node.operator !== "=") {
+      throw Kit.error("Internal compiler stage error: compound assignment was not lowered", i);
     }
-    if (retOld) {
-      const oldTmp = Scope.tempSym(root, scope);
-      const expr = Kit.assign(Tag.push);
-      larg.pos = Tag.right;
-      insertAfter(append(expr, Kit.id(Tag.left, oldTmp)), larg);
-      insertBefore(i, expr);
-      larg = Scope.id0(Tag.left, oldTmp, scope);
-      insertAfter(i, Scope.id0(Tag.push, oldTmp, scope));
-    }
-    i.type = Tag.AssignmentExpression;
-    i.node.operator = "=";
-    const binExpr = Kit.tok(Tag.right, Tag.BinaryExpression, {
-      operator
-    });
-    binExpr.isExpr = true;
-    insertBefore(append(binExpr, rarg), larg);
-    insertAfter(lhs, binExpr);
   }
 }
-function copy(pos, doc, tempObj, scope) {
-  return tempObj ? Scope.id0(pos, tempObj, scope) : Dom.clone(doc);
-}
-function absTemp(root, doc, before) {
-  const scope = root.origFunc;
-  const expr = Kit.assign(Tag.push);
-  const sym = Scope.tempSym(root, scope);
-  Kit.detach(doc);
-  doc.pos = Tag.right;
-  insertAfter(append(expr, Kit.id(Tag.left, sym)), doc);
-  insertBefore(before, expr);
-  return sym;
-}
-function memExpr(computed, prop, tempProp, obj, tempObj, scope) {
-  const memExpr = Kit.tok(Tag.left, Tag.MemberExpression, {
-    computed
-  });
-  memExpr.isExpr = true;
-  insertAfter(append(memExpr, copy(Tag.object, obj, tempObj, scope)), computed ? copy(Tag.property, prop, tempProp, scope) : Kit.tok(Tag.property, Tag.Identifier, {
-    name: prop.node.name
-  }));
-  return memExpr;
-}
-function isPure(doc) {
-  switch (doc.type) {
-    case Tag.Identifier:
-    case Tag.RegExpLiteral:
-    case Tag.NullLiteral:
-    case Tag.StringLiteral:
-    case Tag.BooleanLiteral:
-    case Tag.NumericLiteral:
-      return true;
-  }
-  return false;
-}
-
 /** replaces assignments with API calls */
 function setters() {
   const file = Ctx.root;
@@ -284,6 +177,7 @@ function methodCalls() {
   const opSym = Scope.sysSym("mcall");
   for (let i = file.nextCallExpression, n; i !== file; i = n) {
     n = i.nextCallExpression;
+    if (i.node.extra && i.node.extra.bearSynchronousIntrinsic) continue;
     if (i.type !== Tag.CallExpression) continue;
     const callee = i.firstChild;
     if (callee.type !== Tag.MemberExpression) continue;
@@ -336,6 +230,7 @@ function assignCall() {
   const relAlias = aliases["."];
   const opSym = Scope.contextSym;
   for (let i = root.nextCallExpression; i !== root; i = i.nextCallExpression) {
+    if (i.node.extra && i.node.extra.bearSynchronousIntrinsic) continue;
     const callee = i.firstChild;
     if (callee.type === Tag.Import) {
       let arg = callee.nextSibling.firstChild;

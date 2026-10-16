@@ -113,7 +113,9 @@ function calcFrames(root) {
       rhs = i.doc;
       if (!rhs) continue;
       nextFrame = nextConsequent = null;
-      eff = i.eff;
+      // Private compiler intrinsics retain effect ordering in the CFG but
+      // cannot suspend or invoke author code, so need no continuation frame.
+      eff = i.eff && !(rhs.node.extra && rhs.node.extra.bearSynchronousIntrinsic);
       sym = i.sym;
       lhs = sym && sym.bound && sym.varSym;
       if (eff) {
@@ -284,7 +286,7 @@ function calcFrames(root) {
     if (!nextFrame) {
       br.nextJob = jobs;
       jobs = br;
-      if (combine && (br.enters === 1 || !consequent.parent && !consequent.firstChild) && br.finalizer === block.finalizer && br.handler === block.handler && br.scope === block.scope) {
+      if (combine && (br.enters === 1 || !consequent.parent && !consequent.firstChild) && br.finalizer === block.finalizer && br.returnFinalizer === block.returnFinalizer && br.handler === block.handler && br.scope === block.scope) {
         br.frame = frame;
         br.consequent = consequent;
         return;
@@ -314,6 +316,7 @@ function calcFrames(root) {
         const ref = frameRef(Tag.right, pushFrame(last ? br : n));
         (tail.nextInstance = (ref.nextInstance = tail.nextInstance).prevInstance = ref).prevInstance = tail;
         assignTemp(consequent, tail.ibr, block.scope, ref);
+        if (tail.throwing) assignTemp(consequent, tail.throwing, block.scope, Kit.num(Tag.right, 0));
       }
       return from;
     }
@@ -445,6 +448,7 @@ function errHandler(root) {
       const tail = finalizer.tail;
       assignTemp(consequent, tail.ibr, scope, Kit.num(Tag.right, (tail.errDynFrame || errFrame).id));
       if (tail.errCopy) assignTemp(consequent, tail.errCopy, scope, Scope.id0(Tag.right, errSym, scope));
+      if (tail.throwing) assignTemp(consequent, tail.throwing, scope, Kit.num(Tag.right, 1));
       Kit.append(consequent, Kit.node(Tag.push, Tag.BreakStatement));
     }
   }
@@ -477,6 +481,7 @@ function gotoUnwind(consequent, dst, from, till, scope, assignTemp) {
       n = i.finalizer;
       last = n === till;
       assignTemp(consequent, i.tail.ibr, scope, Kit.num(Tag.right, (last ? dst : n.frame).id));
+      if (i.tail.throwing) assignTemp(consequent, i.tail.throwing, scope, Kit.num(Tag.right, 0));
       i = n;
     } while (!last);
   }
@@ -503,9 +508,7 @@ function finHandler(root) {
       block
     } = i;
     if (!block) continue;
-    const {
-      finalizer
-    } = block;
+    const finalizer = block.returnFinalizer || block.finalizer;
     if (!finalizer) continue;
     finalizer.finalizersMap.add(i);
   }
@@ -519,7 +522,7 @@ function finHandler(root) {
         Kit.append(switchCase, Kit.num(Tag.test, j.id));
         Kit.append(switchCase, consequent = Kit.arr(Tag.consequent));
       }
-      gotoUnwind(consequent, resFrame, j.block, null, j.block.scope, assignTemp);
+      gotoUnwind(consequent, resFrame, { finalizer: i }, null, j.block.scope, assignTemp);
     }
   }
   const switchCase = Kit.node(Tag.push, Tag.SwitchCase);
@@ -605,6 +608,7 @@ function constrs(decls) {
     Kit.append(args, finHandler(root));
     Kit.append(args, Kit.num(Tag.push, func.scopeDepth));
     Kit.append(args, Kit.emitConst(Tag.push, root.stateArgs));
+    Kit.append(args, Kit.emitConst(Tag.push, func.node.extra && func.node.extra.bearSourceRange || null));
     varDecl(decls, metaSym, constr);
   }
 }

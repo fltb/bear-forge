@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { mkdtempSync, writeFileSync, unlinkSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+export { programCapabilities } from './program-capabilities.ts';
 const require = createRequire(import.meta.url);
 const factories = new Map<string, Function>();
 /** Load precompiled CommonJS factory code once in the current runtime.
@@ -32,20 +33,4 @@ export function loadProgramFactory(code: string): Function {
     unlinkSync(filename);
     rmdirSync(directory);
   }
-}
-/** Explicit capabilities, local to an instance. Never modify host Math or timers. */
-export function programCapabilities(tick: () => void, unavailable: () => never) {
-  const math = Object.create(null);
-  Object.defineProperties(math, Object.getOwnPropertyDescriptors(Math));
-  math.random = unavailable;
-  const noDynamicCode = function () {
-    throw Error('Dynamic code is not admitted');
-  };
-  noDynamicCode.prototype = Function.prototype;
-  return {
-    tick,
-    Math: Object.freeze(math),
-    Function: noDynamicCode,
-    unavailable
-  };
 }

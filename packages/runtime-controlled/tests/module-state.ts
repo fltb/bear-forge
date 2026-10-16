@@ -20,6 +20,7 @@ export const program = {
     return counter;
   }
 };
+export let namespaceCounter = 0;
 export const namespaceProgram = {
   schemas: {
     setup: z.null(),
@@ -32,11 +33,22 @@ export const namespaceProgram = {
     }
   },
   async run(_setup: null, io: any) {
-    module.exports.counter = 1;
-    module.exports.counter += await io.call({
+    namespaceCounter = 1;
+    namespaceCounter += await io.call({
       port: 'step',
-      input: module.exports.counter
+      input: namespaceCounter
     });
-    return module.exports.counter;
+    return namespaceCounter;
+  }
+};
+
+export const configurationProgram = {
+  schemas: { setup: z.number(), result: z.string(), ports: { step: { input: z.number(), output: z.number() } } },
+  async run(n: number, io: any) {
+    let local = n;
+    z.config({ customError: () => 'context:' + local });
+    local += await io.call({ port: 'step', input: n });
+    const parsed = z.string().safeParse(42);
+    return parsed.success ? 'unexpected' : parsed.error.issues[0]!.message;
   }
 };

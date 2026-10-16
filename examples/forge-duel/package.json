@@ -1,1 +1,34 @@
-{"name":"@bear-forge/forge-duel","private":true,"type":"module","exports":"./src/index.ts","scripts":{"typecheck":"tsc --noEmit -p tsconfig.json","test":"node --experimental-strip-types --test tests/*.test.ts","check":"npm run typecheck && npm test"},"dependencies":{"@bear-forge/contracts":"*","@bear-forge/game-sdk":"*","zod":"4.6.5"},"devDependencies":{"@bear-forge/compiler":"*","@bear-forge/runtime-controlled":"*","@bear-forge/runtime-native":"*","@bear-forge/game-host":"*"}}
+{
+  "name": "@bear-forge/forge-duel",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./experiment/experiment.types": "./src/experiment/experiment.types.ts",
+    "./experiment/registration.schemas": "./src/experiment/registration.schemas.ts",
+    "./experiment/tasks": "./src/experiment/tasks.ts",
+    "./experiment/summary": "./src/experiment/summary.ts",
+    "./experiment/policy": "./src/experiment/policy.ts",
+    "./experiment/execution": "./src/experiment/execution.ts",
+    "./experiment/analysis": "./src/experiment/analysis.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build --workspace @bear-forge/runtime-controlled && node --experimental-strip-types --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@bear-forge/contracts": "*",
+    "@bear-forge/game-sdk": "*",
+    "zod": "4.6.5",
+    "@bear-forge/policies": "*",
+    "@bear-forge/experiments": "*",
+    "@bear-forge/analysis": "*"
+  },
+  "devDependencies": {
+    "@bear-forge/compiler": "*",
+    "@bear-forge/runtime-controlled": "*",
+    "@bear-forge/runtime-native": "*",
+    "@bear-forge/game-host": "*"
+  }
+}

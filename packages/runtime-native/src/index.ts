@@ -1,2 +1,2 @@
 export { createNativeLoader } from './loader.ts';
-export { nativeProgram } from './module.ts';
+export { nativeProgram, NativeBudgetError, isNativeBudgetError } from './module.ts';

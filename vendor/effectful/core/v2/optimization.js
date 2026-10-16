@@ -236,6 +236,10 @@ function sortFrames(root) {
         schedule(finalizer.frame);
         if (finalizer.tail.errDynFrame) schedule(finalizer.tail.errDynFrame);
       }
+      if (block.returnFinalizer) {
+        schedule(block.returnFinalizer.frame);
+        if (block.returnFinalizer.tail.errDynFrame) schedule(block.returnFinalizer.tail.errDynFrame);
+      }
       if (handler) schedule(handler.frame);
     }
     for (let i = job.nextDynExit; i !== job; i = i.nextDynExit) for (let j = i.nextInstance; j !== i; j = j.nextInstance) schedule(j.dst);

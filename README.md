@@ -1,6 +1,6 @@
 # Bear Forge
 
-正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；完整验收进度见 docs/plan.md。神经训练和玩家搜索后置。
+正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；受控执行采用共享 Program 与独立 Context，分支及恢复不重新初始化程序；完整验收进度见 docs/plan.md。神经训练和玩家搜索后置。
 
 完整介绍与审核入口：[项目介绍](docs/project-overview.md)。
 
@@ -28,7 +28,7 @@
 | docs | 当前设计、需求和计划 |
 | archive | 已失效的历史设计，不作为当前依据 |
 
-Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释游戏交互。两种生产执行器遵循同一协议；受控路径保存完整执行现场，原生路径保留 V8 async/await。
+Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释游戏交互。两种执行器遵循同一对外协议：原生直传入口运行受信任的普通 JS；只有编译受控入口承诺 IO-only、实例现场隔离及保存、恢复和分支。
 
 游戏入口：[模块导出](examples/doudizhu/src/index.ts)、[领域 SDK](examples/doudizhu/src/sdk.ts)、[主循环](examples/doudizhu/src/program.ts)。代理工作规则见 [AGENTS.md](AGENTS.md)。
 
@@ -38,6 +38,8 @@ Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释
 npm ci --ignore-scripts
 npm run check
 ```
+
+作者程序及传递依赖使用严格 ES Module。`.js`/`.ts` 按 ESM 解析，`.mjs`/`.mts` 明确为 ESM；CommonJS 和 Script 输入在准入阶段拒绝。
 
 根目录的 `npm run check` 汇总各 workspace 的类型检查和测试。`npm run typecheck`、`npm test` 分别汇总对应检查；每个模块都有自己的 package.json 脚本和 tsconfig.json。
 

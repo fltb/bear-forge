@@ -116,6 +116,20 @@ test('illegal input leaves the complete world untouched; private observations do
   }));
   assert.deepEqual(observe(s, '0'), a);
 });
+test('legal action identity is independent of object property order', () => {
+  const s = state();
+  s.heroes['0'].hand = [{ id: 'spark', definition: 'spark' }];
+  const action = { target: 'hero:1', cardId: 'spark', kind: 'play' } as const;
+  const port = game.contract.ports.decision as any;
+  const request = port.receive(s).requests[0];
+  assert.equal(port.respond(s, request, action).valid, true);
+  apply(s, action);
+  assert.equal(s.heroes['1'].hp, 18);
+  const malformed = state();
+  malformed.heroes['0'].hand = [{ id: 'spark', definition: 'spark' }];
+  assert.throws(() => apply(malformed, { ...action, extra: true } as any), /Illegal action/);
+  assert.equal(malformed.heroes['0'].hand.length, 1);
+});
 test('turn-limit and simultaneous lethal results are normal rules outcomes', () => {
   const s = state();
   s.heroes['0'].turns = 30;

@@ -70,6 +70,13 @@ function prepare(root) {
 const ASYNC_FUNCTION_FLAG = exports.ASYNC_FUNCTION_FLAG = 1;
 const GENERATOR_FUNCTION_FLAG = exports.GENERATOR_FUNCTION_FLAG = 1 << 1;
 const ARROW_FUNCTION_FLAG = exports.ARROW_FUNCTION_FLAG = 1 << 2;
+// Bit 11 belongs to the continuation runtime's EXCEPTION_BOUNDARY flag.
+const METHOD_FUNCTION_FLAG = exports.METHOD_FUNCTION_FLAG = 1 << 12;
+// Parameter initialization executes eagerly; the returned inner generator owns
+// suspension. Callable kind must survive independently of that control flow.
+const GENERATOR_WRAPPER_FLAG = exports.GENERATOR_WRAPPER_FLAG = 1 << 13;
+const ASYNC_GENERATOR_WRAPPER_FLAG = exports.ASYNC_GENERATOR_WRAPPER_FLAG = 1 << 14;
+const ASYNC_WRAPPER_FLAG = exports.ASYNC_WRAPPER_FLAG = 1 << 15;
 const HAS_THIS_FLAG = exports.HAS_THIS_FLAG = 1 << 3;
 const HAS_ARGUMENTS_FLAG = exports.HAS_ARGUMENTS_FLAG = 1 << 4;
 const FILE_TOP_LEVEL_FLAG = exports.FILE_TOP_LEVEL_FLAG = 1 << 5;
@@ -111,9 +118,14 @@ function split() {
     root.module = i.root;
     const {
       generator,
-      async
+      async: nodeAsync
     } = node;
+    const async = nodeAsync || i.type === Tag.File && node.extra?.bearAsyncModule;
     let flags = i.flags;
+    if (node.extra && (node.extra.bearMethod || node.extra.bearArrow)) flags |= METHOD_FUNCTION_FLAG;
+    if (!async && node.extra && node.extra.bearAsync && !node.extra.bearGeneratorKind) flags |= ASYNC_WRAPPER_FLAG;
+    if (!generator && node.extra && node.extra.bearGeneratorKind) flags |=
+      node.extra.bearGeneratorKind === "async" ? ASYNC_GENERATOR_WRAPPER_FLAG : GENERATOR_WRAPPER_FLAG;
     if (i.type === Tag.ArrowFunctionExpression) {
       flags |= ARROW_FUNCTION_FLAG;
     } else if (i.type === Tag.File) {
@@ -465,6 +477,10 @@ const iterErrSym = exports.iterErrSym = sysSym("iterErr");
 const iterErrUndefSym = exports.iterErrUndefSym = sysSym("iterErrUndef");
 const iterFinSym = exports.iterFinSym = sysSym("iterFin");
 const iterNextSym = exports.iterNextSym = sysSym("iterNext");
+const iterResultSym = exports.iterResultSym = sysSym("iterResult");
+const iterDoneSym = exports.iterDoneSym = sysSym("iterDone");
+const iterValueSym = exports.iterValueSym = sysSym("iterValue");
+const yieldDelegateSym = exports.yieldDelegateSym = sysSym("yldDelegate");
 const pushScopeSym = exports.pushScopeSym = sysSym("pushScope");
 const popScopeSym = exports.popScopeSym = sysSym("popScope");
 const copyScopeSym = exports.copyScopeSym = sysSym("copyScope");
@@ -618,7 +634,7 @@ function index(root) {
             if (i.node.property.name === "target") {
               const before = root.prevNewTarget;
               i.nextNewTarget = root;
-              root.prevFunctionSentExpression = before.nextNewTarget = i;
+              root.prevNewTarget = before.nextNewTarget = i;
               i.prevNewTarget = before;
             }
             break;
@@ -877,10 +893,15 @@ function assignSym(root) {
           fileGlobals.set(name, sym);
         }
       } else {
-        sym = block.blockVars.get(name);
+        // A named function expression has an immutable outer name environment.
+        // Parameters and function-body declarations may shadow it; they must
+        // never reuse its symbol merely because the spelling is identical.
+        const expressionName = declClause.pos === Tag.id && declClauseParent.type === Tag.FunctionExpression;
+        sym = expressionName ? null : block.blockVars.get(name);
         if (sym && !sym.unordered && !unordered) throw Kit.error(`Identifier ${name} has already been declared`, i);
         if (!sym) sym = newSym(name);
-        block.blockVars.set(name, sym);
+        if (expressionName) block.functionNameSym = sym;
+        else block.blockVars.set(name, sym);
         sym.unordered = unordered;
         sym.decl = declClause;
         const func = sym.func = declClause.parentFunc;
@@ -916,6 +937,7 @@ function assignSym(root) {
     let sym;
     for (let j = i.parentBlock; j; j = j.parentBlock) {
       sym = j.blockVars.get(name);
+      if (!sym && j.functionNameSym && j.functionNameSym.orig === name) sym = j.functionNameSym;
       if (sym) break;
     }
     if (sym) {

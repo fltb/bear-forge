@@ -66,3 +66,15 @@ test('timeoutFirst, explicit arrival order, revoked credentials and committed cl
     at: 9
   }));
 });
+test('failed arrivals leave the session unchanged and never evaluate caller getters', () => {
+  const session = new VirtualSession();
+  const before = session.snapshot();
+  assert.throws(() => session.enqueue({ at: 1, player: '0', requestId: id, type: 'move', action: () => 1 } as any));
+  assert.deepEqual(session.snapshot(), before);
+  let reads = 0;
+  const invalid = { get at() { reads++; return 1; }, player: '0', requestId: id, type: 'move', action: null };
+  assert.throws(() => session.enqueue(invalid));
+  assert.equal(reads, 0);
+  assert.deepEqual(session.snapshot(), before);
+  assert.equal(session.enqueue({ at: 1, player: '0', requestId: id, type: 'move', action: null }), 0);
+});

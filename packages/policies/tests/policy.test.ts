@@ -24,6 +24,23 @@ const request = {
   }
 } as unknown as PolicyRequest;
 const signal = new AbortController().signal;
+test('delivery identity uses only protocol fields, without payload keys or delimiter collisions', async () => {
+  const policy = { ...createScript('first'), event: (m: any) => ({ count: (m.count ?? 0) + 1 }) };
+  const router = new PolicyRouter({ '0': policy }, 1);
+  const binding = router.binding('0');
+  const events = [
+    { id: { instanceId: 'a/b', callId: 'c', index: 0 }, event: { key: 'damage', amount: 1 } },
+    { id: { instanceId: 'a', callId: 'b/c', index: 0 }, event: { key: 'damage', amount: 2 } },
+    { id: { instanceId: 'a', callId: 'other', index: 0 }, event: { key: 'damage', amount: 3 } },
+  ];
+  for (const event of [...events, events[0]]) await binding.onEvent(event, { signal });
+  const prepared = router.prepare(null);
+  assert.equal(prepared.state.actors['0']!.history.length, 3);
+  assert.deepEqual(prepared.state.actors['0']!.memory, { count: 3 });
+  router.commit('task:0', prepared.state);
+  await binding.onEvent(events[0], { signal });
+  assert.deepEqual(router.prepare(null).state, router.snapshot());
+});
 test('all scripts consume canonical actions and explicit random state', async () => {
   const input = {
     request,
@@ -90,6 +107,25 @@ test('staged, failed and unmatched replies cannot advance committed memory or ra
   assert.equal(router.commit('task:0', prepared.state), false);
   assert.equal((router.snapshot().actors['0']!.memory as any).decisions, 1);
 });
+test('accepted action matching preserves numeric identity and object aliases', async () => {
+  const shared={value:1};
+  for(const [proposed,accepted] of [
+    [-0,0],
+    [{left:shared,right:shared},{left:{value:1},right:{value:1}}]
+  ] as const) {
+    const router=new PolicyRouter({'0':{
+      version:'fixed',encoderVersion:'fixed',
+      async decide({random}:any){return {action:proposed,nextMemory:{used:true},nextRandom:random,
+        policyVersion:'fixed',encoderVersion:'fixed',logProbability:null};}
+    }},1);
+    const binding=router.binding('0');
+    await binding.onRequest(request,{signal});
+    assert.throws(()=>router.prepare({kind:'action',player:'0',reply:{
+      requestId:request.id,type:'move',action:accepted
+    }}),/no matching staged candidate/);
+    assert.deepEqual(router.snapshot().actors['0']!.memory,{});
+  }
+});
 test('event memory is applied in temporal order, deduplicated, and isolated by game and actor', async () => {
   const policy = {
     ...createScript('first'),
@@ -150,6 +186,31 @@ test('event memory is applied in temporal order, deduplicated, and isolated by g
   assert.deepEqual(new PolicyRouter({
     '0': policy
   }, 1).snapshot().actors['0']!.memory, {});
+});
+test('policy decisions receive each visible delivery once across retries and commits', async () => {
+  const histories: unknown[][] = [];
+  const first = createScript('first');
+  const router = new PolicyRouter({ '0': {
+    ...first,
+    async decide(input) {
+      histories.push(input.visibleHistory);
+      return first.decide(input);
+    }
+  } }, 1);
+  const binding = router.binding('0');
+  const event = { id: { instanceId: 'i', callId: 'e', index: 0 }, event: { kind: 'draw' } };
+  await binding.onEvent(event, { signal });
+  await binding.onEvent(event, { signal });
+  await binding.onRequest(request, { signal });
+  assert.deepEqual(histories[0], [event]);
+  const prepared = router.prepare(null);
+  router.commit('task:0', prepared.state);
+  await binding.onEvent(event, { signal });
+  const next = { ...event, id: { ...event.id, index: 1 } };
+  await binding.onEvent(next, { signal });
+  await binding.onEvent(next, { signal });
+  await binding.onRequest(request, { signal });
+  assert.deepEqual(histories[1], [event, next]);
 });
 test('bounded random draws reject invalid domains and remain deterministic', () => {
   assert.throws(() => randomInt({

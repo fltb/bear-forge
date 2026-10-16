@@ -35,8 +35,11 @@ export async function driveSession(game: any, session: VirtualSession, input: {
         action: selection.arrival.action
       }
     });
-    if (!validation.ok || !validation.value.valid) {
-      session.reject(selection.arrival.ordinal, validation.ok ? validation.value.reason : validation.error.code);
+    // A failed protocol operation is not a rejected player action. In particular,
+    // validate may have faulted/closed the game; preserve that result and queue.
+    if (!validation.ok) return validation;
+    if (!validation.value.valid) {
+      session.reject(selection.arrival.ordinal, validation.value.reason);
       return {
         ok: true,
         value: {

@@ -1,6 +1,6 @@
-import { NativeBudgetError, instantiateNative, nativeBudgetExceeded, nativeHostViolation } from './module.ts';
+import { isNativeBudgetError, instantiateNative, nativeBudgetExceeded, nativeHostViolation } from './module.ts';
 import { copy, read, keys, admitSchema, fields } from '@bear-forge/boundary';
-import { Controller, ok, fail, createCapture } from '@bear-forge/runtime';
+import { Controller, ok, fail, createCapture, exceptionMessage, assertProgramModuleShape, assertProgramSchemasShape } from '@bear-forge/runtime';
 import type { Execution, RawStop } from '@bear-forge/runtime';
 import type { NativeCoreLoader } from '@bear-forge/contracts/loading';
 import type { IO, PortShape, ProgramModule } from '@bear-forge/contracts/core';
@@ -8,8 +8,8 @@ export function createNativeLoader(): NativeCoreLoader {
   return {
     async load<S, P extends { [K in keyof P]: PortShape }, R>(program: ProgramModule<S, P, R>) {
       try {
-        if (!fields(program, ['schemas', 'run']) || typeof program.run !== 'function') return fail('invalid_argument');
-        keys(program.schemas.ports);
+        assertProgramModuleShape(program);
+        assertProgramSchemasShape(program.schemas);
         admitSchema(program.schemas.setup);
         admitSchema(program.schemas.result);
         for (const declaration of Object.values(program.schemas.ports) as any[]) {
@@ -17,7 +17,7 @@ export function createNativeLoader(): NativeCoreLoader {
           admitSchema(declaration.output);
         }
       } catch (e) {
-        return fail('invalid_argument', String(e));
+        return fail('invalid_argument', exceptionMessage(e));
       }
       const controllers = new Map<string, Controller<S, P, R>>();
       return ok({
@@ -26,15 +26,15 @@ export function createNativeLoader(): NativeCoreLoader {
           async start(setup: S) {
             let active: ProgramModule<S, P, R>;
             try {
-              active = instantiateNative(program) as ProgramModule<S, P, R>;
+              active = await instantiateNative(program) as ProgramModule<S, P, R>;
             } catch (error) {
-              return fail(/budget exceeded|timed out/i.test(String(error)) ? 'budget_exceeded' : 'program_failed', String(error));
+              return fail(isNativeBudgetError(error) ? 'budget_exceeded' : 'program_failed', exceptionMessage(error));
             }
             let checked: S;
             try {
               checked = read(active.schemas.setup, setup);
             } catch (e) {
-              return fail(nativeBudgetExceeded(active) ? 'budget_exceeded' : 'invalid_input', String(e));
+              return fail(nativeBudgetExceeded(active) ? 'budget_exceeded' : 'invalid_input', exceptionMessage(e));
             }
             let state: RawStop | undefined, resolveReply: ((v: unknown) => void) | undefined, rejectReply: ((v: unknown) => void) | undefined;
             let wake!: () => void,
@@ -49,7 +49,7 @@ export function createNativeLoader(): NativeCoreLoader {
                 error: {
                   kind: 'fault',
                   code,
-                  message: String(cause)
+                  message: exceptionMessage(cause)
                 }
               };
               wake();
@@ -93,7 +93,7 @@ export function createNativeLoader(): NativeCoreLoader {
                 result
               };
               wake();
-            }, e => fault(e instanceof NativeBudgetError ? 'budget_exceeded' : 'program_failed', e));
+            }, e => fault(isNativeBudgetError(e) ? 'budget_exceeded' : 'program_failed', e));
             await ready;
             const engine: Execution = {
               current: () => nativeHostViolation(active)&&!nativeBudgetExceeded(active)?{kind:'fault',error:{kind:'fault',code:'program_failed',message:'Undeclared host effect'}}:nativeBudgetExceeded(active) ? {

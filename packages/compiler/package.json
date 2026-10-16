@@ -8,29 +8,43 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "test:test262:parse": "node --experimental-strip-types --test tests/test262/module-parse.test.ts",
+    "test:test262:compile": "node --experimental-strip-types --test tests/test262/module-positive-compile.test.ts",
+    "test:test262:resolution": "node --experimental-strip-types --test tests/test262/module-resolution.test.ts"
   },
   "dependencies": {
     "@babel/core": "8.0.7",
-    "@babel/plugin-transform-typescript": "8.0.6",
+    "@babel/generator": "8.0.6",
+    "@babel/helper-replace-supers": "8.0.1",
     "@babel/plugin-transform-arrow-functions": "8.0.1",
     "@babel/plugin-transform-class-properties": "8.0.1",
+    "@babel/plugin-transform-class-static-block": "8.0.1",
     "@babel/plugin-transform-classes": "8.0.5",
     "@babel/plugin-transform-destructuring": "8.0.5",
-    "@babel/plugin-transform-for-of": "8.0.7",
+    "@babel/plugin-transform-explicit-resource-management": "8.0.5",
+    "@babel/plugin-transform-modules-commonjs": "8.0.1",
     "@babel/plugin-transform-nullish-coalescing-operator": "8.0.1",
-    "@babel/plugin-transform-object-rest-spread": "8.0.1",
     "@babel/plugin-transform-optional-chaining": "8.0.5",
     "@babel/plugin-transform-parameters": "8.0.5",
+    "@babel/plugin-transform-private-methods": "8.0.1",
+    "@babel/plugin-transform-private-property-in-object": "8.0.5",
     "@babel/plugin-transform-shorthand-properties": "8.0.1",
-    "@babel/plugin-transform-spread": "8.0.5",
     "@babel/plugin-transform-template-literals": "8.0.1",
+    "@babel/plugin-transform-typescript": "8.0.6",
+    "@babel/traverse": "8.0.7",
     "@babel/types": "8.0.6",
     "@bear-forge/boundary": "*",
     "@bear-forge/contracts": "*",
     "@effectful/core": "2.0.12",
-    "esbuild": "0.28.2",
+    "@jridgewell/trace-mapping": "0.3.31",
+    "@rollup/plugin-node-resolve": "16.0.3",
+    "import-meta-resolve": "4.2.0",
+    "rollup": "4.64.5",
     "typescript": "7.0.2",
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "test262-stream": "1.4.0"
   }
 }

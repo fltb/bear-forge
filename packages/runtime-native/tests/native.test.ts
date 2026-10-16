@@ -38,6 +38,21 @@ const program = {
     return a + b;
   }
 };
+test('trusted direct ProgramModule executes its host closure as ordinary JS', async () => {
+  let clockReads = 0;
+  const readClock = () => { clockReads++; return Date.now(); };
+  const direct = {
+    schemas: { setup: z.null(), result: z.number(), ports: {} },
+    async run() { return readClock(); }
+  };
+  const { core } = unwrap(await createNativeLoader().load(direct));
+  const instance = unwrap(await core.start(null));
+  const stop = unwrap(await instance.inspect());
+  assert.equal(clockReads, 1);
+  assert.equal(stop.kind, 'done');
+  if (stop.kind === 'done') assert.equal(typeof stop.result, 'number');
+  await instance.close();
+});
 test('native execution accepts exactly one return and isolates boundary values', async () => {
   const {
     core

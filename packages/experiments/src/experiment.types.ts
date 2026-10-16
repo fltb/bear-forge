@@ -1,20 +1,19 @@
-import type { Definition } from '@bear-forge/forge-duel';
-export type Script = 'first' | 'last' | 'random' | 'rule';
-export type TaskInput = {
+import type { GameModule, GameTypes } from '@bear-forge/contracts/authoring';
+import type { Policy } from '@bear-forge/policies';
+export type TaskInput = { id: string; seed: number };
+export type Registration = {
   id: string;
-  phase: 'discovery' | 'confirmation';
-  block: number;
-  seed: number;
-  seat: '0' | '1';
-  policy: Script;
-  opponent: Script;
-  replacement: 0 | 1;
-  support: 0 | 1;
-  decks: Record<'0' | '1', Definition[]>;
+  engine?: 'native' | 'controlled' | undefined;
+  checkpointEvery?: number;
+  concurrency?: number;
+  memoryBudgetMB?: number;
+  computeStepBudget?: number;
+  maxSteps: number;
+  maxAttempts: number;
 };
-export type TaskResult = {
+export type TaskResult<T extends TaskInput = TaskInput> = {
   id: string;
-  input: TaskInput;
+  input: T;
   attempt: number;
   status: 'ended' | 'fault' | 'truncated';
   result: any;
@@ -52,35 +51,19 @@ export type TaskResult = {
     kind: 'actual' | 'branch';
   };
 };
-export type Registration = {
-  version: 1;
-  game: 'forge-duel-v1';
-  engine?: 'native' | 'controlled' | undefined;
-  id: string;
-  blocks: number;
-  seed: number;
-  policies: Script[];
-  opponents: Script[];
-  /** 0 commits only the complete task; positive values checkpoint every N decisions. */
-  checkpointEvery?: number;
-  concurrency?: number;
-  memoryBudgetMB?: number;
-  computeStepBudget?: number;
-  maxSteps: number;
-  maxAttempts: number;
-  minimumBlocks: number;
-  margin: number;
-  bootstrap: number;
-  analysisSeed: number;
-};
 export type ExecutionHooks = {
   point?: (stage: 'before-advance' | 'after-advance' | 'after-snapshot' | 'before-commit' | 'after-commit', taskId: string) => void | Promise<void>;
 };
-export type TaskSummary = Omit<TaskResult, 'packets' | 'decisions' | 'facts' | 'policy'> & {
-  opportunities: Record<string, {
-    carry: number;
-    draw: number;
-    available: number;
-    play: number;
-  }>;
+
+/** Outer experiment composition; game execution still uses the frozen GameModule. */
+export type ExperimentDefinition<G extends GameTypes, T extends TaskInput, C extends Registration, S extends { id: string }> = {
+  module: GameModule<G>;
+  parseRegistration: (value: unknown) => C;
+  tasks: (config: C) => T[];
+  setup: (task: T) => G['setup'];
+  policies: (task: T) => Record<string, Policy>;
+  facts: (record: unknown) => unknown[];
+  summarize: (result: TaskResult<T>) => S;
+  identity: () => Promise<unknown>;
+  artifacts: { controlled: string; native: string };
 };

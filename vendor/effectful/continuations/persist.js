@@ -4,6 +4,7 @@ exports.__esModule = true;
 exports.extra = exports.defaultBind = exports.ModuleDescriptor = exports.FunctionDescriptor = void 0;
 exports.opaqueWeakMap = opaqueWeakMap;
 exports.opaqueWeakSet = opaqueWeakSet;
+exports.makeBind = makeBind;
 exports.regDescriptor = exports.regConstructor = exports.regAutoOpaqueConstr = void 0;
 exports.regFun = regFun;
 exports.regModule = regModule;
@@ -44,6 +45,30 @@ const regOpaqueObject = exports.regOpaqueObject = _config.default.persistState ?
 } : nop;
 const regDescriptor = exports.regDescriptor = _config.default.persistState ? S.regDescriptor : nop;
 const regConstructor = exports.regConstructor = _config.default.persistState ? S.regConstructor : nop;
+function propertyStorage(value) {
+  const storage = context.objects || context.memory?.objects;
+  return storage?.has(value) ? storage : undefined;
+}
+function ownDescriptors(value) {
+  const storage = propertyStorage(value);
+  if (!storage) return Object.getOwnPropertyDescriptors(value);
+  const descriptors = Object.create(null);
+  for (const key of storage.ownKeys(value)) descriptors[key] = storage.getOwnPropertyDescriptor(value, key);
+  return descriptors;
+}
+function restoreFunction(value) {
+  return context.allocate ? context.allocate(value) : value;
+}
+// Runtime-owned metadata initialization must not consume author execution
+// budget after a completion has already been committed.
+exports.defineFunctionProperties = function(value, descriptors) {
+  const storage = propertyStorage(value);
+  if (!storage) return Object.defineProperties(value, descriptors);
+  for (const key of Reflect.ownKeys(descriptors)) {
+    if (!storage.defineProperty(value, key, descriptors[key])) throw new TypeError('Cannot initialize function metadata');
+  }
+  return value;
+};
 
 /** `Serialization.regOpaqueDeep` for module exports */
 function regModule(exp, name) {
@@ -73,32 +98,40 @@ const ModuleDescriptor = exports.ModuleDescriptor = S.regDescriptor({
 });
 const FunctionDescriptor = exports.FunctionDescriptor = S.regDescriptor({
   name: "#F",
+  completeOwnProperties: true,
+  propertyStorage, ownDescriptors,
   create(ctx, json) {
     const meta = ctx.createStep(json.m);
-    const parentJson = json.p;
+    const parentJson = json.c;
     let parent = null;
     if (parentJson) {
       parent = ctx.createStep(parentJson);
     }
-    return meta.func(parent, parentJson ? ctx.createStep(json.v) : undefined);
+    return restoreFunction(meta.func(parent, json.v ? ctx.createStep(json.v) : undefined, true));
   },
   readContent(ctx, json, value) {
-    if (json.p) State.closures.get(value)[CLOSURE_VARS] = ctx.step(json.v);
-    if (json.h) Object.setPrototypeOf(value, ctx.step(json.h));
+    if (json.c) State.closures.get(value)[CLOSURE_PARENT] = ctx.step(json.c);
+    if (json.v) State.closures.get(value)[CLOSURE_VARS] = ctx.step(json.v);
   },
   write(ctx, value) {
     const json = {};
     const descr = State.closures.get(value);
     json.m = ctx.step(descr[CLOSURE_META], json, "m");
-    json.h = ctx.step(Object.getPrototypeOf(value), json, "h");
     const parent = descr[CLOSURE_PARENT];
     if (parent) {
-      json.p = ctx.step(parent, json, "p");
-      json.v = ctx.step(descr[CLOSURE_VARS], json, "v");
+      // `p` is reserved by the own-property codec for [[Prototype]].
+      json.c = ctx.step(parent, json, "c");
     }
+    if (descr[CLOSURE_VARS]) json.v = ctx.step(descr[CLOSURE_VARS], json, "v");
     return json;
   }
 });
+// Closure identity already lives in the private closure table. Resolve its
+// codec on demand instead of allocating a duplicate weak-map entry per clone.
+const previousObjectDescriptor = S.getObjectDescriptor;
+if (_config.default.persistState)
+  S.regObjectDescriptorGetter(value => S.getState().byObject.get(value) ||
+    (closures.has(value) ? FunctionDescriptor : previousObjectDescriptor(value)));
 function regFun(meta) {
   const constr = meta.func;
   regOpaqueObject(constr, `c#${meta.persistName}`);
@@ -146,18 +179,21 @@ function stepAsyncFrame(ctx, value, parent, index) {
 }
 const BindDescriptor = regDescriptor({
   name: "#b",
+  completeOwnProperties: true,
+  propertyStorage, ownDescriptors,
   create(ctx, json) {
-    const res = makeBind();
+    const res = restoreFunction(makeBind(json.c));
     weakMapSet.call(binds, res, {
-      fun: ctx.createStep(json.f),
+      fun: ctx.createStep(json.b),
       self: ctx.createStep(json.s),
-      args: ctx.createStep(json.a) || []
+      args: ctx.createStep(json.a) || [],
+      constructable: json.c
     });
     return res;
   },
   readContent(ctx, json, value) {
     const binding = binds.get(value);
-    binding.fun = ctx.step(json.f);
+    binding.fun = ctx.step(json.b);
     binding.self = ctx.step(json.s);
     binding.args = ctx.step(json.a) || [];
   },
@@ -165,40 +201,57 @@ const BindDescriptor = regDescriptor({
     const binding = binds.get(value);
     const json = {};
     if (!binding) return json;
-    json.f = stepDeferred(ctx, binding.fun, json, "f");
+    // `f` belongs to the serializer's own-property records.
+    json.b = stepDeferred(ctx, binding.fun, json, "b");
     json.s = stepDeferred(ctx, binding.self, json, "s");
     json.a = stepDeferred(ctx, binding.args, json, "a");
+    json.c = binding.constructable;
     return json;
   },
-  overrideProps: {
-    arguments: false,
-    caller: false,
-    length: false,
-    name: false,
-    prototype: false
-  },
-  props: false
+  props: true
 });
-function makeBind() {
+function makeBind(constructable) {
+  if (typeof constructable !== 'boolean') throw new TypeError('Missing bound function construction kind');
+  let result;
   function __effectful__Bind(...rest) {
     const {
       fun,
       self,
       args: boundArgs
-    } = binds.get(__effectful__Bind);
-    if (context.call === __effectful__Bind) context.call = fun;
+    } = binds.get(result);
+    if (context.operations) {
+      const args = [].concat(_toConsumableArray(boundArgs), rest);
+      return new.target
+        ? context.operations.construct(fun, args, new.target === __effectful__Bind ? fun : new.target)
+        : context.operations.invoke(fun, self === undef ? this : self, args);
+    }
+    if (context.call === result) context.call = fun;
     if (new.target) return native.Reflect.construct(fun, [].concat(_toConsumableArray(boundArgs), rest), new.target === __effectful__Bind ? fun : new.target);
     return nativeReflectApply(fun, self === undef ? this : self, [].concat(_toConsumableArray(boundArgs), rest));
   }
-  if (BindDescriptor) S.setObjectDescriptor(__effectful__Bind, BindDescriptor);
-  return __effectful__Bind;
+  // A native bound wrapper retains [[Construct]] without introducing an own
+  // prototype. Its target captures only the binding identity; execution data
+  // stays in `binds` and is rebuilt by the existing Context copy paths.
+  const target = constructable ? __effectful__Bind : {
+    invoke(...rest) { return nativeReflectApply(__effectful__Bind, this, rest); }
+  }.invoke;
+  result = nativeReflectApply(Function.prototype.bind, target, [undefined]);
+  weakMapSet.call(binds, result, { constructable });
+  if (BindDescriptor) S.setObjectDescriptor(result, BindDescriptor);
+  return context.allocate ? context.allocate(result) : result;
 }
 const defaultBind = exports.defaultBind = _config.default.persistState ? function bind(self, ...args) {
-  const res = makeBind();
+  // This replacement is also reached by reflected calls to the original
+  // intrinsic. Preserve its early receiver validation before allocating a
+  // persistent binding; the original failure cannot observe bound arguments.
+  if (typeof this !== "function") return nativeReflectApply(Function.prototype.bind, this, []);
+  const constructable = context.operations.isConstructor(this);
+  const res = makeBind(constructable);
   weakMapSet.call(binds, res, {
     fun: this,
     self,
-    args
+    args,
+    constructable
   });
   return res;
 } : Function.prototype.bind;

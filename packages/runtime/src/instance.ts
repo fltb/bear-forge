@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { exceptionMessage } from './exception.ts';
+import { Records } from './records.ts';
 import { copy, read, keys, fields } from '@bear-forge/boundary';
 import { InstanceIdSchema, CallIdSchema } from '@bear-forge/contracts/instance';
 import type { Instance, InstanceStop, InstanceError, Outcome, PortBindings, PauseReason, InstanceRunStop } from '@bear-forge/contracts/instance';
-import type { ProgramSchemas, PortShape } from '@bear-forge/contracts/core';
+import type { PortShape } from '@bear-forge/contracts/core';
 import type { InstanceRecord } from '@bear-forge/contracts/capture';
 export type RawStop = {
   kind: 'call';
@@ -22,8 +24,15 @@ export type RawStop = {
 export type Execution = {
   current: () => RawStop;
   advance: (output: unknown) => Promise<void>;
+  discardOutput?: () => void;
   dispose: () => void;
   snapshot?: () => string;
+};
+type Parser<T> = { parse(value: unknown): T };
+type RuntimeSchemas<S, P extends { [K in keyof P]: PortShape }, R> = {
+  setup: Parser<S>;
+  result: Parser<R>;
+  ports: { [K in keyof P]: { input: Parser<P[K]['input']>; output: Parser<P[K]['output']> } };
 };
 export function ok<T>(value: T): Outcome<T> {
   return {
@@ -72,6 +81,7 @@ export async function callback<T>(invoke: () => Promise<unknown>, signal: AbortS
     Promise.resolve().then(() => live ? invoke() : {
       kind: 'pause'
     }).then(reply => {
+      if (!live) return;
       if (fields(reply, ['kind']) && (reply as any).kind === 'pause') finish({
         pause: 'requested'
       });else if (fields(reply, ['kind', 'value']) && (reply as any).kind === 'reply') {
@@ -95,7 +105,7 @@ export async function callback<T>(invoke: () => Promise<unknown>, signal: AbortS
 export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
   readonly id = InstanceIdSchema.parse(randomUUID());
   state!: InstanceStop<P, R>;
-  records: InstanceRecord<S, P, R>[];
+  records: Records<InstanceRecord<S, P, R>>;
   bindings: PortBindings<P> | null = null;
   computing = false;
   driving = false;
@@ -103,18 +113,17 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
   owner = 0;
   forkHandler?: () => Promise<Outcome<Instance<P, R>>>;
   engine: Execution;
-  schemas: ProgramSchemas<S, P, R>;
-  constructor(engine: Execution, schemas: ProgramSchemas<S, P, R>, setup: S, restored?: {
+  schemas: RuntimeSchemas<S, P, R>;
+  constructor(engine: Execution, schemas: RuntimeSchemas<S, P, R>, setup: S, restored?: {
     state: InstanceStop<P, R>;
-    records: InstanceRecord<S, P, R>[];
+    records: InstanceRecord<S, P, R>[] | Records<InstanceRecord<S, P, R>>;
   }) {
     this.engine = engine;
     this.schemas = schemas;
-    this.records = restored ? copy(restored.records) : [{
-      sequence: 0,
-      kind: 'started',
-      setup: copy(setup)
-    }];
+    this.records = restored?.records instanceof Records ? restored.records.fork() : new Records();
+    if (restored && !(restored.records instanceof Records)) {
+      for (const record of copy(restored.records)) this.records.push(record);
+    } else if (!restored) this.records.push({ sequence: 0, kind: 'started', setup: copy(setup) });
     if (restored) this.state = copy(restored.state);else this.refresh();
   }
   append(record: any) {
@@ -167,17 +176,19 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
   }
   setFault(code: 'invalid_output' | 'program_failed' | 'budget_exceeded', cause: unknown) {
     if (this.state?.kind === 'fault') return;
-    const raw = this.engine.current();
-    if (raw?.kind === 'fault' && ['budget_exceeded','program_failed'].includes(raw.error.code)) {
-      code = raw.error.code as typeof code;
-      cause = raw.error.message;
-    }
+    try {
+      const raw = this.engine.current();
+      if (raw.kind === 'fault') {
+        code = raw.error.code;
+        cause = raw.error.message;
+      }
+    } catch { /* Preserve the original failure if execution state cannot be read. */ }
     this.state = {
       kind: 'fault',
       error: {
         kind: 'fault',
         code,
-        message: String(cause)
+        message: exceptionMessage(cause)
       }
     };
     this.append({
@@ -237,7 +248,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
           async advance() {},
           dispose() {}
         };
-        self.schemas = {} as ProgramSchemas<S, P, R>;
+        self.schemas = {} as RuntimeSchemas<S, P, R>;
         return ok(undefined);
       },
       async run(options) {
@@ -298,7 +309,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
                       await self.engine.advance(output);
                       self.refresh();
                     } catch (cause) {
-                      self.setFault(String(cause).includes('budget') || String(cause).includes('Script execution timed out') ? 'budget_exceeded' : 'program_failed', cause);
+                      self.setFault('program_failed', cause);
                     } finally {
                       self.computing = false;
                     }
@@ -314,6 +325,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
             pause: self.state.kind === 'call' ? pause : null
           } as InstanceRunStop<P, R>);
         } finally {
+          self.engine.discardOutput?.();
           aborter.abort();
           options?.signal?.removeEventListener('abort', cancel);
           self.driving = false;

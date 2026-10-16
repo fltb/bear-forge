@@ -110,14 +110,14 @@ class ArgsTraps {
     const {
       func
     } = this;
-    func.$[func.meta.shift + +prop] = value;
+    func.$[func.meta.shift + +prop].value = value;
     return Reflect.set(target, prop, value);
   }
   get(target, prop) {
     if (typeof prop === "symbol" || isNaN(prop)) return Reflect.get(target, prop);
     const meta = this.func.meta;
     const index = +prop;
-    if (meta.params.length > index) return this.$[meta.shift + index];
+    if (meta.params.length > index) return this.$[meta.shift + index].value;
     return Reflect.get(target, prop);
   }
 }
@@ -164,7 +164,7 @@ function argsWrap(frame, value) {
   });
   return new _state.native.Proxy(arr, new ArgsTraps(frame));
 }
-function _module(modName, evalContext, cjs, require, safePrefix, closSyms, params) {
+function _module(modName, evalContext, cjs, require, safePrefix, closSyms, params, sourceText) {
   let fullPath;
   let name;
   let id;
@@ -195,6 +195,7 @@ function _module(modName, evalContext, cjs, require, safePrefix, closSyms, param
     };
     if (prevVersion) prevVersion.prevVersion = null;
   }
+  curModule.sourceText = sourceText;
   curModule.topLevel = null;
   (0, _persist.regOpaqueObject)(cjs, name + "$mod");
   context.modules[fullPath || id] = curModule;
@@ -221,7 +222,7 @@ let metaCount = 0;
 const parentTag = exports.parentTag = {
   _parentTag: true
 };
-function fun(name, origName, calleeName, parentConstr, params, localsNum, varsNum, loc, flags, handler, errHandler, finHandler, scopeDepth, states, compiledFactory) {
+function fun(name, origName, calleeName, parentConstr, params, localsNum, varsNum, loc, flags, handler, errHandler, finHandler, scopeDepth, states, compiledFactory, sourceRange) {
   const top = !curModule.topLevel;
   let meta = curModule.functions[name];
   if (meta) {
@@ -269,6 +270,7 @@ function fun(name, origName, calleeName, parentConstr, params, localsNum, varsNu
     (0, _persist.regOpaqueObject)(brk, `s#${persistName}#${id}`);
     memo.push(brk);
   }
+  meta.sourceRange = sourceRange;
   meta.varsNum = varsNum;
   meta.shift = calleeName ? 2 : 1;
   meta.exitBreakpoint = memo[memo.length - 1];
@@ -312,6 +314,7 @@ function fun(name, origName, calleeName, parentConstr, params, localsNum, varsNu
   const isArrow = flags & _state.Flag.ARROW_FUNCTION;
   const isAsync = flags & _state.Flag.ASYNC_FUNCTION;
   const isGenerator = flags & _state.Flag.GENERATOR_FUNCTION;
+  const wrapperKind = flags & (_state.Flag.GENERATOR_WRAPPER | _state.Flag.ASYNC_GENERATOR_WRAPPER);
   if (flags & _state.Flag.HAS_THIS) headLines.push(`${ctx}.self = ${isArrow ? ctx + "$.self" : "this"}`);
   if (flags & _state.Flag.HAS_ARGUMENTS) headLines.push(`${ctx}.args = ${isArrow ? ctx + "$.args" : `${ctx}args(${ctx},arguments)`}`);
   const api = curModule.api;
@@ -329,7 +332,11 @@ function fun(name, origName, calleeName, parentConstr, params, localsNum, varsNu
   }
   const constrParams = ["module", "exports", `${ctx}args`, `${ctx}context`, `${ctx}m`, `${ctx}M`, `${ctx}clos`, `${ctx}frame`, `${ctx}pushFrame`];
   const cjs = curModule.cjs;
-  const args = [cjs, cjs && cjs.exports, argsWrap, context, meta, api, isAsync || !isGenerator ? api.clos : api.closG, isAsync ? isGenerator ? api.frameAG : api.frameA : isGenerator ? api.frameG : api.frame, api.pushFrame];
+  const closureFactory = flags & _state.Flag.ASYNC_WRAPPER ? api.closA
+    : wrapperKind ? flags & _state.Flag.ASYNC_GENERATOR_WRAPPER ? api.closAG : api.closG
+    : isGenerator ? isAsync ? api.closAG : api.closG : isAsync ? api.closA : api.clos;
+  const frameFactory = isAsync ? isGenerator ? api.frameAG : api.frameA : isGenerator ? api.frameG : api.frame;
+  const args = [cjs, cjs && cjs.exports, argsWrap, context, meta, api, closureFactory, frameFactory, api.pushFrame];
   constrParams.push(`return (function(${ctx}$){
     var ${ctx}x = [${ctx}$,${ctx}$ && ${ctx}$.$,${ctx}m,function ${funcName}(${meta.params.join()}) {
       ${flags & _state.Flag.SLOPPY ? "" : '"use strict";'}
@@ -360,29 +367,26 @@ function buildScope(scope, parent) {
   if (scope == null) return parent;
   if (scope.length === 4) return scope[3];
   const [vars, par, depth] = scope;
-  const scopeInfo = {};
+  const scopeInfo = Object.create(null);
   scope.push(scopeInfo);
   const parScope = par ? buildScope(par, parent) : parent;
   if (parScope) Object.assign(scopeInfo, parScope);
-  // tslint:disable-next-line:forin
-  for (const i in vars) {
-    const info = vars[i];
+  for (const [i, info] of vars) {
     if (!info) continue;
     const [declDepth, declLoc] = info;
     scopeInfo[i] = [declDepth, depth, declLoc];
   }
   return scopeInfo;
 }
-const clos = exports.clos = _config.default.persistState ? function clos(closure) {
+const clos = exports.clos = _config.default.persistState ? function clos(closure, deferred) {
   const func = closure[CLOSURE_FUNC];
   weakMapSet.call(closures, func, closure);
-  (0, _serialization.setObjectDescriptor)(func, _persist.FunctionDescriptor /*(<any>meta).descriptor*/);
-  return func;
-} : function clos(closure) {
+  return !deferred && context.allocateFunction ? context.allocateFunction(func) : func;
+} : function clos(closure, deferred) {
   const func = closure[CLOSURE_FUNC];
   setPrototypeOf(func, FunctionConstr.prototype);
   weakMapSet.call(closures, func, closure);
-  return func;
+  return !deferred && context.allocateFunction ? context.allocateFunction(func) : func;
 };
 function __effectful__apply() {
   if (context.call === __effectful__apply) context.call = this;
@@ -407,6 +411,16 @@ function popScope() {
   return top.$ = top.$[0];
 }
 function __effectful_mcall(prop, ...args) {
+  if (context.operations) {
+    const operations = context.operations;
+    // The compiler's own helper table is frozen and has only own data methods.
+    // Looking up one of these methods cannot enter author code. Keep invoke
+    // (argument admission, result charging and dispatcher state) unchanged;
+    // only omit the redundant generic property lookup on this exact table.
+    const method = args[0] === operations && typeof prop === 'string' && Object.hasOwn(operations, prop)
+      ? operations[prop] : operations.get(operations.ref(args[0], prop));
+    return operations.invoke(method, args[0], args.slice(1));
+  }
   if ((prop === 'call' || prop === 'apply') && context.methods?.has(args[0])) args[0] = context.methods.get(args[0]);
   const original = args[0][prop];
   const func = context.methods?.get(original) ?? original;
@@ -436,6 +450,7 @@ function step(till = null) {
         if (!top) throw value;
         error = true;
       }
+      if (!context.__budgetExceeded) context.prepareException?.(value);
       top.error = value;
       top.meta.errHandler(top, top.$);
     }
@@ -500,6 +515,7 @@ function loop(value, till = null) {
         return e;
       }
       const frame = top;
+      if (!context.__budgetExceeded) context.prepareException?.(e);
       frame.error = e;
       if (!frame.meta.blackbox && context.exception !== e && checkErrBrk(frame, e)) {
         context.value = e;
@@ -580,6 +596,10 @@ function checkErrBrk(frame, e) {
   return needsStop;
 }
 function handle(frame, e) {
+  // A latched execution budget is terminal, including when an async rejection
+  // resumes a frame. Redispatching its catch handler would throw the same fault
+  // back into this loop without ever unwinding to the instance boundary.
+  if (context.__budgetExceeded) throw e;
   if (e === ctrlToken) {
     if (frame.next === context.unwindingTill) {
       const body = context.unwindingBody;
@@ -591,6 +611,7 @@ function handle(frame, e) {
     throw e;
   }
   for (;;) {
+    if (context.__budgetExceeded) throw e;
     if (e === token) {
       if (context.running || frame.next) throw e;
       context.onStop();
@@ -599,6 +620,7 @@ function handle(frame, e) {
     if (frame !== context.top) throw e;
     // tslint:disable-next-line:no-console
     const meta = frame.meta;
+    context.prepareException?.(e);
     frame.error = e;
     if (!meta.blackbox && e !== context.exception && checkErrBrk(frame, e)) {
       context.value = e;
@@ -846,7 +868,9 @@ function isDelayedResult(value) {
   return value === token;
 }
 let frameCounter = 0;
-function makeFrame(closure, newTarget) {
+function makeFrame(closure, newTarget, transient = false) {
+  if (!newTarget && context.takeConstructTarget) newTarget = context.takeConstructTarget(closure[CLOSURE_FUNC]);
+  if (context.operations) newTarget = context.operations.originalNewTarget(newTarget);
   const $g = global;
   const frame = {
     $: closure[CLOSURE_VARS],
@@ -875,7 +899,7 @@ function makeFrame(closure, newTarget) {
     self: void 0,
     args: void 0
   };
-  return frame;
+  return context.createFrame ? context.createFrame(frame, transient) : frame;
 }
 let TOP_LINES_STACK_NUM = 2;
 const isStackFrameLine = State.isNode ? function isStackFrameLine(line) {
@@ -970,6 +994,16 @@ function checkExitBrk(top, value) {
 }
 function ret(value) {
   const top = context.top;
+  if (top.meta.flags & (_state.Flag.GENERATOR_WRAPPER | _state.Flag.ASYNC_GENERATOR_WRAPPER)) {
+    const prototype = context.operations
+      ? context.operations.get(context.operations.ref(top.func, "prototype"))
+      : top.func.prototype;
+    const fallback = top.meta.flags & _state.Flag.ASYNC_GENERATOR_WRAPPER
+      ? top.meta.module.api.AsyncGenerator.prototype : top.meta.module.api.Generator.prototype;
+    const targetPrototype = prototype !== null && (typeof prototype === "object" || typeof prototype === "function") ? prototype : fallback;
+    if (context.operations) context.operations.invoke(nativeObject.setPrototypeOf, nativeObject, [value, targetPrototype]);
+    else nativeObject.setPrototypeOf(value, targetPrototype);
+  }
   if (top.newTarget && (!value || typeof value !== "object" && typeof value !== "function")) value = top.self;
   top.result = void 0;
   top.flags |= State.FrameFlags.Done;
@@ -1023,14 +1057,15 @@ function iteratorM(v) {
   return __effectful_mcall(v[Symbol.asyncIterator] ? Symbol.asyncIterator : Symbol.iterator, v);
 }
 function then(p, onResolve, onReject) {
-  if (p && typeof p.then === "function") {
-    context.call = p.then;
-    return p.then(onResolve, onReject);
-  }
+  const operations = context.operations;
+  if (!operations) throw new TypeError("Controlled await requires operations");
   context.call = Promise.resolve;
-  const res = Promise.resolve(p);
-  context.call = res.then;
-  return res.then(onResolve, onReject);
+  const res = operations.invoke(Promise.resolve, Promise, [p]);
+  // Await uses the intrinsic Promise continuation, not an own `then` that
+  // author code may have installed on an already-resolved Promise instance.
+  const method = Promise.prototype.then;
+  context.call = method;
+  return operations.invoke(method, res, [onResolve, onReject]);
 }
 function raise(e) {
   context.exception = _state.undef;
@@ -1048,21 +1083,25 @@ function reset() {
   context.launched = false;
 }
 function iterErr(iter, reason) {
-  if (!(context.call = iter.throw)) throw reason;
-  return iter.throw(reason);
+  const method = context.operations ? context.operations.get(context.operations.ref(iter, 'throw')) : iter.throw;
+  if (method == null) throw reason;
+  if (context.operations) return context.operations.invoke(method, iter, [reason]);
+  context.call = method; return method.call(iter, reason);
 }
 function iterErrUndef() {
   return TypeError("The iterator does not provide a 'throw' method.");
 }
 function iterFin(iter, value) {
-  if (!(context.call = iter.return)) return {
+  const method = context.operations ? context.operations.get(context.operations.ref(iter, 'return')) : iter.return;
+  if (method == null) return {
     value,
     done: true
   };
-  return iter.return(value);
+  if (context.operations) return context.operations.invoke(method, iter, [value]);
+  context.call = method; return method.call(iter, value);
 }
 function iterNext(iter, value) {
-  return context.call = iter.next, iter.next(value);
+  return __effectful_mcall('next', iter, value);
 }
 
 /**

@@ -17,7 +17,7 @@
     "vendor/effectful/*",
     "packages/experiments",
     "packages/analysis",
-    "packages/viewer",
+    "examples/forge-duel-viewer",
     "packages/cli",
     "examples/resolution",
     "packages/session"
@@ -31,7 +31,7 @@
     "analyze": "node --experimental-strip-types packages/cli/src/main.ts analyze",
     "serve": "node --experimental-strip-types packages/cli/src/main.ts serve",
     "demo": "node --experimental-strip-types packages/cli/src/main.ts demo",
-    "build:viewer": "npm run build --workspace @bear-forge/viewer",
+    "build:viewer": "npm run build --workspace @bear-forge/forge-duel-viewer",
     "build:runtime": "npm run build --workspace @bear-forge/runtime-controlled",
     "build": "npm run build:games && npm run build:viewer"
   },

@@ -24,88 +24,95 @@ class IterableThis {
   }
 }
 (0, _serialization.regConstructor)(IterableThis);
+const generatorConstruction = Symbol("generator construction");
 class Generator extends IterableThis {
-  constructor(frame) {
+  constructor(frame, token) {
     super();
-    this._frame = frame;
+    if (token !== generatorConstruction) throw new TypeError("Illegal generator construction");
+    State.context.generatorState.initialize(this, "Generator", frame);
   }
 }
 (0, _serialization.regConstructor)(Generator);
+exports.Generator = Generator;
+exports.IterableThis = IterableThis;
 const Gp = Generator.prototype;
-defineProperty(Gp, "throw", {
-  value: function raise(e) {
-    context.call = context.call === raise ? next : null;
-    const frame = this._frame;
+function resumableFrame(receiver) {
+  const record = context.generatorState.record(receiver);
+  if (!record || record.kind !== "Generator") throw new TypeError("Incompatible generator receiver");
+  const frame = record.state;
+  // Validate before a throw/return request can change the live continuation.
+  if ((frame.flags & State.FrameFlags.Running) !== 0) throw new TypeError("Generator is already running");
+  return frame;
+}
+const methods = {
+  next(value) {
+    const frame = resumableFrame(this);
+    frame.sent = value;
+    frame.flags |= State.FrameFlags.Running;
+    (0, _engine.pushFrame)(frame, methods.next);
+    context.call = null;
+    try {
+      return frame.meta.handler(frame, frame.$, value);
+    } catch (e) {
+      return (0, _engine.handle)(frame, e);
+    }
+  },
+  throw(e) {
+    const frame = resumableFrame(this);
+    context.call = context.call === methods.throw ? methods.next : null;
     frame.error = e;
     frame.meta.errHandler(frame, frame.$);
-    return this.next(e);
+    return methods.next.call(this, e);
   },
-  configurable: true,
-  writable: true
-});
-function next(value) {
-  const frame = this._frame;
-  if ((frame.flags & State.FrameFlags.Running) !== 0) throw new Error("Generator is already running");
-  frame.sent = value;
-  frame.flags |= State.FrameFlags.Running;
-  (0, _engine.pushFrame)(frame, next);
-  context.call = null;
-  try {
-    return frame.meta.handler(frame, frame.$, value);
-  } catch (e) {
-    return (0, _engine.handle)(frame, e);
-  }
-}
-defineProperty(Gp, "return", {
-  value: function ret(r) {
-    context.call = context.call === ret ? next : null;
-    const frame = this._frame;
+  return(r) {
+    const frame = resumableFrame(this);
+    context.call = context.call === methods.return ? methods.next : null;
     frame.meta.finHandler(frame, frame.$);
     frame.result = r;
-    return this.next(r);
-  },
-  configurable: true,
-  writable: true
+    return methods.next.call(this, r);
+  }
+};
+for (const key of ["next", "return", "throw"]) defineProperty(Gp, key, {
+  value: methods[key], configurable: true, writable: true
 });
-defineProperty(Gp, "next", {
-  value: next,
-  configurable: true,
-  writable: true
-});
-function GeneratorFunction() {}
-(0, _serialization.regOpaqueObject)(GeneratorFunction);
-function GeneratorFunctionPrototype() {}
-setPrototypeOf(GeneratorFunctionPrototype, _engine.FunctionConstr.prototype);
-(0, _serialization.regOpaqueObject)(GeneratorFunctionPrototype);
-GeneratorFunctionPrototype.prototype = Gp;
-GeneratorFunction.prototype = Gp.constructor = GeneratorFunctionPrototype;
-GeneratorFunctionPrototype.constructor = GeneratorFunction;
-GeneratorFunctionPrototype[Symbol.toStringTag] = GeneratorFunction.displayName = "GeneratorFunction";
-function closG($$, meta, closure) {
-  const res = (0, _engine.clos)($$, meta, closure);
+// Shared intrinsic objects are registered once; per-function prototypes remain Context data.
+function createFunctionPrototype(name, iteratorPrototype, tag, prototype) {
+  Object.defineProperties(iteratorPrototype, {
+    constructor: { value: prototype, writable: false, configurable: true },
+    [Symbol.toStringTag]: { value: tag, configurable: true }
+  });
+  const link = Object.getOwnPropertyDescriptor(prototype, "prototype");
+  if (!link || !Object.prototype.hasOwnProperty.call(link, "value")) throw new TypeError("Generator function prototype has no iterator link");
+  Object.defineProperty(prototype, "prototype", { ...link, value: iteratorPrototype });
+  (0, _serialization.regOpaqueObject)(prototype.constructor, "runtime." + name, { props: false });
+  (0, _serialization.regOpaqueObject)(prototype, "runtime." + name + ".prototype", { props: false });
+  return prototype;
+}
+exports.createFunctionPrototype = createFunctionPrototype;
+const GeneratorFunctionPrototype = createFunctionPrototype("GeneratorFunction", Gp, "Generator", Object.getPrototypeOf(function*() {}));
+function closG(closure) {
+  const res = (0, _engine.clos)(closure, true);
   Object.setPrototypeOf(res, GeneratorFunctionPrototype);
-  /*
-  const proto = (res.prototype = Object.create(Gp));
-  defineProperty(proto, "next", {
-    value: meta.handler,
-    configurable: true
-  });*/
   res.prototype = Object.create(Gp);
-  return res;
+  return context.allocateFunction ? context.allocateFunction(res) : res;
 }
 function frameG(closure, newTarget) {
   const frame = (0, _engine.makeFrame)(closure, newTarget);
-  const iter = Object.create(closure[CLOSURE_FUNC].prototype);
+  const prototype = context.operations
+    ? context.operations.get(context.operations.ref(closure[CLOSURE_FUNC], "prototype"))
+    : closure[CLOSURE_FUNC].prototype;
+  const iter = Object.create(prototype !== null && (typeof prototype === "object" || typeof prototype === "function") ? prototype : Gp);
   frame.iter = iter;
-  iter._frame = frame;
+  State.context.generatorState.initialize(iter, "Generator", frame);
   return frame;
+}
+function iterationResult(value, done) {
+  const result = {value, done};
+  return context.allocate ? context.allocate(result) : result;
 }
 function yld(value) {
   const frame = context.top;
-  const res = context.value = {
-    value,
-    done: false
-  };
+  const res = context.value = iterationResult(value, false);
   if (!context.enabled && frame.restoreEnabled !== State.undef) context.enabled = true;
   (0, _engine.popFrame)(frame);
   frame.flags &= ~State.FrameFlags.Running;
@@ -113,10 +120,7 @@ function yld(value) {
 }
 function retG(value) {
   const frame = context.top;
-  const res = context.value = {
-    value,
-    done: true
-  };
+  const res = context.value = iterationResult(value, true);
   frame.result = void 0;
   frame.flags = frame.flags & ~State.FrameFlags.Running | State.FrameFlags.Done;
   if (context.enabled) (0, _engine.checkExitBrk)(frame, res);else if (frame.restoreEnabled !== State.undef) context.enabled = true;

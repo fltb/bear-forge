@@ -3,7 +3,7 @@ import { createGameSDK } from '@bear-forge/game-sdk';
 import type { GameModule } from '@bear-forge/contracts/authoring';
 import type { Types, Ports } from './game.types.ts';
 import { SetupSchema, StateSchema, SeatSchema, ObservationSchema, EventSchema, ResultSchema, ActionSchema, RequestSchema, OptionsSchema, gamePorts } from './forge.schemas.ts';
-import { create, apply, legal, available, decisionKey, observe, project } from './rules.ts';
+import { create, apply, legal, sameAction, available, decisionKey, observe, project } from './rules.ts';
 export const game: GameModule<Types> = {
   program: {
     schemas: {
@@ -61,9 +61,10 @@ export const game: GameModule<Types> = {
             valid: false,
             reason: 'request_mismatch'
           };
-          return legal(state as any).some(candidate => JSON.stringify(candidate) === JSON.stringify(action)) ? {
+          const checked = ActionSchema.safeParse(action);
+          return checked.success && legal(state as any).some(candidate => sameAction(candidate, checked.data)) ? {
             valid: true,
-            output: ActionSchema.parse(action)
+            output: checked.data
           } : {
             valid: false,
             reason: 'illegal_action'

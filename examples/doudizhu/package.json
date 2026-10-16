@@ -11,7 +11,9 @@
   "devDependencies": {
     "@bear-forge/compiler": "*",
     "@bear-forge/runtime-controlled": "*",
-    "@bear-forge/session": "*"
+    "@bear-forge/session": "*",
+    "@bear-forge/experiments": "*",
+    "@bear-forge/policies": "*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

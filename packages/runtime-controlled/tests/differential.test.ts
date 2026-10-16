@@ -11,6 +11,7 @@ import { createNativeLoader } from '@bear-forge/runtime-native';
 import { createControlledLoader, programDigest, fileSnapshotStore } from '../src/index.ts';
 import type { CompiledProgram } from '@bear-forge/contracts/loading';
 import { program, modes } from './benchmarks.ts';
+const sizes = process.env.BEAR_BENCHMARK_EXTENDED === '1' ? [4, 8, 32] : [4, 8];
 const unwrap = <T,>(x: {
   ok: true;
   value: T;
@@ -51,21 +52,24 @@ async function native(setup: any, replies: number[] = []) {
 }
 async function controlled(setup: any, restore = false) {
   const loaded = unwrap(await createControlledLoader({
-    trustedDigests: new Set([programDigest(artifact.content)])
+    trustedDigests: new Set([programDigest(artifact.content)]),
+    stepBudget: 100000000
   }).load(artifact));
   let instance = unwrap(await loaded.core.start(setup));
   const calls: any[] = [];
   let ordinal = 0;
   while (true) {
     const state = unwrap(await instance.inspect());
-    if (state.kind === 'done') return {
-      calls,
-      value: state.result
-    };
+    if (state.kind === 'done') {
+      unwrap(await instance.close());
+      unwrap(await loaded.capture!.release(instance.id));
+      return { calls, value: state.result };
+    }
     assert.equal(state.kind, 'call', inspect(state));
     if (restore) {
       const saved = unwrap(await loaded.persistence!.save(instance));
       unwrap(await instance.close());
+      unwrap(await loaded.capture!.release(instance.id));
       instance = unwrap(await loaded.persistence!.restore(saved));
       unwrap(await loaded.persistence!.release(saved));
       assert.equal((unwrap(await instance.inspect()) as any).callId, (state as any).callId);
@@ -88,22 +92,24 @@ async function controlled(setup: any, restore = false) {
   }
 }
 for (const mode of modes) test('native/compiled ' + mode + ' complete trace and final result', async () => {
-  for (const seed of [1, 17]) {
+  for (const size of sizes) for (const seed of [1, 17]) {
     const setup = {
       mode,
       seed,
-      size: 4
+      size
     };
     assert.deepEqual(await controlled(setup), await native(setup));
   }
 });
 for (const mode of modes) test('every stable point restores ' + mode, async () => {
+  for (const size of sizes) {
   const setup = {
     mode,
     seed: 31,
-    size: 4
+    size
   };
   assert.deepEqual(await controlled(setup, true), await native(setup));
+  }
 });
 test('cross-process restore loads only artifact/runtime and consumes only suffix', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'bear-restore-'));
@@ -129,7 +135,8 @@ test('cross-process restore loads only artifact/runtime and consumes only suffix
 });
 test('fork has new identity, retained call id, independent memory and bindings', async () => {
   const loaded = unwrap(await createControlledLoader({
-    trustedDigests: new Set([programDigest(artifact.content)])
+    trustedDigests: new Set([programDigest(artifact.content)]),
+    stepBudget: 100000000
   }).load(artifact));
   const parent = unwrap(await loaded.core.start({
     mode: 'closure',
@@ -172,4 +179,4 @@ test('fork has new identity, retained call id, independent memory and bindings',
   assert.notDeepEqual(av, bv);
 });
 
-test('IO-free native and compiled benchmark variants reach the same complete result without emitting a port',async()=>{for(const mode of modes){const setup={mode,seed:31,size:4,pause:false};const actual=await controlled(setup),expected=await native(setup);assert.deepEqual(actual,expected,mode);assert.equal(actual.calls.length,0);}});
+test('IO-free native and compiled benchmark variants reach the same complete result without emitting a port',async()=>{for(const mode of modes)for(const size of sizes){const setup={mode,seed:31,size,pause:false};const actual=await controlled(setup),expected=await native(setup);assert.deepEqual(actual,expected,mode);assert.equal(actual.calls.length,0);}});

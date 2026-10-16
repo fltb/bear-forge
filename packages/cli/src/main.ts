@@ -1,10 +1,10 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { compileEntry, compileNativeEntry } from '@bear-forge/compiler';
-import { ExperimentFiles, runExperiment, RegistrationSchema } from '@bear-forge/experiments';
-import type { TaskResult } from '@bear-forge/experiments';
-import { analyze } from '@bear-forge/analysis';
-import { createEvidenceServer } from '@bear-forge/viewer';
+import { ExperimentFiles, runExperiment, RegistrationSchema } from '@bear-forge/forge-duel/experiment/execution';
+import type { TaskResult } from '@bear-forge/forge-duel/experiment/execution';
+import { analyze } from '@bear-forge/forge-duel/experiment/analysis';
+import { createEvidenceServer } from '@bear-forge/forge-duel-viewer';
 export function argumentsOf(args: string[]) {
   const flags: Record<string, string | boolean> = {};
   for (let i = 0; i < args.length; i++) {
@@ -20,7 +20,7 @@ export async function main(args = process.argv.slice(2)) {
   const allowed: Record<string, string[]> = {
     'build:games': [],
     experiment: ['output', 'config', 'resume', 'concurrency', 'memory-mb', 'compute-steps'],
-    analyze: ['output'],
+    analyze: ['output', 'experiment'],
     demo: ['output', 'concurrency', 'memory-mb', 'compute-steps'],
     serve: ['output', 'port']
   };
@@ -57,9 +57,11 @@ export async function main(args = process.argv.slice(2)) {
     return;
   }
   if (command === 'analyze') {
+    if (flags.experiment !== undefined && typeof flags.experiment !== 'string') throw Error('--experiment requires an id');
     const files = new ExperimentFiles(directory),
       registration: any = await files.read('registration');
     if (!registration) throw Error('No registration');
+    if (flags.experiment !== undefined && flags.experiment !== registration.config.id) throw Error('Experiment id does not match the registered output directory');
     const result = analyze(registration.config, await files.summaries());
     await files.write('analysis', result);
     console.log(JSON.stringify({

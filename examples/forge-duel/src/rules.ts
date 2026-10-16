@@ -1,4 +1,4 @@
-import { SetupSchema } from './forge.schemas.ts';
+import { ActionSchema, SetupSchema } from './forge.schemas.ts';
 import type { Setup, State, Seat, Definition, Action, Event, Observation } from './forge.schemas.ts';
 export const cards: Record<Definition, {
   cost: number;
@@ -249,6 +249,11 @@ export function legal(s: State, seat = s.active): Action[] {
   });
   return actions;
 }
+export function sameAction(a: Action, b: Action): boolean {
+  if (a.kind === 'play' && b.kind === 'play') return a.cardId === b.cardId && a.target === b.target;
+  if (a.kind === 'attack' && b.kind === 'attack') return a.unitId === b.unitId && a.target === b.target;
+  return a.kind === 'end' && b.kind === 'end';
+}
 export function available(s: State) {
   const used = new Set<string>();
   for (const action of legal(s)) {
@@ -287,7 +292,9 @@ function damage(s: State, target: string, amount: number) {
   throw Error('Unknown target');
 }
 export function apply(s: State, action: Action) {
-  if (!legal(s).some(a => JSON.stringify(a) === JSON.stringify(action))) throw Error('Illegal action');
+  const checked = ActionSchema.safeParse(action);
+  if (!checked.success || !legal(s).some(candidate => sameAction(candidate, checked.data))) throw Error('Illegal action');
+  action = checked.data;
   const seat = s.active,
     hero = s.heroes[seat];
   s.cause = 'action:' + s.step;

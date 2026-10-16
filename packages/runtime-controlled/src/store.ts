@@ -1,4 +1,5 @@
-import { mkdir, readFile, open, rename, stat } from 'node:fs/promises';
+import { mkdir, readFile, open, rename, rm, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 export type SnapshotStore = {
   put: (id: string, content: Uint8Array) => Promise<void>;
@@ -29,24 +30,30 @@ export function fileSnapshotStore(directory: string): SnapshotStore {
     return join(directory, id + '.snapshot');
   };
   async function put(id: string, value: Uint8Array) {
+    const target = path(id),
+      temp = target + '.' + randomUUID() + '.tmp';
     await mkdir(directory, {
       recursive: true
     });
-    const target = path(id),
-      temp = target + '.tmp';
-    const file = await open(temp, 'wx');
+    let renamed = false;
     try {
-      await file.writeFile(value);
-      await file.sync();
+      const file = await open(temp, 'wx');
+      try {
+        await file.writeFile(value);
+        await file.sync();
+      } finally {
+        await file.close();
+      }
+      await rename(temp, target);
+      renamed = true;
+      const dir = await open(directory, 'r');
+      try {
+        await dir.sync();
+      } finally {
+        await dir.close();
+      }
     } finally {
-      await file.close();
-    }
-    await rename(temp, target);
-    const dir = await open(directory, 'r');
-    try {
-      await dir.sync();
-    } finally {
-      await dir.close();
+      if (!renamed) await rm(temp, { force: true });
     }
   }
   return {

@@ -78,6 +78,8 @@ function emptyBlock() {
     ibr: null,
     // a variable to hold a copy of an exception
     errCopy: null,
+    // Whether this finalizer was entered with a throw completion.
+    throwing: null,
     finalizer: null,
     blackbox: false,
     handler: null
@@ -106,58 +108,32 @@ function isPureCaseExpr(i) {
       return false;
   }
 }
+/** Preserve left-to-right evaluation by materializing every value expression.
+ * Only immutable atoms and syntactic references may remain in the parent.
+ * Short-circuit/conditional expressions are split by enter(), never evaluated
+ * eagerly across an untaken branch. Function bodies are separate CFG roots.
+ */
 function defaultNeedsSave(doc) {
   switch (doc.type) {
     case Tag.ThisExpression:
-    case Tag.RegExpLiteral:
     case Tag.NullLiteral:
     case Tag.StringLiteral:
     case Tag.BooleanLiteral:
     case Tag.NumericLiteral:
+    case Tag.BigIntLiteral:
     case Tag.Import:
     case Tag.Super:
       return false;
     case Tag.Identifier:
-      const sym = doc.sym;
-      return sym && sym.capt;
-    case Tag.FunctionExpression:
-    case Tag.ArrowFunctionExpression:
-    case Tag.BinaryExpression:
-    case Tag.ObjectExpression:
-    case Tag.ClassExpression:
-    case Tag.ArrayExpression:
-      return false;
-    case Tag.UnaryExpression:
-      {
-        switch (doc.node.operator) {
-          case "delete":
-          case "throw":
-            return true;
-        }
-        const p = doc.parent;
-        if (p.type === Tag.MemberExpression) return true;
-        return false;
-      }
-    case Tag.MemberExpression:
-      {
-        const p = doc.parent;
-        switch (p.type) {
-          case Tag.UpdateExpression:
-            return false;
-          case Tag.ForInStatement:
-          case Tag.ForOfStatement:
-          case Tag.AssignmentExpression:
-            if (doc.pos === Tag.left) return false;
-            break;
-          case Tag.CallExpression:
-            if (doc.pos === Tag.callee) return false;
-            break;
-          case Tag.UnaryExpression:
-            if (p.node.operator === "delete") return false;
-            break;
-        }
-        break;
-      }
+      // Runtime references and compiler temporaries cannot change before use.
+      return !!doc.sym && !doc.sym.temp && !doc.sym.lib;
+    case Tag.MemberExpression: {
+      const p = doc.parent;
+      if ((p.type === Tag.AssignmentExpression || p.type === Tag.ForInStatement || p.type === Tag.ForOfStatement) && doc.pos === Tag.left) return false;
+      if (p.type === Tag.CallExpression && doc.pos === Tag.callee) return false;
+      if (p.type === Tag.UnaryExpression && p.node.operator === "delete") return false;
+      break;
+    }
   }
   return true;
 }
@@ -293,7 +269,7 @@ function build(needsSave = defaultNeedsSave) {
             lastItem.doc.refDoc = doc;
             const testBlock = lastBlock.br = newBlock();
             setBlock(testBlock);
-            push(newItem(null, memExpr(Tag.right, itemSym, "done"), curScope));
+            push(opItem(null, Scope.iterDoneSym, itemSym));
             testBlock.exitKind = EXIT_COND;
             if (sym) {
               setBlock(testBlock.trueBr = newBlock());
@@ -302,49 +278,49 @@ function build(needsSave = defaultNeedsSave) {
             } else testBlock.trueBr = exitBlock;
             testBlock.falseBr = bodyBlock;
             setBlock(bodyBlock);
-            const nextValSym = tempSym(root, curScope);
-            pushIterValue(nextValSym, itemSym);
-            pushYield(async, yieldResSym, nextValSym);
+            if (async) {
+              const nextValSym = tempSym(root, curScope);
+              pushIterValue(nextValSym, itemSym);
+              pushYield(async, yieldResSym, nextValSym);
+            } else push(opItem(yieldResSym, Scope.yieldDelegateSym, itemSym));
             lastItem.eff = lastItem.result = true;
             lastItem.doc.refDoc = doc;
             bodyBlock.br = iterBlock;
             bodyBlock.rec = true;
             const catchBlock = newBlock();
             catchBlock.blackbox = true;
-            testBlock.handler = bodyBlock.handler = catchBlock;
+            bodyBlock.handler = catchBlock;
             handlers.add(catchBlock);
             setBlock(catchBlock);
-            catchBlock.exitKind = EXIT_COND;
-            push(newItem(null, memExpr(Tag.right, iterSym, "throw")));
-            setBlock(catchBlock.trueBr = newBlock());
             iterOp(async, Scope.iterErrSym, iterSym, itemSym, id0(Tag.push, errSym, curScope));
             lastBlock.br = testBlock;
             lastBlock.rec = true;
-            const reThrowBlock = catchBlock.falseBr = newBlock();
-            setBlock(reThrowBlock);
-            const undef = Kit.node(Tag.right, Tag.CallExpression);
-            Kit.append(undef, memExpr(Tag.callee, nsSym, "iterErrUndef"));
-            Kit.append(undef, Kit.arr(Tag.arguments));
-            push(newItem(errSym, undef));
-            lastBlock.br = curHandler;
-            lastBlock.unwind = true;
             const finBlock = newFinalizerBlock();
             setBlock(finBlock);
             const retItemSym = tempSym(root, curScope);
             iterOp(async, Scope.iterFinSym, iterSym, retItemSym, id0(Tag.push, retSym, curScope));
-            push(newItem(null, memExpr(Tag.right, retItemSym, "done"), curScope));
+            push(opItem(null, Scope.iterDoneSym, retItemSym));
             lastBlock.exitKind = EXIT_COND;
-            lastBlock.trueBr = finBlock.tail;
-            setBlock(lastBlock.falseBr = newBlock());
-            const retValSym = tempSym(root, curScope);
-            pushIterValue(retValSym, retItemSym);
-            pushYield(async, yieldResSym, retValSym);
+            const returnTestBlock = lastBlock;
+            setBlock(returnTestBlock.trueBr = newBlock());
+            pushIterValue(retSym, retItemSym);
+            lastBlock.br = finBlock.tail;
+            setBlock(returnTestBlock.falseBr = newBlock());
+            lastBlock.handler = catchBlock;
+            lastBlock.returnFinalizer = finBlock;
+            push(newItem(retSym, id0(Tag.right, Scope.undefinedSym, curScope), curScope));
+            if (async) {
+              const retValSym = tempSym(root, curScope);
+              pushIterValue(retValSym, retItemSym);
+              pushYield(async, yieldResSym, retValSym);
+            } else push(opItem(yieldResSym, Scope.yieldDelegateSym, retItemSym));
             lastItem.eff = lastItem.result = true;
             lastItem.doc.refDoc = doc;
             lastBlock.br = iterBlock;
             lastBlock.rec = true;
-            testBlock.finalizer = iterBlock.finalizer = bodyBlock.finalizer = finBlock;
-            catchBlock.finalizer = reThrowBlock.finalizer = finBlock;
+            // Delegation forwards an injected return, but neither a normal
+            // resume nor a delegated throw performs IteratorClose here.
+            bodyBlock.returnFinalizer = finBlock;
             setBlock(exitBlock);
             return;
           }
@@ -481,9 +457,10 @@ function build(needsSave = defaultNeedsSave) {
     push(opItem(resSym, yieldSym, argSym));
   }
   function pushIterValue(valSym, itemSym) {
-    push(newItem(valSym, memExpr(Tag.right, itemSym, "value"), curScope));
+    push(opItem(valSym, Scope.iterValueSym, itemSym));
   }
   function iterOp(async, opSym, iterSym, itemSym, passVal) {
+    if (!itemSym) itemSym = tempSym(root, curScope);
     const call = Kit.node(Tag.right, Tag.CallExpression);
     Kit.append(call, Scope.sysId(Tag.callee, opSym));
     const args = Kit.tok(Tag.arguments, Tag.Array, []);
@@ -492,6 +469,8 @@ function build(needsSave = defaultNeedsSave) {
     if (passVal) Kit.append(args, passVal);
     call.eff = true;
     pushAsync(async, itemSym, newItem(null, call, curScope));
+    lastItem.eff = true;
+    push(opItem(itemSym, Scope.iterResultSym, itemSym));
     lastItem.eff = true;
   }
   function iterMethod(pos, iterSym, method) {
@@ -749,10 +728,30 @@ function build(needsSave = defaultNeedsSave) {
             }
             if (!forIn) {
               const finalizer = newFinalizerBlock();
+              // IteratorClose preserves an incoming throw, including undefined.
+              // Keep its completion separate from any error raised while closing.
+              const tail = finalizer.tail;
+              curScope.scopeDecls.add(tail.errCopy = tempSym(root, curScope));
+              curScope.scopeDecls.add(tail.throwing = tempSym(root, curScope));
+              const closeHandler = newBlock();
+              const closeFailure = newBlock();
+              handlers.add(closeHandler);
+              setBlock(closeHandler);
+              push(newItem(null, id0(Tag.right, tail.throwing, curScope), curScope));
+              lastBlock.exitKind = EXIT_COND;
+              lastBlock.trueBr = tail;
+              lastBlock.falseBr = closeFailure;
+              setBlock(closeFailure);
+              push(opItem(null, Scope.raiseSym, errSym));
+              lastItem.result = lastItem.eff = true;
+              lastBlock.br = tail;
+              const parHandler = curHandler;
+              curHandler = finalizer.handler = closeHandler;
               setBlock(finalizer);
               iterOp(async, Scope.iterFinSym, iterSym, null, null);
               lastItem.doc.refDoc = right;
-              lastBlock.br = finalizer.tail;
+              lastBlock.br = tail;
+              curHandler = parHandler;
               bodyBlock.finalizer = finalizer;
             }
             let firstBlock = enterBlock;
@@ -769,8 +768,10 @@ function build(needsSave = defaultNeedsSave) {
               bodyBlock.scope = curScope;
               firstBlock = lastBlock;
             }
-            curFinalizer = bodyBlock.finalizer;
+            // Iterator advancement and result getters are outside IteratorClose.
+            // Only binding assignment and the body have an acquired value to close.
             const testBlock = newBlock();
+            const valueBlock = newBlock();
             const postfixBlock = newBlock();
             postfixBlock.br = scopeCleanupBlock;
             firstBlock.br = testBlock;
@@ -794,11 +795,16 @@ function build(needsSave = defaultNeedsSave) {
             } else iterOp(async, Scope.iterNextSym, iterSym, itemSym, null);
             lastItem.doc.node.loc = left.node.loc;
             lastItem.doc.refDoc = right;
-            push(newItem(null, memExpr(Tag.right, itemSym, "done"), curScope));
+            push(opItem(null, Scope.iterDoneSym, itemSym));
             lastBlock.exitKind = EXIT_COND;
             lastBlock.trueBr = postfixBlock;
-            lastBlock.falseBr = bodyBlock;
+            lastBlock.falseBr = valueBlock;
             setBlock(postfixBlock);
+            setBlock(valueBlock);
+            const valSym = tempSym(root, curScope);
+            pushIterValue(valSym, itemSym);
+            lastBlock.br = bodyBlock;
+            curFinalizer = bodyBlock.finalizer;
             setBlock(bodyBlock);
             if (left.type === Tag.MemberExpression) {
               let obj = left.firstChild;
@@ -823,11 +829,14 @@ function build(needsSave = defaultNeedsSave) {
             Kit.detach(left);
             Kit.append(assign, left);
             Dom.regPat(left);
-            const valSym = tempSym(root, curScope);
-            pushIterValue(valSym, itemSym);
             Kit.append(assign, id0(Tag.right, valSym, curScope));
             push(newItem(null, assign, curScope));
-            loopBody(i, body, testBlock, exitBlock);
+            // Continue ends the body without closing its iterator. Unwind author
+            // finally blocks to this bridge, then advance outside the close region.
+            const continueBlock = newBlock();
+            loopBody(i, body, continueBlock, exitBlock);
+            setBlock(continueBlock);
+            lastBlock.br = testBlock;
             setBlock(exitBlock);
             curFinalizer = parFinalizer;
             curScope = parScope;
@@ -1090,18 +1099,26 @@ function build(needsSave = defaultNeedsSave) {
     if (!body) return;
     const parBrk = curBrk;
     const parCnt = curCnt;
-    curCnt = cnt;
+    const iterationEnd = i.isScopeNode ? newBlock() : cnt;
+    curCnt = iterationEnd;
     curBrk = brk;
     const par = i.parent;
     if (par.type === Tag.LabeledStatement) {
-      const label = par.firstChild.node.name;
       const parLabels = cntLabels;
       cntLabels = new Map(cntLabels);
-      cntLabels.set(label, curCnt);
+      for (let label = par; label && label.type === Tag.LabeledStatement; label = label.parent) {
+        cntLabels.set(label.firstChild.node.name, curCnt);
+      }
       traverse(body, after(body));
       cntLabels = parLabels;
     } else traverse(body, after(body));
-    if (i.isScopeNode) i.copyScopeExpr = pushCopyScope();
+    if (i.isScopeNode) {
+      // Every continue edge must create the next iteration's lexical cells,
+      // including labelled edges that unwind an intervening finally block.
+      lastBlock.br = iterationEnd;
+      setBlock(iterationEnd);
+      i.copyScopeExpr = pushCopyScope();
+    }
     curCnt = parCnt;
     curBrk = parBrk;
     lastBlock.br = cnt;

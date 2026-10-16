@@ -1,1 +1,1 @@
-export { keys, fields, copy, read, matchTables, admitSchema } from './values.ts';
+export { keys, fields, copy, sameData, read, matchTables, admitSchema } from './values.ts';

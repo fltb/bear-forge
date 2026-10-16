@@ -21,6 +21,7 @@ exports.regConstructor = regConstructor;
 exports.regNewConstructor = regNewConstructor;
 exports.writeProps = writeProps;
 exports.readProps = readProps;
+exports.prepareOwnKeys = prepareOwnKeys;
 exports.regObjectDescriptorGetter = regObjectDescriptorGetter;
 exports.regValueDescriptorGetter = regValueDescriptorGetter;
 exports.getJsonDescriptor = getJsonDescriptor;
@@ -127,29 +128,32 @@ function write(value, opts = {}) {
     const x = [];
     const resRefs = opts.refs;
     const weakMaps = ctx.weakMaps;
-    for (let job; (job = ctx.jobs) != null;) {
-        if (job.started) {
-            if (alwaysByRef) {
-                if (job.ref)
-                    job.ref.r = x.push(job.data) - 1;
-                if (resRefs)
-                    resRefs.push(job.value);
-            }
-            else
-                refs.push(job);
-            ctx.jobs = job.nextJob;
-            continue;
-        }
-        job.started = true;
-        const value = job.value;
-        job.data = (job.descriptor.write(ctx, value, job.parent, job.index));
-        for (const [map, json] of weakMaps) {
-            if (map.has(value)) {
-                const { k, v } = json;
-                k.push(ctx.step(value, k, k.length));
-                v.push(ctx.step(map.get(value), v, v.length));
-            }
-        }
+    for (;;) {
+      for (let job; (job = ctx.jobs) != null;) {
+          if (job.started) {
+              if (alwaysByRef) {
+                  if (job.ref)
+                      job.ref.r = x.push(job.data) - 1;
+                  if (resRefs)
+                      resRefs.push(job.value);
+              }
+              else
+                  refs.push(job);
+              ctx.jobs = job.nextJob;
+              continue;
+          }
+          job.started = true;
+          const value = job.value;
+          job.data = (job.descriptor.write(ctx, value, job.parent, job.index));
+          for (const [map, json] of weakMaps) {
+              if (map.has(value)) {
+                  const { k, v } = json;
+                  k.push(ctx.step(value, k, k.length));
+                  v.push(ctx.step(map.get(value), v, v.length));
+              }
+          }
+      }
+      if (!ctx.weakEntries.drain() && ctx.jobs == null) break;
     }
     if (ctx.weakSets.length) {
         for (const info of ctx.sharedRefs.values()) {
@@ -266,6 +270,40 @@ function bind(func, self, ...args) {
     return res;
 }
 let debCtx = null;
+// Ephemeron processing: each entry waits on one key and is scheduled once.
+// Newly reachable values may wake more entries; no pending-list rescans.
+class WeakEntryQueue {
+    constructor() {
+        this.reached = new Set();
+        this.pending = new Map();
+        this.ready = [];
+    }
+    mark(key) {
+        const type = typeof key;
+        if (key === null || type !== "object" && type !== "function" && type !== "symbol" || this.reached.has(key)) return;
+        this.reached.add(key);
+        const waiting = this.pending.get(key);
+        if (waiting) {
+            for (const write of waiting) this.ready.push(write);
+            this.pending.delete(key);
+        }
+    }
+    add(key, write, shared = false) {
+        if (shared || this.reached.has(key)) this.ready.push(write);
+        else {
+            let waiting = this.pending.get(key);
+            if (!waiting) this.pending.set(key, waiting = []);
+            waiting.push(write);
+        }
+    }
+    drain() {
+        if (!this.ready.length) return false;
+        for (let i = 0; i < this.ready.length; i++) this.ready[i]();
+        this.ready.length = 0;
+        return true;
+    }
+}
+exports.WeakEntryQueue = WeakEntryQueue;
 /**
  * An object passed to Descriptor's `write` method to support recursive
  * invocation for nested values
@@ -280,6 +318,7 @@ class WriteContext {
         this.knownSyms = opts.knownSyms || (opts.knownSyms = new LocMap());
         this.weakMaps = opts.weakMaps || (opts.weakMaps = []);
         this.weakSets = opts.weakSets || (opts.weakSets = []);
+        this.weakEntries = new WeakEntryQueue();
         this.jobs = void 0;
     }
     /**
@@ -290,6 +329,7 @@ class WriteContext {
      *               or number index if it is an array
      */
     step(value, parent, key) {
+        this.weakEntries.mark(value);
         let descriptor = (0, exports.getValueDescriptor)(value);
         if (!descriptor) {
             const { opts } = this;
@@ -787,24 +827,23 @@ function writeProps(ctx, descrs, pred, mask, snapshot) {
     return props;
 }
 function readPropName(ctx, key) {
+    if (typeof key === "string")
+        return key;
     let name;
-    if (key.substr) {
-        name = key;
-    }
-    else if (key.$) {
+    if (key.$) {
         const descr = descriptorByName.get(key.$);
         if (descr)
             name = descr.read(ctx, key);
     }
-    if (!name)
+    if (name === undefined)
         name = readSym(ctx, key);
     return name;
 }
 function readPropDescriptor(ctx, pjson, flags, get, set, pdescr) {
     pdescr.configurable = (flags & 1) === 0;
     pdescr.enumerable = (flags & 2) === 0;
-    if ((flags & 4) === 0)
-        pdescr.writable = true;
+    if ((flags & 8) === 0)
+        pdescr.writable = (flags & 4) === 0;
     if ((flags & 8) === 0)
         pdescr.value = ctx.step(pjson);
     if (get)
@@ -814,26 +853,52 @@ function readPropDescriptor(ctx, pjson, flags, get, set, pdescr) {
     weakMapSet.call(descriptorByObject, pdescr, exports.PropertyDescriptorDescriptor);
     return pdescr;
 }
+/** Reconcile allocation-time keys before restoring complete own descriptors.
+ * Integer indices have numeric order; strings and symbols have separate insertion
+ * orders. Keep an existing prefix and remove the configurable remainder. */
+function prepareOwnKeys(value, keys, storage) {
+    const ordered = key => typeof key === "symbol" ||
+        !(String(Number(key) >>> 0) === key && Number(key) < 4294967295);
+    const allocated = (storage ? storage.ownKeys(value) : Reflect.ownKeys(value)).filter(key => key !== exports.descriptorSymbol && ordered(key));
+    if (!allocated.length) return;
+    for (const type of ["string", "symbol"]) {
+        if (!allocated.some(key => typeof key === type)) continue;
+        const expected = keys.filter(key => typeof key === type && ordered(key));
+        let next = 0;
+        for (const key of allocated) {
+            if (typeof key !== type) continue;
+            if (key === expected[next]) { next++; continue; }
+            if (!(storage ? storage.deleteProperty(value, key) : Reflect.deleteProperty(value, key)))
+                throw new TypeError("Allocated own-property order cannot represent saved state");
+        }
+    }
+}
 /** Reading serialized `Object.defineProperty` descriptors from JSON */
-function readProps(ctx, props, value) {
+function readProps(ctx, props, value, storage) {
+    const own = name => storage ? storage.getOwnPropertyDescriptor(value, name) : Object.getOwnPropertyDescriptor(value, name);
+    const define = (name, descriptor) => {
+        if (storage) {
+            if (!storage.defineProperty(value, name, descriptor)) throw new TypeError('Cannot restore property');
+        } else Object.defineProperty(value, name, descriptor);
+    };
     for (const [key, pjson, flags, get, set] of props) {
         const name = readPropName(ctx, key);
         if (flags != null) {
             const pdescr = readPropDescriptor(ctx, pjson, flags, get, set, {});
             try {
-                Object.defineProperty(value, name, pdescr);
+                define(name, pdescr);
                 continue;
             }
             catch (e) {
-                const sdescr = Object.getOwnPropertyDescriptor(value, name);
+                const sdescr = own(name);
                 if (!sdescr || sdescr.configurable || !sdescr.writable)
                     throw e;
             }
         }
         // Restoring data properties must not invoke inherited or previously
         // restored setters before the rest of a cyclic graph is initialized.
-        const existing = Object.getOwnPropertyDescriptor(value, name);
-        Object.defineProperty(value, name, existing && !existing.configurable
+        const existing = own(name);
+        define(name, existing && !existing.configurable
             ? { value: ctx.step(pjson) }
             : { value: ctx.step(pjson), writable: true, enumerable: true, configurable: true });
     }
@@ -867,7 +932,12 @@ function propsDescriptor(descriptor) {
         name: descriptor.name,
         write(ctx, value, parent, index) {
             const json = descriptor.write(ctx, value, parent, index);
-            const props = writeProps(ctx, Object.getOwnPropertyDescriptors(value), pred, descriptor.propsDescrMask || 0, this.snapshot);
+            const storage = descriptor.propertyStorage?.(value);
+            // Instance values retain their actual prototype and extensibility,
+            // including subclasses of types with native internal slots.
+            json.p = ctx.step(storage ? storage.getPrototypeOf(value) : Object.getPrototypeOf(value), json, "p");
+            if (!(storage ? storage.isExtensible(value) : Object.isExtensible(value))) json.extensible = false;
+            const props = writeProps(ctx, descriptor.ownDescriptors ? descriptor.ownDescriptors(value) : Object.getOwnPropertyDescriptors(value), pred, descriptor.propsDescrMask || 0, this.snapshot);
             if (props.length)
                 json.f = props;
             return json;
@@ -875,9 +945,22 @@ function propsDescriptor(descriptor) {
         read: defaultRead,
         readContent(ctx, json, value) {
             descriptor.readContent(ctx, json, value);
+            const storage = descriptor.propertyStorage?.(value);
             const props = json.f;
+            if (descriptor.completeOwnProperties)
+                prepareOwnKeys(value, (props || []).map(prop => readPropName(ctx, prop[0])), storage);
             if (props)
-                readProps(ctx, props, value);
+                readProps(ctx, props, value, storage);
+            if (Object.prototype.hasOwnProperty.call(json, "p")) {
+                const prototype = ctx.step(json.p);
+                if (storage) {
+                    if (!storage.setPrototypeOf(value, prototype)) throw new TypeError('Cannot restore prototype');
+                } else if (Object.getPrototypeOf(value) !== prototype) Object.setPrototypeOf(value, prototype);
+            }
+            if (json.extensible === false) {
+                if (storage) storage.preventExtensions(value);
+                else Object.preventExtensions(value);
+            }
         },
         create(ctx, json) {
             return descriptor.create(ctx, json);
@@ -903,8 +986,9 @@ const OpaqueDescriptor = {
 };
 const OpaquePrimDescriptor = Object.assign(Object.assign({}, OpaqueDescriptor), { props: false });
 function writeSym(ctx, sym, parent, index, ignore) {
+    ctx.weakEntries.mark(sym);
     const key = Symbol.keyFor(sym);
-    if (key)
+    if (key !== undefined)
         return { key };
     const globalSym = descriptorByValue.get(sym);
     if (globalSym)
@@ -914,11 +998,7 @@ function writeSym(ctx, sym, parent, index, ignore) {
         if (!descr) {
             if (!ctx.symsByName)
                 throw new TypeError(`couldn't write "${String(sym)}"`);
-            let name = sym.description;
-            if (!name) {
-                const text = String(sym);
-                name = text.substring(7 /*"Symbol("*/, text.length - 1);
-            }
+            const name = sym.description === undefined ? null : sym.description;
             let tup = ctx.symsByName.get(name);
             if (!tup)
                 ctx.symsByName.set(name, (tup = []));
@@ -937,7 +1017,7 @@ function writeSym(ctx, sym, parent, index, ignore) {
 }
 exports.undefinedSymbol = Symbol("@effectful/serialization/undefined");
 function readSym(ctx, json) {
-    if (json.key)
+    if (json.key !== undefined)
         return Symbol.for(json.key);
     const { name } = json;
     if (name !== undefined && ctx.symsByName) {
@@ -952,7 +1032,7 @@ function readSym(ctx, json) {
         const descr = {
             name: name,
             id,
-            value: Symbol(json.name)
+            value: Symbol(json.name === null ? undefined : json.name)
         };
         if (!local)
             ctx.symsByName.set(name, (local = []));

@@ -40,31 +40,42 @@ const rescopeVisitor = {
   Identifier() {}
 };
 function run(transform, state) {
-  state.file.scope.path.traverse(rescopeVisitor);
-  const {
-    babel
-  } = _config.default;
-  const path = state.file.path;
-  _config.default.babelFile = state.file;
-  const ast = state.file.ast;
-  let ret;
-  if (_config.default.debug) {
-    ret = transform(ast, helpers);
-  } else {
-    try {
-      ret = transform(state.file.ast, helpers);
-    } catch (e) {
-      if (e instanceof SyntaxError) throw e;
-      if (_config.default.verbose) console.log(e);
-      throw state.file.buildCodeFrameError(e.esNode || ast, e.message);
+  const previousRoot = context.root;
+  const previousFile = _config.default.babelFile;
+  try {
+    state.file.scope.path.traverse(rescopeVisitor);
+    const {
+      babel
+    } = _config.default;
+    const path = state.file.path;
+    _config.default.babelFile = state.file;
+    const ast = state.file.ast;
+    let ret;
+    if (_config.default.debug) {
+      ret = transform(ast, helpers);
+    } else {
+      try {
+        ret = transform(state.file.ast, helpers);
+      } catch (e) {
+        if (e instanceof SyntaxError) throw e;
+        if (_config.default.verbose) console.log(e);
+        throw state.file.buildCodeFrameError(e.esNode || ast, e.message);
+      }
     }
+    babel.traverse.cache.clearScope();
+    babel.traverse.clearNode(path.node);
+    /** I don't know why but this prevents crashes in babel sometimes */
+    state.file.scope.path.traverse(rescopeVisitor);
+    return ret;
+  } finally {
+    // Compilation graphs belong to this invocation, not the loaded compiler.
+    // Retaining the last root pins its CFG, scopes and Babel paths while the
+    // caller builds the next AST. Restore outer state on failure as well.
+    context.setRoot(previousRoot);
+    _config.default.babelFile = previousFile;
   }
-  babel.traverse.cache.clearScope();
-  babel.traverse.clearNode(path.node);
-  /** I don't know why but this prevents crashes in babel sometimes */
-  state.file.scope.path.traverse(rescopeVisitor);
-  return ret;
 }
+
 function fileOpts(state) {
   const file = state.file;
   if (file) {

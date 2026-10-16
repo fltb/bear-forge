@@ -1,1 +1,15 @@
-{"name":"@bear-forge/cli","private":true,"type":"module","scripts":{"typecheck":"tsc --noEmit -p tsconfig.json","test":"node --experimental-strip-types --test tests/*.test.ts","check":"npm run typecheck && npm test"},"dependencies":{"@bear-forge/compiler":"*","@bear-forge/experiments":"*","@bear-forge/analysis":"*","@bear-forge/viewer":"*"}}
+{
+  "name": "@bear-forge/cli",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@bear-forge/compiler": "*",
+    "@bear-forge/forge-duel-viewer": "*",
+    "@bear-forge/forge-duel": "*"
+  }
+}

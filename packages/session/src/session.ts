@@ -33,12 +33,11 @@ export class VirtualSession {
     return copy(this.state);
   }
   enqueue(input: Omit<Arrival, 'ordinal'>) {
-    if (!Number.isSafeInteger(input.at) || input.at < this.state.now) throw Error('Arrival precedes virtual clock');
-    const entry = copy({
-      ...input,
-      ordinal: this.state.ordinal++
-    });
+    const admitted = copy(input);
+    if (!Number.isSafeInteger(admitted.at) || admitted.at < this.state.now) throw Error('Arrival precedes virtual clock');
+    const entry = { ...admitted, ordinal: this.state.ordinal };
     this.state.pending.push(entry);
+    this.state.ordinal++;
     return entry.ordinal;
   }
   reject(ordinal: number, reason: string) {

@@ -17,7 +17,8 @@ function effectful(ast) {
   _config.default.expInjectTempSetters = false;
   _config.default.debug = true;
   if (_config.default.rt === "default") _config.default.rt = "@effectful/debugger";
-  if (Kit.hasDirective(ast.program, "no-debug") || Kit.hasDirective(ast.program, "no-ctrl")) return;
+  // Compilation mode belongs to the host compiler configuration. Author string
+  // directives cannot disable continuation lowering in an admitted program.
   const root = Kit.produce(ast);
   Scope.prepare(root);
   Eval.replaceEvalDir();

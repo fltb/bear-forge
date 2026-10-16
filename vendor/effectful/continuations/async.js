@@ -5,8 +5,8 @@ exports.__esModule = true;
 exports.awt = awt;
 exports.awtOnReject = awtOnReject;
 exports.frameA = frameA;
+exports.closA = closA;
 exports.getBoundSelf = getBoundSelf;
-exports.getSuspendedFrameByPromise = getSuspendedFrameByPromise;
 exports.retA = retA;
 exports.scopeInit = scopeInit;
 exports.unhandledA = unhandledA;
@@ -18,7 +18,14 @@ const {
   context,
   token
 } = State;
-const AsyncFunctionPrototype = Object.getPrototypeOf(async function(){});
+const AsyncFunctionPrototype = exports.AsyncFunctionPrototype = Object.getPrototypeOf(async function(){});
+(0, _serialization.regOpaqueObject)(AsyncFunctionPrototype, "runtime.AsyncFunction.prototype", { props: false });
+(0, _serialization.regOpaqueObject)(AsyncFunctionPrototype.constructor, "runtime.AsyncFunction", { props: false });
+function closA(closure) {
+  const fn = (0, _engine.clos)(closure, true);
+  Object.setPrototypeOf(fn, AsyncFunctionPrototype);
+  return context.allocateFunction ? context.allocateFunction(fn) : fn;
+}
 function scopeInit(rs, rj) {
   this.onReturn = rs;
   this.onError = rj;
@@ -54,34 +61,29 @@ function unhandledA(reason) {
   return top.promise;
 }
 function awtOnResolve(value) {
-  context.suspended.delete(this);
   this.awaiting = token;
-  return (0, _engine.resume)(this, value);
+  (0, _engine.resume)(this, value);
+  // This is an internal await reaction, not the async function's return.
+  // Returning its outer promise makes every await's unused reaction promise
+  // adopt that promise and retain another listener until the function ends.
 }
 (0, _serialization.regOpaqueObject)(awtOnResolve, "@effectful/debugger/awt#resolve");
 function awtOnReject(error) {
-  context.suspended.delete(this);
   this.awaiting = token;
+  if (!context.__budgetExceeded) context.prepareException?.(error);
   this.error = error;
   this.meta.errHandler(this, this.$);
-  return (0, _engine.resume)(this, error);
+  (0, _engine.resume)(this, error);
 }
 (0, _serialization.regOpaqueObject)(awtOnReject, "@effectful/debugger/awt#reject");
 function awt(asyncValue) {
   const top = context.top;
-  context.suspended.add(top);
   top.awaiting = asyncValue;
   (0, _engine.then)(asyncValue, persistentBind.call(awtOnResolve,top), persistentBind.call(awtOnReject,top));
   if (!context.enabled && top.restoreEnabled !== State.undef) context.enabled = true;
   (0, _engine.popFrame)(top);
   top.next = null;
   return context.value = top.promise;
-}
-function getSuspendedFrameByPromise(promise) {
-  for (const frame of context.suspended) {
-    if (frame.promise === promise) return frame;
-  }
-  return undefined;
 }
 function getBoundSelf(value) {
   var _binds$get;

@@ -1,16 +1,24 @@
 # 受控编译与原生差分规格
 
-本页落实用户要求：受控程序在构建时编译，运行时只装载编译产物；差分验收同时覆盖游戏和通用程序。它补充 implementation-spec.md 第4、13、14节，不改变已冻结的公共协议。本文是实施合同，尚未实现的编译器和差分套件不能据此标记完成。
+本页落实用户要求：受控程序在构建时编译，运行时只装载编译产物；差分验收同时覆盖游戏和通用程序。它补充 implementation-spec.md 第4、13、14节，不改变已冻结的公共协议。本文定义声明范围与验收方法；当前实施证据见 plan.md。可信原生直传是独立的普通 JS 入口；原生编译产物也保留 V8 原生 Promise 语义，两者都不承诺 IO-only。差分对照不代替受控执行验收。
+
+**当前准入边界：**作者入口和所有传递依赖仅接受严格语义的 ES Module；`.js`、`.mjs`、`.ts`、`.mts` 按模块解析。Script、非严格语义、CommonJS 作者源码、动态导入和 `import defer` 不在准入范围。旧方案的 Script/CommonJS 实施记录已移入 archive；编译器内部生成的 CommonJS 工厂只是产物格式。当前进度以 [实施计划](plan.md) 顶部当前清单为准。
+
+## 0. 原始需求与当前偏差
+
+受控目标是共享 Program + 独立 Context，仅在对外 IO.call 等待边界及正常终局保存。具体要求以 requirements.md 的 R03/R04 为准，不能用选中库的默认行为替代需求。
+
+Effectful 适配将函数/调试元数据注册放在共享 LoadedProgram，新局 start 初始化实例数据，Loader 装载时另用临时 Context 完成协议要求的 schema 准入。快照根为 Context；fork/restore 不重新初始化依赖，不无条件保存 ProgramModule 或 moduleExports 容器。以下准入与差分范围同时约束编译行为和执行表示。
 
 ## 1. 编译底座
 
-采用 **Babel + EffectfulJS core v2 的完整续延转换**：`@effectful/core/v2/compiler`、v2 debugger preset、裁剪的续延运行库和 `@effectful/serialization`。源码先由 TypeScript 检查/去类型，再把 await 的后续计算、跨等待点存活的局部变量和同步/异步闭包环境显式化。生成 JavaScript 由 V8 直接运行，不在运行时逐条解释作者 AST。编译指 JavaScript 到 JavaScript 的提前转换，不要求生成机器码。
+现有实现采用 **Babel + EffectfulJS core v2 续延转换**，具体适配包括：`@effectful/core/v2/compiler`、v2 debugger preset、裁剪的续延运行库和 `@effectful/serialization`。源码先由 TypeScript 检查/去类型，再把 await 的后续计算、跨等待点存活的局部变量和同步/异步闭包环境显式化。生成 JavaScript 由 V8 直接运行，不在运行时逐条解释作者 AST。编译指 JavaScript 到 JavaScript 的提前转换，不要求生成机器码。
 
 实测调整：最初的 es-persist 路线不能序列化捕获外部局部变量的嵌套 async 闭包，因此改用同一项目的 v2 完整闭包转换。运行库原来在函数注册时使用 Function 构造器，本项目在构建时生成对应函数工厂，运行时禁止动态代码生成。裁剪包不携带调试 UI、编译器或网络能力。项目采用 MIT 许可。引用感知的序列化器保留共享/循环引用；现成库仍须接受下面的真实恢复验收。
 
 库只提供转换和状态机制。完整实例隔离、模块工厂、端口设备、稳定点判定、预算、格式兼容与持久快照由本项目实现。不能把库的 clone/示例注册宿主对象当成跨进程保存的证明；闭包、SDK、Zod 和实际游戏都须通过下述验收。
 
-2026-10-11 核对并采用 npm latest：core/debugger/serialization 为 **2.0.12**，Babel 为 **8.x**，esbuild 为 **0.28.2**，Zod 为 **4.6.5**，TypeScript 为 **7.0.2**。不同包的版本号不作横向大小比较。最新 es-persist 2.0.13 发布元数据含 workspace:^，并有上述闭包反例，现已退出实际依赖。core/serialization 和裁剪的 debugger 运行库保留相同最新上游源码，修正 workspace 引用及 Babel 主版本，并在 vendor/effectful 中记录必要补丁。lockfile 锁定实际版本。实际采用 core v2 的提前静态工厂路线；产物 ABI 为 effectful-v2-main-3，快照私有格式为 4。程序/schema 共同进入恢复对象图，保持模块变量共享。正式命令为 npm run check；关卡以 docs/plan.md 的实测状态为准。
+2026-10-11 核对并采用 npm latest：core/debugger/serialization 为 **2.0.12**，Babel 为 **8.x**，esbuild 为 **0.28.2**，Zod 为 **4.6.5**，TypeScript 为 **7.0.2**。不同包的版本号不作横向大小比较。最新 es-persist 2.0.13 发布元数据含 workspace:^，并有上述闭包反例，现已退出实际依赖。core/serialization 和裁剪的 debugger 运行库以该上游版本为基础，包含 workspace/Babel 适配及语义修复，来源与必要补丁记录在 vendor/effectful 中；不能把当前分支当作未经修改的上游。lockfile 锁定实际版本。实际采用 core v2 的提前静态工厂路线；产物 ABI 为 effectful-v2-main-3，快照私有格式为 4。当前实现复用共享 Program，显式保存独立 Context 中的实例可变环境及 schema 捕获数据；fork/restore 不重新执行模块初始化。正式命令为 npm run check；关卡以 docs/plan.md 的实测状态为准。
 
 ## 2. 两条构建与装载路径
 
@@ -23,31 +31,67 @@
 
 原生 oracle 不得经过受控续延转换或复用其解释/状态调度器。两端共用游戏源码、schema 和 SDK 是必要的；不得共用受控转换结果来制造一致。生产原生 runner 另与直接调用源码的 oracle 对照，避免两种 runner 共用边界错误。预算插桩独立检验，不用指令计数相等作为语言语义正确性。
 
+类降级先在编译器 AST 中记录构造器与方法身份，再在同一 AST 上消费这些标记，期间不打印重解析或丢弃标记。方法恢复为不可构造的简洁方法，名称来自实际属性键；计算属性键在类定义时转换一次。构造器在参数初始化前通过真实 new.target 检查调用方式，不依赖 instanceof，也不读取作者作用域里的 TypeError。两种生产构建路径使用相同规则，并各自对照未经降级的源码。构造器数量不对应或方法身份丢失属于编译错误，不能退回普通函数。标记和检查操作是编译器内部实现，不是源码可提供的标志或公共协议。
+
+super 构造通过 Babel 的 helperGenerator 接口取得编译器标记，按 helper 身份转换，不按输出标识符名称猜测。显式 super 调用、默认派生构造器、helper 请求和最终转换的数量必须对应。转换先把参数求值到普通局部变量，再按目标 V8 的顺序读取当前类的实际父构造器，并传递词法 new.target；不读取 prototype.constructor。派生 this 的初始化状态保存在构造器的私有词法对象中，复用既有捕获单元；Construct 成功后才绑定 this，重复绑定抛出 ReferenceError，且不重新执行派生类字段初始化。
+
+super 属性读取使用同一 helper 接口绑定到受控 Reflect.get，保留实际接收者；调用形式用已注册的参数列表调用函数和现有持久绑定保存目标函数/接收者，不读取目标函数的 apply 属性，不生成捕获程序对象的宿主闭包。类方法与对象方法均安装这一 helper 绑定。显式 super.method(...values) 在 helper 转换前保留迭代语义，不使用数组或 arguments 的直接转发捷径。
+
 构建步骤：
 
 1. TS 类型检查与闭合依赖解析，固定版本；检查全部可达源码，拒绝不准入的构造和隐式宿主效果。
-2. 去类型与模块转换；依赖初始化生成实例工厂，可变模块状态在实例内。循环导入、初始化顺序、导入绑定语义须验证；不能把所有模块变量简单复制一遍。
+2. 去类型与模块转换，分离共享代码/不可变元数据和实例 Context；可变模块状态在 Context 内。start 负责新局初始化，fork/restore 不重新执行初始化。循环导入、初始化顺序、导入绑定语义须验证；不能把所有模块变量简单复制一遍。
 3. 对可挂起调用链应用 core v2 续延转换。按上游要求分离转换 pass，固定实际顺序。不删 await、不把 SDK IO.call 改成同步函数、不要求作者手写 PC。
 4. 在循环、递归入口及批准内建调用插入预算点；随后校验生成代码和所有运行时 helper 的能力边界。纯同步计算可直接使用 V8，但其挂起点可达对象图仍要可保存。
 5. 生成 CompiledProgram.content：JS 执行载荷、模块/续延构造器表、schema/端口描述、source map、编译及适配/runtime/快照 ABI 版本、准入策略身份和内容校验。以上是私有格式，不添加公共字段。
 
 Loader 只做格式、版本、完整性和能力校验以及装载执行，不再读取 TS 源码、做 Babel 转换或解释 AST。V8 正常解析/JIT 生成 JS 属于执行引擎行为。运行部署不携带 TypeScript/Babel/转换插件；以仅产物和 runtime 的子进程执行测试证明这一点。恢复须使用与快照匹配的产物；不提供任意新代码热迁移。
 
-生成程序使用固定的模块解析表和批准能力；不得允许作者 require 任意包。产物为主 runtime 直接加载的普通模块工厂，实例不使用 VM、Worker 或独立进程；原生 ABI 为 native-main-2。不提供硬超时。续延转换本身也不构成沙箱，准入、能力封闭和执行预算是独立必需项。
+生成程序使用固定的模块解析表和批准能力；不得允许作者 require 任意包。产物为主 runtime 直接加载的普通模块工厂，受控路径仅在共享 Program 装载时创建 V8 Realm，不为每个 Instance、fork 或 restore 创建 Realm，也不使用 Worker 或独立进程承载实例；原生 ABI 为 native-main-2。不提供硬超时。续延转换本身也不构成沙箱，准入、能力封闭和执行预算是独立必需项。
 
 ## 3. IO 与现场适配
 
 受控 IO.call 返回实现库 AsyncValue 接口的端口等待对象；库要求原生模式也可等待时，该对象须具备兼容 Thenable 接口。原生 oracle 仍用独立的 Promise IO 绑定。端口设备只捕获实例内逻辑设备身份、调用数据和可序列化续延，不捕获宿主回调、Promise resolver、计时器或 AbortSignal。
 
-程序 await 原生未决 Promise 会导致库状态不可序列化，必须由准入/运行检查拒绝。顺序 IO 的内部 continuation/job 链在确定性实例调度器中管理；稳定点必须只有一个对外待决调用，内部可运行队列已排空。若仍有库的异步队列状态，必须纳入现场，不能用默认宿主 event loop 代替保存。不得注册活动宿主函数为 opaque object 来逃避检查。
+程序 await 原生未决 Promise 会导致库状态不可序列化，必须由准入/运行检查拒绝。顺序 IO 的内部 continuation/job 链在确定性实例调度器中管理；稳定点必须只有一个对外待决调用，内部可运行队列已排空。若仍有库的异步队列状态，必须纳入现场，不能用默认宿主 event loop 代替保存。不得注册活动宿主函数为 opaque object 来逃避检查。准入只在原始作者源码及依赖入口作一次；后续转译信任准入结果，内部断言只检验转译器自身不变量。运行时仅检查必须由实际值决定的支持条件；同进程恶意代码隔离不属于目标。
 
-快照包含续延根及其可达对象图、实例模块环境、随机状态、内部调度状态、待决调用、记录前缀和正常终局。编译产物提供稳定构造器标识，恢复先重新装载并注册同一张构造器表，再读对象图；不序列化 JS 函数字符串后 eval。注册静态代码身份与保存宿主函数是不同的操作，注册表不得接受作者/绑定端注入的活动对象。
+快照的执行数据仅来自 Context：跨 call 的控制位置、必要调用帧/局部值、闭包捕获数据、实例模块可变环境、随机状态、必要调度数据、待决调用或正常终局。函数使用共享 Program 的稳定代码标识；静态代码表在加载匹配产物时建立一次，不在每次恢复中重新生成。记录前缀另按协议关联。恢复不执行程序入口、依赖初始化或历史前缀，也不序列化函数源码、宿主函数或无条件挂入整个 program/moduleExports 容器。入口使用 this 或源码引用导出命名空间时，相应对象成为实际实例数据；保持其身份与别名，不以裁剪破坏程序语义。
 
-fork 深复制该图或使用经验证的隔离复制机制；同一图内别名保持，不同分支之间不共享可变对象。库文档中的 continuation 重复 resume 会共享已修改变量，直接重复 resume 不等于 fork。
+fork 直接复制 Context 或使用经验证的隔离复制机制，复用同一个已加载 Program，不通过字符串存档/读档创建一份新程序；同一图内别名保持，不同分支之间不共享可变对象。库文档中的 continuation 重复 resume 会共享已修改变量，直接重复 resume 不等于 fork。
 
 Zod 按可达代码验证，不能整体包名放行；自定义检查、错误结构、parse/safeParse 和 schema 构造须保持原生行为。暂时无法序列化的现场是准入失败/实现缺口，不能降级成重放前缀或只存游戏 JSON。
 
+代码注册由产物工厂返回 initialize 而不执行源码顶层。Loader 在返回提供者前创建并释放一个准入 Context，以保留装载时的 schema 检查；它不充当快照恢复源。编译器把自由 module/exports/globalThis 访问绑定到当前 Context；exports 的重新赋值先规范化，避免上游转换误当作 module.exports。静态可知的命名空间键按需保留，计算访问或命名空间逃逸时保守保留全部。加载后的注册表按代码摘要及命名空间布局复用；Loader 持有强引用，跨提供者缓存只持弱引用。
+
+进入受控计算、校验或编码时，同步选择 Context，结束后恢复调度器原现场；不将选中的 Context 跨宿主 await 保留。实例的 Zod 可变配置与捕获回调也留在 Context。fork 直接复制实例对象与受控函数捕获单元，不调用持久化编码器/解码器，不经过 JSON 或 SnapshotStore；save 才产生持久字符串。编译产物及快照的私有 contextLayout/layout 标记为 lexical-cells，旧产物需重建，旧快照拒绝载入；公共协议、既有 ABI 字符串和版本号不变。
+
+编译期 lexicalCaptures 分析函数读取的外层槽位，并对嵌套闭包的捕获需求求不动点。运行时闭包只持有所需变量单元的投影，多个闭包共享同一可变绑定；不持有完整父执行帧。词法 this 单独保存其实际接收对象。liveness 在无词法作用域切换的函数中分析恢复点之后的普通、异常和 return 路径，按真实语句终止关系连接状态；在 await 前清除所有可达路径均不再使用、且未被闭包捕获的局部值。已结束区域中的间接跳转不再使整个函数失去优化；若恢复后仍能到达未知跳转，则保守保留。不改变准入能力。复杂控制流继续由既有编译结果执行。
+
+箭头函数的 new.target 在参数降级之后转换为最近普通函数内的词法绑定，并在参数默认值计算之前初始化。嵌套箭头通过既有变量单元捕获该值；遇到普通函数停止向外查找。词法构造目标不写入箭头调用帧的实际构造标志，避免把箭头的原始值返回错误地改成构造器返回规则。
+
+数组和参数展开在受控操作转换中逐项构造列表：迭代器方法和 next 按协议获取，next 缓存一次，每次按 done、value 顺序读取。普通元素、空槽和展开按源码顺序处理，已构造的列表能跨 await 保留。调用直接进入既有 invoke/construct，不读取作者函数的 apply 属性，也不通过 concat、species 或数组/arguments 类型捷径替代迭代。显式 super(...arguments) 与默认派生构造器的参数直接转发分开处理。每个展开迭代步骤扣除现有实例预算，原生 next 的无限迭代不能绕过预算；两种执行器都验证捕获异常后仍保持 budget_exceeded。
+
+可选调用保留 Babel 的 nullish 短路转换，但通过原始 optional-call AST 节点身份保留调用接收者，转换为既有 invoke 操作；不读取作者函数的 call 或 bind 属性。括号终止短路但仍保留成员引用，转换用临时函数/接收者记录表达：空值或不可调用值仍先计算外层参数，再抛出 TypeError；未加括号的空值链则跳过参数。作者显式访问的 call/bind 属性按正常属性处理，不因名字被替换。节点结构与预期的转换合同不符时编译报错。
+
+Babel 的 toPropertyKey/toPrimitive helper 通过 helperGenerator 绑定既有受控转换操作，不能读取转换方法自身的 call 属性。类计算字段的键在类定义时转换并保存，实例初始化复用原始属性键。对象解构使用 vendor/babel-destructuring 中保留许可证的 8.0.5 源码分支：先保存右值并检查可转换性，再按属性顺序执行键转换、属性读取及默认值；rest 排除列表复用已转换的键。三个编译入口的模块链接统一经 bundleProgram：Babel 擦除类型，Rollup 保留 ESM 局部声明完成链接，再由 Babel 转换最终模块导出，保留待处理类字段语法。两种执行器使用相同降级流程，原始 V8 源码作为独立差分参照；完整声明范围的审核与正式检查结果见 plan.md。
+
+内存复制与持久化分别验证：保持共享/循环引用、类与绑定构造器、属性描述符、稀疏数组和集合；复制不执行实例重写的集合迭代器或 RegExp/字节视图访问器。记录采用不可变分块前缀，fork 共享前缀，后续追加仅复制末块或创建新块。
+
+对象 rest 的 objectWithoutProperties helper 统一绑定内部 objectRest 操作，包括空排除列表，不能用 Object.assign 替代。它先取得字符串和 Symbol 的完整自有键列表，再按顺序排除已绑定键、读取当前描述符、调用受控 getter，并用自有数据属性写入新对象。这样 __proto__ 保持普通数据属性，getter 新增的键不会进入本次复制，删除和枚举性变动按读取时的描述符处理。每个键使用既有预算计费；该操作不增加公共能力或另一套 Context。
+
+对象展开与方法、访问器和普通属性统一在同一个对象上按源码顺序构造，不再通过 Babel object-rest-spread 将字面量拆成多个中间对象后合并。展开复用 rest 的 CopyDataProperties 实现，空值源跳过；字面量 __proto__ 与方法 home 始终对应最终对象，后续更换原型时 super 读取该对象当前的原型。中间对象引用通过正常局部变量跨 IO 保留。参数、循环及赋值中的 rest 继续由参数转换和解构转换处理。
+
+数组解构通过 iteratorPush/iteratorStep/iteratorRest/iteratorFinish 逐项执行，不使用数组或 arguments 捷径，也不先收集全部值。每个活动调用持有普通数组形式的迭代记录栈；编译器通过 AST 私有元数据标记所属调用，并在 iterator-regions 中为原有函数体和 try/catch/finally 区域添加退出清理。清理只处理进入该区域之后尚未完成的记录，按内到外关闭；已有 throw 优先于关闭异常，正常关闭的首个错误成为新的完成状态。默认值里的 await/yield 保持原表达式位置，记录及其 next 通过既有 Context 保存。for 初始化保持单条声明及逐轮词法绑定；带默认值的成员赋值先保存目标引用，再取迭代值。此转换不增加公共字段、代码重放或作者手写恢复状态。
+
+同步 for-of 直接降级到同一组 iteratorOpen/iteratorStep/iteratorClose，保留普通 for 与 try/catch/finally；没有数组捷径、字符串 @@iterator 回退或读取方法自身 call 的步骤。退出循环时关闭，next/done/value 本身失败时不另行关闭；已有循环体异常优先于关闭异常。多重标签仍指向循环，续延 CFG 的所有 continue 边经过同一个逐轮变量复制节点。右侧表达式的循环头词法绑定是独立且始终未初始化的绑定：按 Babel 绑定身份替换其引用到内部未初始化单元，保留读取、typeof、写入顺序和闭包捕获。仅有这类引用时才创建单元，普通循环不额外分配。异步 for-await 复用同一右侧词法绑定转换，推进由异步迭代 CFG 处理。next/done/value 的读取位于关闭区域之外；循环体到下一轮通过不关闭迭代器的内部跳转，continue 仍先执行作者 finally。关闭区域显式保留原完成种类及异常，已有 throw 优先于关闭失败，普通 break/return 则传播关闭失败。异步循环通过独立差分及跨 IO 恢复检查，不以同步用例替代。
+
 ## 4. 差分测试 harness
+
+已准入语言行为以固定目标 Node/V8 对未经转译源码的实际执行为差分基准，当前为 Node 26.5.0 / V8 14.6.202.34-node.24。规范用于理解算法，Test262 用于提供外部用例，二者不得覆盖原生结果。原生未实现的特性不自行模拟；明确排除的动态 import 与 import defer 不因此放开。引擎升级须重新核对支持范围和差异。
+
+编译阶段对已经准入的原始 ESM 图使用目标 V8 做只链接、不执行的校验。解析依赖仍由编译器的闭合依赖图提供，校验器不自行读取作者文件。JSON 数据模块的导入必须声明 type: json。Rollup 的循环导出解析修复位于 vendor/rollup，原生拒绝的模块图不能因为修复后能够生成代码而被接受。该编译期校验不进入 Instance、fork 或恢复路径。
+
+super 父构造器选择、成员增减属性键转换和数字形模块导出排序的项目回归直接执行未经转译的源码获取期望，已删除手填规范 oracle 的测试入口。源码成员引用只保存已求值的对象和键值，在实际读写时经受控转换取得属性键；同一复合操作的读取和写入分别转换，nullish 接收者保留原生拒绝顺序。内建算法明确要求捕获属性键时仍使用转换后的内部引用，两种语义不混用。禁止按测试名、源码片段或依赖包名适配结果。
 
 测试归属 `packages/compiler/tests/` 的转换语义和 `packages/runtime-controlled/tests/` 的装载/保存/分支；游戏集成放各游戏 `tests/`。通用夹具不依赖 BaseGame、玩家或合法动作。全部进入各模块 check 和根 npm run check。这些生产模块及正式测试已经落地，完成验收仍以 docs/plan.md 为准。
 
@@ -61,7 +105,7 @@ Zod 按可达代码验证，不能整体包名放行；自定义检查、错误�
 
 ## 5. 通用语义和 benchmark 集
 
-每类均包含无 IO 的整段计算和通过已有 IO.call 插入固定检查点的版本；原生/受控输入相同。检查点由 fixture 作者显式插入，不修改第三方 benchmark 来暗改算法。量级使用固定小/中/大数据集，日常 check 运行小/中，扩展集进入模块 test 命令的显式选项；不能跳过唯一覆盖某项语义的测试。
+每类均包含无 IO 的整段计算和通过已有 IO.call 插入固定检查点的版本；原生/受控输入相同。检查点由 fixture 作者显式插入，不修改第三方 benchmark 来暗改算法。量级使用固定小/中/大数据集（size 4/8/32），日常 check 运行小/中，扩展集通过 `npm run test:benchmarks:extended -w @bear-forge/runtime-controlled` 执行；不能跳过唯一覆盖某项语义的测试。
 
 | 组 | 代表程序与边界 | 验证目标 |
 | --- | --- | --- |
@@ -113,11 +157,13 @@ fork 的原生分支 oracle 可从入口用原生前缀重跑再给不同后缀�
 
 ## 8. 验收与顺序
 
-先解决最新版依赖安装/转换 API，再做最小同源嵌套 async → IO 等待 → 序列化 → 独立进程恢复 → 原生后缀对照。随后完成通用语义集、通用 benchmark 集和 SDK/Zod，最后接完整游戏和真实 Loader/Instance 生命周期。任何阶段发现 admitted 源码无法保存，优先修复转换/适配，不改业务规则或冻结协议。
+初始建设顺序（已有对应实现与测试，当前缺项见 plan.md 顶部）：先解决依赖安装/转换 API，再做最小同源嵌套 async → IO 等待 → 序列化 → 独立进程恢复 → 原生后缀对照。随后完成通用语义集、通用 benchmark 集和 SDK/Zod，最后接完整游戏和真实 Loader/Instance 生命周期。任何阶段发现 admitted 源码无法保存，优先修复转换/适配，不改业务规则或冻结协议。
+
+增加结构验收：同产物的 start/fork/restore 共用代码与静态元数据；fork/restore 不调用程序/依赖初始化，不重建调试作用域；快照执行根仅为 Context，代码只出现为标识；闭包/模块可变数据仍隔离。用初始化计数、共享代码身份、快照结构及破坏分离的反例验证，不能只比较最终结果或用耗时下降替代结构断言。未知动态调用不得误判为纯同步，已准入的递归、闭包、异常语义和完整游戏须保留。
 
 C02 的编译路线通过条件：构建后只装载产物可执行；所有已准入构造的固定正例/负例通过；完整逐调用差分通过；每个稳定点保存恢复、独立进程恢复和 fork 隔离通过；两游戏集成通过；预算及依赖边界检查通过。声明文件/typecheck、库 README、同进程 clone 或只比较最终结果均不能代替上述条件。
 
-本轮仅修改规格并核实候选与安装问题，未加入生产编译依赖，未声称这些未来 diff tests 已运行。当前正式检查仍是既有 npm run check。
+生产结构验收位于 runtime-controlled/tests/context.test.ts 与 module-state.test.ts：共享代码身份、初始化计数、禁止初始化/字符串存档的反例、未使用导出排除、命名空间别名、入口 this 和依赖可变配置隔离。正式检查入口为 npm run check，仍以实际执行结果为准。
 
 ## 来源
 
@@ -127,3 +173,12 @@ C02 的编译路线通过条件：构建后只装载产物可执行；所有已�
 - [serialization 官方说明](https://github.com/awto/effectfuljs/blob/main/packages/serialization/README.md)：引用感知的对象图编码，扩展描述符需注册。
 - [cc 官方说明](https://github.com/awto/effectfuljs/blob/main/packages/cc/README.md)：async 转换限制和重复 resume 的共享状态行为。
 - [Babel 官方插件说明](https://babeljs.io/docs/babel-plugin-transform-async-to-generator)：普通 async 降级不等于可持久续延。
+
+
+## 当前 ESM 模块边界
+
+每个作者源码模块在链接和转换之前接受同一准入检查；包名、文件名和测试身份不构成豁免。只接受 `.js`、`.mjs`、`.ts`、`.mts` 的模块输入，TypeScript 先检查并去类型。JSON 数据模块按目标 V8 的静态导入属性规则处理。运行时生成代码、动态导入、`import defer`、Script 与 CommonJS 作者源码均不准入。最终生成的 CommonJS 工厂仅是受控产物的私有加载格式。
+
+链接阶段保留循环依赖、TDZ、live binding 和模块求值次序；在准入图上使用目标 V8 进行只链接、不执行的校验。原始 ESM 与原生执行器是语义差分基准，受控执行须在 IO 等待及正常终局保留同一可观测结果。Test262 的原始 Script harness 已由测试 worker 在 Program Realm 中执行，不转换成 ESM；测试使用单实例全局及测试专用完成通道，不证明生产 Loader/schema 与多实例隔离。六个固定门槛已有历史通过记录，最终树重验状态见 plan.md 顶部；基础设施缺失仍须标为未执行，不计为通过。
+
+编译产物代码和静态元数据属于共享 Program。作者模块的可变环境、闭包捕获、续延和 SDK 状态进入独立 Context；fork 与 restore 只处理 Context，不重新执行模块初始化或历史输入。函数源码反射、模块命名空间、异步模块求值、弱集合可达性与对象复制均须以正式回归及原生差分验证。当前完成状态只以 [实施计划](plan.md) 和实际检查为准。

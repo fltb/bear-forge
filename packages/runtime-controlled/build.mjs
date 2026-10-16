@@ -8,5 +8,8 @@ for(const key of ['Object','Array','Number','String','Boolean','Math','JSON','Ma
 const __effectfulSerializationState=globalThis.__effectfulSerializationState={};
 let Promise=host.Promise;
 const process=undefined,console={log(){},warn(){},error(){}};
+const unavailableTimer=()=>{throw new TypeError('Host timer is unavailable inside Program');};
+const setTimeout=unavailableTimer,setInterval=unavailableTimer,clearTimeout=unavailableTimer,clearInterval=unavailableTimer;
 const module={exports:{}};let exports=module.exports;
 `},footer:{js:'return module.exports;})();};'}});
+await build({entryPoints:['src/realm-runtime.ts'],bundle:true,outfile:'dist/realm-runtime.cjs',platform:'node',format:'cjs',logLevel:'silent'});

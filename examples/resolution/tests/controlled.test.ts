@@ -111,10 +111,12 @@ test('K2–K6 save and restore complete continuations; public binder rejects sta
       value: 'U'
     }
   };
-  assert.equal((await a.validate({
+  const aBefore = unwrap(await a.inspect());
+  const bBefore = unwrap(await b.inspect());
+  assert.deepEqual(unwrap(await a.validate({
     player: '0',
     reply
-  })).ok, false);
+  })), { valid: false, reason: 'request_mismatch' });
   assert.equal(unwrap(await a.validate({
     player: '1',
     reply: {
@@ -125,10 +127,12 @@ test('K2–K6 save and restore complete continuations; public binder rejects sta
       }
     }
   })).valid, false);
-  assert.equal((await b.validate({
+  assert.deepEqual(unwrap(await b.validate({
     player: '1',
     reply
-  })).ok, false);
+  })), { valid: false, reason: 'request_mismatch' });
+  assert.deepEqual(unwrap(await a.inspect()), aBefore);
+  assert.deepEqual(unwrap(await b.inspect()), bBefore);
   assert.equal(unwrap(await b.observe({
     player: '1'
   })).hand.length, 1);
@@ -143,10 +147,12 @@ test('K2–K6 save and restore complete continuations; public binder rejects sta
   }));
   const next = unwrap(await a.run());
   assert.equal(next.accepted.kind, 'action');
-  assert.equal((await a.validate({
+  const aAfter = unwrap(await a.inspect());
+  assert.deepEqual(unwrap(await a.validate({
     player: '1',
     reply
-  })).ok, false);
+  })), { valid: false, reason: 'request_mismatch' });
+  assert.deepEqual(unwrap(await a.inspect()), aAfter);
   assert.equal(unwrap(await b.observe({
     player: '1'
   })).hand.length, 1);

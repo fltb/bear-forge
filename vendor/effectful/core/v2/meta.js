@@ -220,12 +220,12 @@ function scopes(decls) {
       block.scopeDepth = parentBlock.scopeDepth;
       return block.blockDescrSym = parent;
     }
-    const vars = {};
+    const vars = [];
     res = block.blockDescrSym = Scope.newSym();
     res.orig = res.name = `$s$${++num}`;
     for (const i of blockDecls) if (i.bound) {
       const args = [i.index !== undefined ? i.index : i.name, Kit.locStr(i.declPos && i.declPos.node.loc)];
-      vars[i.orig] = args;
+      vars.push([i.orig, args]);
       if (i.metaArgs) args.push.apply(args, _toConsumableArray(i.metaArgs));
     }
     const decl = Kit.node(Tag.push, Tag.VariableDeclarator);

@@ -176,7 +176,7 @@ export const program = {
         }
       case 'matrix':
         {
-          const m = Math.min(n, 4),
+          const m = n,
             a = Array.from({
               length: m
             }, () => Array.from({

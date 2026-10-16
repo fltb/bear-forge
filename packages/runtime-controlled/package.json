@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run build && node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm run typecheck && npm test",
-    "build": "node build.mjs"
+    "test:test262:modules": "npm run build && node --experimental-strip-types --test tests/test262/module-execution.test.ts",
+    "build": "node build.mjs",
+    "test:benchmarks:extended": "npm run build && BEAR_BENCHMARK_EXTENDED=1 node --experimental-strip-types --test tests/differential.test.ts tests/oracles.test.ts"
   },
   "dependencies": {
     "@bear-forge/contracts": "*",

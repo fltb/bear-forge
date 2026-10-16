@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { copy, keys } from '@bear-forge/boundary';
+import { isolatedParser } from '../../boundary/src/values.ts';
 import { assertProgramModuleShape, assertProgramSchemasShape, exceptionMessage } from '@bear-forge/runtime';
 import { createProgramRealm } from './program-realm.ts';
 export type Artifact = {
@@ -42,9 +43,9 @@ class LoadedProgram {
       const storage = this.storage(value);
       return storage ? storage.getPrototypeOf(value) : Object.getPrototypeOf(value);
     },
-    getOwnPropertyDescriptor: (value: object, key: PropertyKey): PropertyDescriptor | undefined => {
+    getOwnPropertyDescriptor: (value: object, key: PropertyKey, scratch?: PropertyDescriptor): PropertyDescriptor | undefined => {
       const storage = this.storage(value);
-      return storage ? storage.getOwnPropertyDescriptor(value,key) : Object.getOwnPropertyDescriptor(value,key);
+      return storage ? storage.getOwnPropertyDescriptor(value,key,scratch) : Object.getOwnPropertyDescriptor(value,key);
     },
     ownKeys: (value: object): (string | symbol)[] => this.storage(value)?.ownKeys(value) ?? Reflect.ownKeys(value)
   };
@@ -288,7 +289,7 @@ export class ProgramExecution {
     this.initialize();
     return this.guard(() => {
       const wrap = (select: (schemas: any) => any, transactional = false) => Object.freeze({
-        parse: (value: unknown) => {
+        parse: isolatedParser((value: unknown) => {
           const parse = (execution: ProgramExecution) => execution.guard(() => {
             const schema = select(execution.context.bindings.schemas), loaded = execution.loaded;
             return copy(loaded.effects.operations.invoke(loaded.read(schema,'parse'),schema,[loaded.input(value)]),loaded.inspection);
@@ -315,7 +316,7 @@ export class ProgramExecution {
             }
             throw error;
           } finally { branch.dispose(); }
-        }
+        })
       });
       const schemas = this.context.bindings.schemas;
       assertProgramSchemasShape(schemas,this.loaded.inspection);

@@ -143,17 +143,25 @@ export class CowHeap {
     const state = this.state(object), slot = this.slot(object, key);
     return slot === undefined ? undefined : state.properties.descriptor(slot);
   }
-  getOwnPropertyDescriptor(object: object, key: PropertyKey): PropertyDescriptor | undefined {
-    return this.descriptor(object, key);
+  getOwnPropertyDescriptor(object: object, key: PropertyKey, scratch?: PropertyDescriptor): PropertyDescriptor | undefined {
+    const state = this.state(object), slot = this.slot(object, key);
+    return slot === undefined ? undefined : state.properties.descriptor(slot, scratch);
   }
   ownKeys(object: object): (string | symbol)[] {
-    const properties = [...this.state(object).properties.entries()].map(([, property]) => property);
-    const indices = properties.filter(property => arrayIndex(property.key) !== undefined)
-      .sort((a, b) => arrayIndex(a.key)! - arrayIndex(b.key)!);
-    const named = properties.filter(property => typeof property.key === 'string' && arrayIndex(property.key) === undefined)
-      .sort((a, b) => a.order - b.order);
-    const symbols = properties.filter(property => typeof property.key === 'symbol').sort((a, b) => a.order - b.order);
-    return [...indices, ...named, ...symbols].map(property => property.key as string | symbol);
+    const indices: string[] = [], named: {key: PropertyKey; order: number}[] = [], symbols: {key: PropertyKey; order: number}[] = [];
+    this.state(object).properties.forEachLayout(property => {
+      if (typeof property.key === 'symbol') symbols.push(property);
+      else if (arrayIndex(property.key) !== undefined) indices.push(property.key as string);
+      else named.push(property);
+    });
+    // Numeric keys occupy slot index * 2. Page traversal is increasing by
+    // slot, so their required numeric order is already established.
+    if (named.length > 1) named.sort((a, b) => a.order - b.order);
+    if (symbols.length > 1) symbols.sort((a, b) => a.order - b.order);
+    const result: (string | symbol)[] = indices;
+    for (const property of named) result.push(property.key as string);
+    for (const property of symbols) result.push(property.key as symbol);
+    return result;
   }
   getPrototypeOf(object: object): object | null { return this.state(object).prototype; }
   isExtensible(object: object): boolean { return this.state(object).extensible; }

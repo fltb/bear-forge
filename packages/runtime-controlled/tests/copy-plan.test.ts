@@ -321,3 +321,64 @@ test('closure codecs derive from existing metadata without duplicate per-functio
     assert.equal(S.getObjectDescriptor(fn).value,fn);
   });
 });
+
+test('object literals preserve suspended evaluation, keys, descriptors and branch isolation', () => {
+  const artifact = decode(compileJavaScript(`export const program={schemas:{},async run(n,io){
+    const symbol=Symbol('field'), child={value:1};
+    let calls=0;
+    const key={toString(){calls++;return 'field';}};
+    const object={3:3, first:child, [key]:await io.call({port:'step',input:calls}),
+      first:child, [symbol]:child, ['__proto__']:child};
+    const proto={inherited:7}, withPrototype={__proto__:proto, data:2};
+    const getter={get value(){return 9;}}, spread={...getter};
+    await io.call({port:'step',input:[calls,Object.keys(object),withPrototype.inherited,spread.value]});
+    const next=await io.call({port:'step',input:null});
+    object.first.value=next;
+    const d=Object.getOwnPropertyDescriptor(object,'field');
+    return [object.first.value,object[symbol].value,object.__proto__.value,
+      object.field,calls,d.writable,d.enumerable,d.configurable,Object.keys(object)];
+  }};`).content);
+  const parent = new ProgramExecution(artifact); parent.start(null);
+  assert.equal(parent.io.callData.input, 1);
+  parent.resume(4);
+  assert.deepEqual(parent.io.callData.input, [1, ['3','first','field','__proto__'], 7, 9]);
+  const restored = parent.fresh(); restored.restore(parent.snapshot());
+  const child = parent.fork();
+  for (const [instance, value] of [[parent,10],[child,20],[restored,30]] as const) {
+    instance.resume(null); instance.resume(value);
+    assert.equal(instance.result.status, 1, String(instance.result.value));
+    assert.deepEqual(instance.result.value,[value,value,value,4,1,true,true,true,['3','first','field','__proto__']]);
+  }
+});
+
+test('isolated schema wrappers cannot mutate the boundary baseline or retain host aliases', async () => {
+  const {read} = await import('@bear-forge/boundary');
+  const artifact = decode(compileJavaScript(`let retained;
+    export const program={schemas:{setup:{parse(value){retained=value;return value;}},
+      result:{parse(value){return retained;}},ports:{step:{input:{parse(value){value.child.n++;return value;}},output:{parse(value){return value;}}}}},
+      async run(_,io){await io.call({port:'step',input:null});return 1;}};`).content);
+  const execution = new ProgramExecution(artifact), schemas = execution.boundarySchemas();
+  let getters = 0;
+  const invalid = {get child() {getters++; return {n:1};}};
+  // Supplying a public second argument must not bypass the private admission.
+  assert.throws(() => schemas.setup.parse(invalid, true), /enumerable data properties/);
+  assert.equal(getters, 0);
+  const child = {n:1}, input: any = {child, alias:child, array:[, child]};
+  input.self = input;
+  Object.defineProperty(input, '__proto__', {value: child, enumerable: true, writable: true, configurable: true});
+  const result = read<typeof input>(schemas.setup, input);
+  assert.notEqual(result.child, child);
+  assert.equal(result.child, result.alias);
+  assert.equal(result.self, result);
+  assert.equal(result.array.length, 2);
+  assert.equal(0 in result.array, false);
+  assert.equal(result.array[1], result.child);
+  assert.equal(result.__proto__, result.child);
+  assert.equal(Object.getPrototypeOf(result), Object.prototype);
+  result.child.n = 10;
+  assert.equal(child.n, 1);
+  assert.deepEqual(read(schemas.result, input), input);
+  assert.throws(() => read(schemas.ports.step.input, input), /changed its input/);
+  assert.equal(child.n, 1);
+  execution.dispose();
+});

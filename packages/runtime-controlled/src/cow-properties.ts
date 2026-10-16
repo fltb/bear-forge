@@ -6,6 +6,11 @@ export const writableProperty = 2;
 const enumerableProperty = 4, configurableProperty = 8;
 type Layout = {readonly key: PropertyKey; readonly order: number; readonly flags: number};
 type Page = {owner: object | undefined; layout: (Layout | undefined)[]; values: unknown[]; setters: unknown[] | undefined; ownLayout: boolean; count: number};
+// A fresh empty array contains only this primitive descriptor. No authored
+// value or mutable owner is retained; the first edit clones the shared page.
+const emptyArrayPage: Page = {owner: undefined,
+  layout: [undefined, {key: 'length', order: 0, flags: dataProperty | writableProperty}],
+  values: [undefined, 0], setters: undefined, ownLayout: false, count: 1};
 const clonePage = (page: Page): Page => ({owner: undefined, layout: page.layout, values: page.values.slice(), setters: page.setters?.slice(), ownLayout: false, count: page.count});
 
 /** Property metadata never holds authored values or accessor functions.
@@ -21,10 +26,26 @@ export class CowProperties {
     return slot < propertyPageWidth ? this.first : this.pages?.get(Math.floor(slot / propertyPageWidth));
   }
   layout(slot: number): Layout | undefined { return this.read(slot)?.layout[slot % propertyPageWidth]; }
-  descriptor(slot: number): PropertyDescriptor | undefined {
+  descriptor(slot: number, scratch?: PropertyDescriptor): PropertyDescriptor | undefined {
     const page = this.read(slot), offset = slot % propertyPageWidth, layout = page?.layout[offset];
     if (!layout) return undefined;
     const flags = layout.flags;
+    if (scratch) {
+      scratch.enumerable = !!(flags & enumerableProperty);
+      scratch.configurable = !!(flags & configurableProperty);
+      if (flags & dataProperty) {
+        if ('get' in scratch) delete scratch.get;
+        if ('set' in scratch) delete scratch.set;
+        scratch.value = page!.values[offset];
+        scratch.writable = !!(flags & writableProperty);
+      } else {
+        delete scratch.value;
+        delete scratch.writable;
+        scratch.get = page!.values[offset] as (() => unknown);
+        scratch.set = page!.setters?.[offset] as ((value: unknown) => void);
+      }
+      return scratch;
+    }
     return flags & dataProperty
       ? {value: page!.values[offset], writable: !!(flags & writableProperty), enumerable: !!(flags & enumerableProperty), configurable: !!(flags & configurableProperty)}
       : {get: page!.values[offset] as (() => unknown), set: page!.setters?.[offset] as ((value: unknown) => void),
@@ -45,9 +66,15 @@ export class CowProperties {
     return page;
   }
   define(slot: number, key: PropertyKey, order: number, descriptor: PropertyDescriptor): void {
-    const page = this.edit(slot), offset = slot % propertyPageWidth;
     const flags = ('value' in descriptor ? dataProperty : 0) | (descriptor.writable ? writableProperty : 0)
       | (descriptor.enumerable ? enumerableProperty : 0) | (descriptor.configurable ? configurableProperty : 0);
+    if (!this.first && slot === 1 && key === 'length' && order === 0
+      && flags === (dataProperty | writableProperty) && Object.is(descriptor.value, 0)) {
+      this.first = emptyArrayPage;
+      this.shapeVersion++;
+      return;
+    }
+    const page = this.edit(slot), offset = slot % propertyPageWidth;
     const previous = page.layout[offset];
     if (!previous || previous.flags !== flags || previous.key !== key || previous.order !== order) {
       if (!page.ownLayout) { page.layout = page.layout.slice(); page.ownLayout = true; }
@@ -84,6 +111,12 @@ export class CowProperties {
     branch.pages = this.pages?.fork();
     this.owner = {};
     return branch;
+  }
+  forEachLayout(visit: (layout: Layout) => void): void {
+    if (this.first) for (const layout of this.first.layout) if (layout) visit(layout);
+    if (this.pages) for (const [, page] of this.pages.entries()) {
+      for (const layout of page.layout) if (layout) visit(layout);
+    }
   }
   *entries(): IterableIterator<[number, Layout]> {
     if (this.first) for (let offset = 0; offset < this.first.layout.length; offset++) {

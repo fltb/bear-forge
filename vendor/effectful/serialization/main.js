@@ -49,6 +49,7 @@ function showStack(ctx, key, value) {
 }
 const LocMap = Map;
 const LocWeakMap = WeakMap;
+const referenceDescriptors = new LocWeakMap();
 const LocSet = Set;
 function initializeState(init) {
     if (!init.symbol)
@@ -449,58 +450,40 @@ exports.descriptorTemplate = {
  * in more than one sub-value it will have a unique value id instead of the
  * value in the output.
  */
-function refAwareDescriptor(descriptor) {
-    return Object.assign({}, descriptor, {
-        name: descriptor.name,
-        read(ctx, json) {
-            const ref = json.r;
-            if (ref != null) {
-                const res = this.create(ctx, json);
-                this.readContent(ctx, json, res);
-                return res;
-            }
-            return descriptor.read(ctx, json);
-        },
-        write(ctx, value, parent, index) {
-            let info = ctx.sharedRefsMap.get(value);
-            if (info == null) {
-                ctx.sharedRefsMap.set(value, (ctx.jobs = info =
-                    {
-                        ref: null,
-                        data: null,
-                        parent,
-                        value,
-                        descriptor,
-                        index,
-                        nextJob: ctx.jobs,
-                        started: false,
-                        debCtx
-                    }));
-                ctx.jobs = info;
-                if (!ctx.opts.alwaysByRef)
-                    return null;
-            }
-            if (info.ref == null)
-                info.ref = {};
-            return info.ref;
-        },
-        create(ctx, json) {
-            const ref = json.r;
-            if (ref != null) {
-                const value = ctx.sharedVals[ref];
-                if (value !== undef)
-                    return value;
-                return (ctx.sharedVals[ref] = ctx.sharedDescriptors[ref].create(ctx, ctx.sharedJsons[ref]));
-            }
-            return descriptor.create(ctx, json);
-        },
-        readContent(ctx, json, value) {
-            if (json.r != null)
-                return;
-            descriptor.readContent(ctx, json, value);
-        }
-    });
+function referenceRead(ctx, json) {
+    if (json.r != null) {
+        const value = this.create(ctx, json);
+        this.readContent(ctx, json, value);
+        return value;
+    }
+    return referenceDescriptors.get(this).read(ctx, json);
 }
+function referenceWrite(ctx, value, parent, index) {
+    let info = ctx.sharedRefsMap.get(value);
+    if (info == null) {
+        const descriptor = referenceDescriptors.get(this);
+        ctx.sharedRefsMap.set(value, (ctx.jobs = info = {
+            ref: null, data: null, parent, value, descriptor, index,
+            nextJob: ctx.jobs, started: false, debCtx
+        }));
+        if (!ctx.opts.alwaysByRef) return null;
+    }
+    if (info.ref == null) info.ref = {};
+    return info.ref;
+}
+function referenceCreate(ctx, json) {
+    const ref = json.r;
+    if (ref != null) {
+        const value = ctx.sharedVals[ref];
+        if (value !== undef) return value;
+        return (ctx.sharedVals[ref] = ctx.sharedDescriptors[ref].create(ctx, ctx.sharedJsons[ref]));
+    }
+    return referenceDescriptors.get(this).create(ctx, json);
+}
+function referenceReadContent(ctx, json, value) {
+    if (json.r == null) referenceDescriptors.get(this).readContent(ctx, json, value);
+}
+
 /**
  * Adds a descriptor to an internal global registry for creating value instances
  * by type names on reading.
@@ -517,6 +500,9 @@ function refAwareDescriptor(descriptor) {
  * @param descriptor
  * @returns
  */
+function emptyReadContent() {}
+function readFromCreate(ctx, json) { return this.create(ctx, json); }
+function rejectWrite(_, val) { throw new TypeError(`not writable ${val}`); }
 function regDescriptor(descriptor) {
     let { read: readImpl, readContent: readContentImpl, create: createImpl, write: writeImpl } = descriptor;
     if (!readImpl) {
@@ -530,17 +516,13 @@ function regDescriptor(descriptor) {
         descriptor.defaultPrototype = Object.getPrototypeOf(descriptor.value);
     const overrideProps = Object.assign({}, defaultOverrideProps, descriptor.typeofHint === "function" && funcOverrideProps, descriptor.overrideProps);
     if (!readContentImpl)
-        readContentImpl = function readContent() { };
+        readContentImpl = emptyReadContent;
     if (!readImpl)
-        readImpl = function readCreate(ctx, json) {
-            return this.create(ctx, json);
-        };
+        readImpl = readFromCreate;
     if (!createImpl)
         createImpl = exports.descriptorTemplate.create;
     if (!writeImpl)
-        writeImpl = function noWrite(_, val) {
-            throw new TypeError(`not writable ${val}`);
-        };
+        writeImpl = rejectWrite;
     const name = guessDescriptorName(descriptor);
     let uniq = name;
     let i = 0;
@@ -571,20 +553,20 @@ function regDescriptor(descriptor) {
     descriptorByName.set(uniq, noRefs);
     if (descriptor.typeofTag)
         descriptorByTypeOfProp.set(descriptor.typeofTag, noRefs);
-    if (descriptor.refAware !== false)
-        final = refAwareDescriptor(final);
+    const referenceAware = descriptor.refAware !== false;
     final = {
         name: uniq,
-        read: final.read,
-        write: final.write,
-        readContent: final.readContent,
-        create: final.create,
+        read: referenceAware ? referenceRead : final.read,
+        write: referenceAware ? referenceWrite : final.write,
+        readContent: referenceAware ? referenceReadContent : final.readContent,
+        create: referenceAware ? referenceCreate : final.create,
         overrideProps,
         value: descriptor.value,
         props: descriptor.props,
         default$: descriptor.default$,
         snapshot: final.snapshot
     };
+    if (referenceAware) referenceDescriptors.set(final, noRefs);
     return final;
 }
 /**

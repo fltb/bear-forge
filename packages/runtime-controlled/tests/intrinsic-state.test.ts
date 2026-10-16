@@ -580,7 +580,9 @@ test('for-in snapshots logical keys and forks cursor progress with branch-local 
   ops.invoke(Object.defineProperty,Object,[object,'shadow',{value:5,enumerable:false}]);
   assert.deepEqual(ops.forInKeys(object),['own','gone','base']);
   const record=effects.forInIterator(object);
-  assert.equal(ops.get(ops.ref(effects.iterNext(record),'value')),'own');
+  const first=effects.iterNext(record);
+  assert.equal(parent.has(first),false,'private for-in results do not allocate COW state');
+  assert.equal(ops.get(ops.ref(first,'value')),'own');
   const child=parent.fork(),childSlots=slots.fork();context.objects=child;context.intrinsicSlots=childSlots;
   ops.invoke(Reflect.deleteProperty,Reflect,[object,'gone']);
   for(const restored of [effects.S.read(effects.S.write(record)),effects.prepareCopy(record,null,null)()]){

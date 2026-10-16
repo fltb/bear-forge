@@ -386,3 +386,38 @@ test('cached absence on mutable prototypes invalidates independently in sibling 
   child.defineProperty(ancestor, 'field', data(4));
   assert.equal(child.get(object, 'field', object, invoke, cache), 4);
 });
+
+test('reusable descriptor inspection preserves branch-local data and accessor distinctions', () => {
+  const heap = new CowHeap(), object = heap.create(), scratch: PropertyDescriptor = {};
+  const getter = () => 2;
+  heap.defineProperty(object, 'data', data(1));
+  heap.defineProperty(object, 'accessor', {get: getter, enumerable: false, configurable: true});
+  const child = heap.fork();
+  child.defineProperty(object, 'data', data(3));
+  for (const branch of [heap, child]) {
+    for (const key of ['data', 'accessor', 'data']) {
+      const expected = branch.getOwnPropertyDescriptor(object, key);
+      assert.equal(branch.getOwnPropertyDescriptor(object, key, scratch), scratch);
+      assert.deepEqual(scratch, expected);
+    }
+  }
+  assert.equal(heap.getOwnPropertyDescriptor(object, 'absent', scratch), undefined);
+});
+
+test('own key order matches native across sparse pages and divergent branch insertions', () => {
+  const heap = new CowHeap(), object = heap.create(), native: any = {};
+  const symbol = Symbol('field');
+  for (const key of ['4294967294','96','32','0','-0','01','4294967295','name',symbol]) {
+    heap.defineProperty(object,key,data(1)); Object.defineProperty(native,key,data(1));
+  }
+  const branch = heap.fork(), nativeBranch = Object.defineProperties({},Object.getOwnPropertyDescriptors(native));
+  for (const [current, expected, keys] of [[heap,native,['95','1','new']], [branch,nativeBranch,['2','64','other']]] as const) {
+    current.deleteProperty(object,'32'); delete (expected as any)['32'];
+    current.deleteProperty(object,'name'); delete (expected as any).name;
+    for (const key of [...keys,'32','name']) {
+      current.defineProperty(object,key,data(2)); Object.defineProperty(expected,key,data(2));
+    }
+    assert.deepEqual(current.ownKeys(object),Reflect.ownKeys(expected));
+  }
+  assert.deepEqual(heap.ownKeys(object),Reflect.ownKeys(native));
+});

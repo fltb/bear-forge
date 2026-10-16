@@ -98,3 +98,102 @@ test('schema values are preserved irrespective of source property order', () => 
   assert.throws(() => admitSchema(z.coerce.number()));
   assert.throws(() => admitSchema(z.number().default(1)));
 });
+
+test('copy validates plain fields once and preserves cyclic data with dangerous property names', () => {
+  const input: any = JSON.parse('{"__proto__":{"value":1},"constructor":2}');
+  input.self = input;
+  let ownKeyCalls = 0;
+  const reads = new Map<object, Map<PropertyKey, number>>();
+  const result = copy(input, {
+    getPrototypeOf: Object.getPrototypeOf,
+    ownKeys(value) { ownKeyCalls++; return Reflect.ownKeys(value); },
+    getOwnPropertyDescriptor(value, key) {
+      let fields = reads.get(value);
+      if (!fields) reads.set(value, fields = new Map());
+      fields.set(key, (fields.get(key) ?? 0) + 1);
+      return Object.getOwnPropertyDescriptor(value, key);
+    }
+  });
+  assert.equal(ownKeyCalls, 2);
+  for (const fields of reads.values()) for (const count of fields.values()) assert.equal(count, 1);
+  assert.equal(Object.getPrototypeOf(result), Object.prototype);
+  assert.equal(result.self, result);
+  assert.equal(result.constructor, 2);
+  assert.deepEqual(Object.getOwnPropertyDescriptor(result, '__proto__'), {
+    value: {value: 1}, writable: true, enumerable: true, configurable: true
+  });
+});
+
+test('copy never invokes inherited setters while constructing plain output', () => {
+  const key = '__bearBoundaryInheritedSetter';
+  let calls = 0;
+  Object.defineProperty(Object.prototype, key, {set() {calls++;}, configurable: true});
+  try {
+    const result = copy({[key]: 42});
+    assert.equal(calls, 0);
+    assert.equal(Object.getPrototypeOf(result), Object.prototype);
+    assert.deepEqual(Object.getOwnPropertyDescriptor(result, key), {
+      value: 42, writable: true, enumerable: true, configurable: true
+    });
+  } finally { delete (Object.prototype as any)[key]; }
+});
+
+test('copy snapshots values from reusable inspection descriptors before nested traversal', () => {
+  const child = {nested: 7};
+  const input: any = {first: child, second: 8, alias: child, array: [child, , 9]};
+  input.self = input;
+  const scratchDescriptors = new Set<PropertyDescriptor>();
+  const inspect = {
+    getPrototypeOf: Object.getPrototypeOf,
+    ownKeys: Reflect.ownKeys,
+    getOwnPropertyDescriptor(object: object, key: PropertyKey, scratch?: PropertyDescriptor) {
+      const descriptor = Object.getOwnPropertyDescriptor(object, key);
+      if (!descriptor || !scratch) return descriptor;
+      scratchDescriptors.add(scratch);
+      for (const field of Reflect.ownKeys(scratch)) delete (scratch as any)[field];
+      return Object.assign(scratch, descriptor);
+    }
+  };
+  const result = copy(input, inspect);
+  assert.equal(scratchDescriptors.size, 1);
+  assert.equal(result.first.nested, 7);
+  assert.equal(result.second, 8);
+  assert.equal(result.first, result.alias);
+  assert.equal(result.array[0], result.first);
+  assert.equal(1 in result.array, false);
+  assert.equal(result.self, result);
+  let called = false;
+  assert.throws(() => copy({data: 1, get bad() {called = true; return 2;}}, inspect));
+  assert.equal(called, false);
+});
+
+test('copy defines own writable fields over inherited readonly array properties', () => {
+  const key = '__bearBoundaryReadonly';
+  const source: any[] = [1, , 3];
+  Object.defineProperty(source, key, {value: 7, enumerable: true});
+  Object.defineProperty(Array.prototype, key, {value: 0, configurable: true});
+  try {
+    const result = copy(source);
+    assert.equal(result.length, 3);
+    assert.equal(1 in result, false);
+    assert.deepEqual(Object.getOwnPropertyDescriptor(result, key), {
+      value: 7, writable: true, enumerable: true, configurable: true
+    });
+  } finally {delete (Array.prototype as any)[key];}
+});
+
+test('copy does not inspect an exotic host array prototype chain while writing output', async () => {
+  const {runInNewContext} = await import('node:vm');
+  const source = runInNewContext('[1,2]');
+  const previous = Object.getPrototypeOf(Array.prototype);
+  let traps = 0, result: unknown;
+  const exotic = new Proxy(Object.create(null), {
+    has() {traps++; throw Error('unexpected output prototype lookup');},
+    get() {traps++; throw Error('unexpected output prototype read');}
+  });
+  Object.setPrototypeOf(Array.prototype, exotic);
+  try {result = copy(source);}
+  finally {Object.setPrototypeOf(Array.prototype, previous);}
+  assert.equal(traps, 0);
+  assert.deepEqual(result, [1,2]);
+});

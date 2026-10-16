@@ -72,3 +72,27 @@ test('optional setter pages detach across branches and release replaced accessor
     assert.equal(parent.descriptor(slot)!.set, original);
   }
 });
+
+test('empty length pages isolate independent objects and forks on value and structural writes',()=>{
+  const descriptor={value:0,writable:true,enumerable:false,configurable:false};
+  const first=new CowProperties(),second=new CowProperties(),negative=new CowProperties();
+  first.define(1,'length',0,descriptor);second.define(1,'length',0,descriptor);
+  negative.define(1,'length',0,{...descriptor,value:-0});
+  assert.ok(Object.is(negative.descriptor(1)!.value,-0));
+  assert.strictEqual(first.read(1),second.read(1));
+  const fork=first.fork();
+  first.setValue(1,2);
+  fork.define(1,'length',0,{...descriptor,writable:false});
+  second.define(0,'0',1,data({alive:true}));
+  assert.equal(first.descriptor(1)!.value,2);
+  assert.equal(first.descriptor(1)!.writable,true);
+  assert.equal(fork.descriptor(1)!.value,0);
+  assert.equal(fork.descriptor(1)!.writable,false);
+  assert.equal(second.descriptor(1)!.value,0);
+  assert.equal(second.descriptor(1)!.writable,true);
+  assert.equal(first.descriptor(0),undefined);
+  assert.equal(fork.descriptor(0),undefined);
+  const fresh=new CowProperties();fresh.define(1,'length',0,descriptor);
+  assert.deepEqual(fresh.descriptor(1),descriptor);
+  assert.equal(fresh.descriptor(0),undefined);
+});

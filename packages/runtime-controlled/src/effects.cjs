@@ -437,8 +437,10 @@ const AG=require("@bear-forge/effectful-continuations/asyncGenerator");
 class ForInCursor{
  constructor(value){intrinsicState.initialize(this,'ForInCursor',{object:Object(value),fields:State.context.operations.forInKeys(value),index:0});}
  next(){const state=intrinsicState.edit(this),ops=State.context.operations;
-  while(state.index<state.fields.length){tick();const key=state.fields[state.index++];if(ops.has(key,state.object))return allocate({done:false,value:key});}
-  return allocate({done:true,value:undefined});
+  // Only generated for-in machinery sees these immutable, primitive-only
+  // results. Cursor progress remains in Context; results need no heap version.
+  while(state.index<state.fields.length){tick();const key=state.fields[state.index++];if(ops.has(key,state.object))return {done:false,value:key};}
+  return {done:true,value:undefined};
  }
 }
 intrinsicState.register(ForInCursor,'ForInCursor');

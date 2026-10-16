@@ -329,3 +329,24 @@ for(const kind of ['Map','Set'] as const)test(`${kind} cursor seeks past deleted
     instance.dispose();
   }
 });
+
+
+test('private for-in results survive IO while cursor deletions remain branch-local',()=>{
+ const artifact=decode(compileJavaScript(`export const program={schemas:{},async run(_,io){
+  const object={a:1,b:2,c:3},seen=[];
+  for(const key in object){
+   seen.push(key);
+   if(key==='a'){const remove=await io.call({port:'step',input:key});if(remove)delete object.b;}
+  }
+  return seen;
+ }};`).content);
+ const parent=new ProgramExecution(artifact);parent.start(null);
+ assert.equal(parent.result.status,0);
+ const fork=parent.fork(),restored=parent.fresh();restored.restore(parent.snapshot());
+ for(const [current,remove]of [[parent,false],[fork,true],[restored,true]] as const){
+  current.resume(remove);
+  assert.equal(current.result.status,1,String(current.result.value));
+  assert.deepEqual(current.result.value,remove?['a','c']:['a','b','c']);
+  current.dispose();
+ }
+});

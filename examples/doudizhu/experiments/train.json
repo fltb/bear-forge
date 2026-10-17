@@ -1,0 +1,6 @@
+{
+  "output": "data/ddz-training",
+  "seed": 7,
+  "samples": 20000,
+  "minutes": 10
+}

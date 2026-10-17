@@ -1,0 +1,1 @@
+{"version":1,"game":"forge-duel-v1","engine":"native","id":"ppo-relations","blocks":64,"seed":5000000,"policies":["model-own"],"opponents":["first"],"models":{"model-own":"data/forge-ppo/model.pt"},"maxSteps":1000,"maxAttempts":2,"minimumBlocks":64,"margin":0.05,"bootstrap":2000,"analysisSeed":91}

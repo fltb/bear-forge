@@ -1,0 +1,10 @@
+{
+  "output": "data/ddz-wp-training",
+  "pretrainedDirectory": "data/douzero-wp",
+  "teacherCheckpoint": "data/ddz-wp-original/model.pt",
+  "seed": 10000,
+  "samples": 100000,
+  "minutes": 30,
+  "epsilon": 0.01,
+  "batchSamples": 3200
+}

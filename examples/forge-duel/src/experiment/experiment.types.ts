@@ -1,6 +1,6 @@
 import type { TaskResult as ExperimentTaskResult } from '@bear-forge/experiments';
 import type { Definition } from '../index.ts';
-export type Script = 'first' | 'last' | 'random' | 'rule';
+export type Script = 'first' | 'last' | 'random' | 'rule' | `model-${string}`;
 export type TaskInput = {
   id: string;
   phase: 'discovery' | 'confirmation';
@@ -21,6 +21,7 @@ export type Registration = {
   id: string;
   blocks: number;
   seed: number;
+  models?: Record<string,string> | undefined;
   policies: Script[];
   opponents: Script[];
   /** 0 commits only the complete task; positive values checkpoint every N decisions. */

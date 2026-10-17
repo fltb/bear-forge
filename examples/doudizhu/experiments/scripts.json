@@ -1,0 +1,11 @@
+{
+  "id": "ddz-scripts",
+  "seed": 7,
+  "games": 20,
+  "seats": [
+    "first",
+    "last",
+    "random"
+  ],
+  "maxSteps": 600
+}

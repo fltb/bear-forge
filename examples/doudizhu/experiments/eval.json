@@ -1,0 +1,6 @@
+{
+  "output": "data/ddz-training",
+  "checkpoint": "data/ddz-training/model.pt",
+  "seed": 1000000,
+  "evaluationSeeds": 300
+}

@@ -1,0 +1,1 @@
+{"game":"doudizhu","output":"data/ddz-ppo-evaluation","checkpoint":"data/ddz-ppo/model.pt","teacherCheckpoint":"data/ddz-wp-original/model.pt","seed":3000000,"evaluationSeeds":100,"maxSteps":600,"evaluationScope":"both"}

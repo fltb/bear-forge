@@ -7,7 +7,8 @@
     "@bear-forge/contracts": "*",
     "zod": "4.6.5",
     "@bear-forge/game-sdk": "*",
-    "@bear-forge/card-engine": "*"
+    "@bear-forge/card-engine": "*",
+    "@bear-forge/training": "*"
   },
   "devDependencies": {
     "@bear-forge/compiler": "*",
@@ -15,6 +16,7 @@
     "@bear-forge/session": "*",
     "@bear-forge/experiments": "*",
     "@bear-forge/policies": "*",
+    "@bear-forge/analysis": "*",
     "@bear-forge/game-host": "*",
     "@bear-forge/runtime-card": "*",
     "@bear-forge/boundary": "*"
@@ -22,7 +24,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "check": "npm run typecheck && npm test",
+    "check": "npm run typecheck && npm test && npm run test:training",
+    "test:training": "uv run --frozen --project . python -m unittest discover -s tests -p '*_test.py'",
     "benchmark:card": "node --experimental-strip-types tests/card-benchmark.ts"
   }
 }

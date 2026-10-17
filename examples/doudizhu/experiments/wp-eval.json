@@ -1,0 +1,8 @@
+{
+  "output": "data/ddz-wp-evaluation",
+  "checkpoint": "data/ddz-wp-training/model.pt",
+  "previousCheckpoint": "data/ddz-wp-original/model.pt",
+  "seed": 2000000,
+  "evaluationSeeds": 300,
+  "evaluationMode": "team"
+}

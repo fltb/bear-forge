@@ -1,0 +1,9 @@
+{
+  "name": "@bear-forge/training", "private": true, "type": "module", "exports": "./src/index.ts",
+  "dependencies": { "@bear-forge/policies": "*", "@bear-forge/contracts": "*", "@bear-forge/experiments": "*", "zod": "4.6.5" },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --experimental-strip-types --test tests/*.test.ts && uv run --frozen --project . python -m unittest discover -s tests -p '*_test.py'",
+    "check": "npm run typecheck && npm test"
+  }
+}

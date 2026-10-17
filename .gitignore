@@ -151,6 +151,7 @@ vite.config.ts.timestamp-*
 # Local OS and Python cache
 .DS_Store
 __pycache__/
+.venv/
 *.pyc
 
 # Generated programs and local experiments

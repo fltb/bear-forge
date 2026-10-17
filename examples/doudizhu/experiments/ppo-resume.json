@@ -1,0 +1,1 @@
+{"game":"doudizhu","output":"data/ddz-ppo","checkpoint":"data/ddz-ppo/model.pt","seed":50000,"samples":10000,"minutes":60,"teacher":true,"teacherCheckpoint":"data/ddz-wp-original/model.pt","maxSteps":600}

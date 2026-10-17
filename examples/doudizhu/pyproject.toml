@@ -1,0 +1,8 @@
+[project]
+name = "bear-forge-doudizhu-training"
+version = "0.1.0"
+requires-python = ">=3.11,<3.15"
+dependencies = ["douzero", "torch", "numpy", "GitPython"]
+
+[tool.uv.sources]
+douzero = { git = "https://github.com/kwai/DouZero", rev = "718a5c920bf3361e34178a38f3b80458e176b351" }

@@ -1,0 +1,9 @@
+{
+  "output": "data/ddz-wp-training",
+  "checkpoint": "data/ddz-wp-training/model.pt",
+  "teacherCheckpoint": "data/ddz-wp-original/model.pt",
+  "samples": 100000,
+  "minutes": 60,
+  "epsilon": 0.01,
+  "batchSamples": 3200
+}

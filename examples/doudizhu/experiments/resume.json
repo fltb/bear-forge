@@ -1,0 +1,6 @@
+{
+  "output": "data/ddz-training",
+  "checkpoint": "data/ddz-training/model.pt",
+  "samples": 100000,
+  "minutes": 60
+}

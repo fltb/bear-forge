@@ -230,6 +230,7 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
     } finally {
       await game.close();
     }
+    if (status === 'truncated' && !error) error = 'Experiment step budget exceeded';
     let after: number | null = null;
     const facts: any[] = [];
     do {
@@ -261,7 +262,7 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
       policy: router.snapshot(),
       cost: {
         milliseconds: performance.now() - started,
-        steps: steps + 1,
+        steps: Math.min(steps + 1, config.maxSteps),
         cpuMilliseconds: (process.cpuUsage(cpuStarted).user + process.cpuUsage(cpuStarted).system) / 1000,
         processPeakRssBytes: process.resourceUsage().maxRSS * 1024,
         snapshotMilliseconds,

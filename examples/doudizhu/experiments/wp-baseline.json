@@ -1,0 +1,5 @@
+{
+  "output": "data/ddz-wp-original",
+  "pretrainedDirectory": "data/douzero-wp",
+  "pretrainedMode": "original"
+}

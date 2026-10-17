@@ -23,7 +23,10 @@ export function scoreAction(action: any, request: PolicyRequest) {
   const target = observation.heroes[enemy].board.find((u: any) => u.id === action.target);
   return (target.hp <= (card.definition === 'spark' ? 2 : 4) ? 25 : 0) + target.attack;
 }
-export const policy = (name: Script) => createScript(name, name === 'rule' ? {
+export const policy = (name: Script) => {
+  if(name.startsWith('model-'))throw Error('Model policy requires a frozen model binding');
+  return createScript(name as 'first'|'last'|'random'|'rule', name === 'rule' ? {
   score: scoreAction,
   version: 'forge-rule@1'
 } : {});
+};

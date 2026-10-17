@@ -1,0 +1,1 @@
+{"game":"forge-duel","output":"data/forge-ppo","checkpoint":"data/forge-ppo/model.pt","seed":60000,"samples":5000,"minutes":60,"teacher":true}

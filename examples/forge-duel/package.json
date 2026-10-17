@@ -26,7 +26,8 @@
     "@bear-forge/experiments": "*",
     "@bear-forge/analysis": "*",
     "@bear-forge/card-engine": "*",
-    "@bear-forge/runtime-card": "*"
+    "@bear-forge/runtime-card": "*",
+    "@bear-forge/training": "*"
   },
   "devDependencies": {
     "@bear-forge/compiler": "*",

@@ -11,7 +11,7 @@ import { createGameBinder } from '@bear-forge/game-host';
 import { PolicyRouter } from '@bear-forge/policies';
 import { ExperimentFiles } from './files.ts';
 import { sameData } from '@bear-forge/boundary';
-import type { Registration, TaskInput, TaskResult, ExecutionHooks, ExperimentDefinition } from './experiment.types.ts';
+import type { Registration, TaskInput, TaskResult, ExecutionHooks, ExperimentDefinition, ExecutionProvider } from './experiment.types.ts';
 const experimentBudgetErrors = new WeakSet<object>();
 const protocolFailureCodes = new WeakMap<object, string>();
 class ExperimentBudgetError extends Error {
@@ -105,6 +105,7 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
     // Own the provider for this experiment, including between asynchronous
     // task commits. A global WeakRef alone cannot keep Program code alive.
     controlled?: ReturnType<ReturnType<typeof createControlledLoader>['load']>;
+    provided?: ReturnType<ExecutionProvider<G>['load']>;
   };
   async function runTaskImplementation(task: T, config: C, attempt = 1, files?: Files, hooks: ExecutionHooks = {}, prepared?: FrozenExecutable): Promise<Row> {
     const started = performance.now(),
@@ -116,7 +117,19 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
     if (controlled && !files) throw Error('Controlled task requires its registered output directory');
     const saved: any = files ? await files.read('checkpoint-' + task.id) : null;
     let loaded: any;
-    if (controlled) {
+    if ('execution' in definition) {
+      const executable = definition.execution.identity;
+      if (files && !prepared) {
+        const old = await files.read(controlled ? 'artifact' : 'native-artifact');
+        if (old && !sameData(old, executable)) throw Error('Registered executable belongs to another provider');
+        const frozen: any = await files.read('implementation');
+        if (frozen && frozen.executableDigest !== executableDigest(controlled ? 'controlled' : 'native', executable)) throw Error('Frozen executable identity changed');
+        if (frozen && !sameData(frozen.implementation, await definition.identity())) throw Error('Registered production code or dependency version changed');
+      }
+      const load = () => definition.execution.load({ controlled, stepBudget: config.computeStepBudget ?? 100000000,
+        ...(files ? { snapshotDirectory: files.directory + '/snapshots' } : {}) });
+      loaded = unwrap(await (prepared ? prepared.provided ??= load() : load()));
+    } else if (controlled) {
       const artifact: any = prepared?.engine === 'controlled' ? prepared.value : await files!.read('artifact');
       if (!artifact) throw Error('Missing frozen compiled artifact');
       if (!prepared) {
@@ -142,7 +155,7 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
     const instance = controlled && saved ? unwrap(await loaded.persistence.restore(saved.snapshot)) : unwrap(await loaded.core.start(definition.setup(task)));
     const game = unwrap(await createGameBinder().bind({
       instance,
-      contract: definition.module.contract,
+      contract: 'execution' in definition ? definition.contract : definition.module.contract,
       ...(controlled ? {
         persistence: loaded.persistence
       } : {})
@@ -319,7 +332,13 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
       if (!sameData(frozen.implementation, identity)) throw Error('Registered production code or dependency version changed');
     }
     let executable: unknown;
-    if (registration.config.engine === 'controlled') {
+    if ('execution' in definition) {
+      executable = definition.execution.identity;
+      const key = registration.config.engine === 'controlled' ? 'artifact' : 'native-artifact';
+      const old = await files.read(key);
+      if (old && !sameData(old, executable)) throw Error('Registered executable belongs to another provider');
+      if (!old) await files.write(key, executable);
+    } else if (registration.config.engine === 'controlled') {
       const old: any = await files.read('artifact');
       if (old) executable = old;
       else {
@@ -346,14 +365,14 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
     if (frozen) {
       if (frozen.executableDigest !== digest) throw Error('Frozen executable artifact changed');
     }
-    if (registration.config.engine === 'controlled') {
+    if (!('execution' in definition) && registration.config.engine === 'controlled') {
       const artifact = executable as { content?: unknown; digest?: unknown };
       if (typeof artifact.content !== 'string' || typeof artifact.digest !== 'string'
         || programDigest(new Uint8Array(Buffer.from(artifact.content, 'base64'))) !== artifact.digest) {
         throw Error('Invalid frozen executable artifact');
       }
     }
-    await verifyExecutableSources(registration.config.engine ?? 'native', executable);
+    if (!('execution' in definition)) await verifyExecutableSources(registration.config.engine ?? 'native', executable);
     if (!frozen) await files.write('implementation', { implementation: identity, runtime, executableDigest: digest });
     const existing = new Set((await files.summaries()).map(r => r.id));
     if (registration.config.engine === 'controlled') {

@@ -8,8 +8,11 @@
     "check": "npm run typecheck && npm test"
   },
   "dependencies": {
-    "@bear-forge/compiler": "*",
     "@bear-forge/forge-duel-viewer": "*",
-    "@bear-forge/forge-duel": "*"
+    "@bear-forge/forge-duel": "*",
+    "@bear-forge/runtime-card": "*",
+    "@bear-forge/game-host": "*",
+    "@bear-forge/doudizhu": "*",
+    "esbuild": "0.28.2"
   }
 }

@@ -4,14 +4,18 @@ import { readdirSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import assert from 'node:assert/strict';
 
-export function assertSourceBoundaries(root:string,kind:'contracts'|'sdk'|'game'):void {
+export function assertSourceBoundaries(root:string,kind:'contracts'|'sdk'|'game',entries?:readonly string[]):void {
 const files=(dir:string):string[]=>readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(resolve(dir,e.name)):e.name.endsWith('.ts')?[resolve(dir,e.name)]:[]);
 const errors:string[]=[];
 const forbidden=new Set(['Date','globalThis','process','window','document','fetch','WebSocket','require','eval','Function','setTimeout','setInterval','Worker','Atomics']);
 const paths=files(root),api=new API();
 try {
 const snapshot=api.updateSnapshot({openFiles:paths});
-for(const path of paths){
+const known=new Set(paths),pending=entries?entries.map(name=>resolve(root,name)):[...paths],visited=new Set<string>();
+while(pending.length){
+  const path=pending.shift()!;
+  if(visited.has(path))continue;
+  visited.add(path);
   const source=snapshot.getDefaultProjectForFile(path)?.program.getSourceFile(path);
   assert.ok(source,`AST unavailable: ${path}`);
   const label=relative(root,path),isContract=kind==='contracts',isSDK=kind==='sdk';
@@ -23,6 +27,7 @@ for(const path of paths){
         if(name.startsWith('.')){
           const target=resolve(dirname(path),name),base=root;
           if(!target.startsWith(base+'/'))errors.push(`${label}: import escapes layer`);
+          if(entries&&known.has(target)&&!visited.has(target))pending.push(target);
           if(isContract){
             const role=(file:string):string=>{
               const part=relative(root,file).split('/');

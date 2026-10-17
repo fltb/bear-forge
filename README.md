@@ -21,17 +21,18 @@
 | --- | --- |
 | packages/contracts | 公共 TS 类型与 Zod schema |
 | packages/game-sdk | 程序内使用的类型化端口薄封装 |
-| packages/card-engine | 两游戏共用的效果组合、嵌套调用和选择等待；复用原执行续延 |
-| examples/doudizhu | 真实斗地主规则、循环、领域 SDK 与外侧适配 |
+| packages/card-engine | 卡牌声明与专用同步执行器；另保留通用程序使用的旧 async 组合库 |
+| packages/runtime-card | 并列专用卡牌后端：同步结算、COW 分支、保存恢复和记录重放；不经过通用编译器 |
+| examples/doudizhu | 真实斗地主规则、卡牌定义与外侧适配 |
 | packages/contracts/tests | 协议类型、schema、依赖边界测试；support 存放可复用的协议测试夹具 |
 | packages/game-sdk/tests | SDK 调用、类型及与外侧游戏接口的接线测试 |
 | examples/doudizhu/tests | 规则、合法动作独立核对、领域 schema 与完整原生对局测试 |
 | docs | 当前设计、需求和计划 |
 | archive | 已失效的历史设计，不作为当前依据 |
 
-Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释游戏交互。两种执行器遵循同一对外协议：原生直传入口运行受信任的普通 JS；只有编译受控入口承诺 IO-only、实例现场隔离及保存、恢复和分支。
+Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释游戏交互。通用程序和专用卡牌后端遵循同一对外协议。通用原生入口运行受信任 JS，通用编译入口提供其准入保障；专用卡牌原生/受控都执行同一 Card Core，受控模式增加图状态隔离、保存、恢复、分支及步骤记录。
 
-游戏入口：[模块导出](examples/doudizhu/src/index.ts)、[领域 SDK](examples/doudizhu/src/sdk.ts)、[主循环](examples/doudizhu/src/program.ts)。代理工作规则见 [AGENTS.md](AGENTS.md)。
+游戏入口：[模块导出](examples/doudizhu/src/index.ts)、[卡牌流程](examples/doudizhu/src/card.ts)、[生产契约](examples/doudizhu/src/contract.ts)。代理工作规则见 [AGENTS.md](AGENTS.md)。
 
 ## 正式检查
 
@@ -65,3 +66,23 @@ npm run serve -- --output ./data/demo
 ```
 
 打开 http://127.0.0.1:4173。demo 从空目录运行真实对局、文件提交和关系分析；小样本显示未知。完整实验、恢复和限制见项目介绍。
+
+## 专用卡牌路径
+
+同一 cardDefinition 的原生/受控模式都经过卡牌 Core，没有无 Core 的正式卡牌模式。两游戏模块、card:run/card:replay、build:games 和 demo/experiment 已接此路径。旧 async 游戏入口移入 tests/generic，作为通用后端的兼容性夹具；旧参考仅生成差分期望，正式 BaseGame 基准使用生产契约。
+
+当前基准为同一 Card Core 上的完整可交互 GameHost：原生游戏自身的多余路径单独优化，受控再核算新增能力的成本。默认原生不承担未启用的训练、记录、COW 或存档管理；游戏历史、观察、合法动作及实际事件交付保留。用户已要求继续，当前按 [完整游戏优化方案](docs/card-core-spec.md#gamehost-optimization) 推进能力装配、基准与结构优化，实际完成状态见 plan.md。原生审计使用已有 recordCore:true；默认原生不发布 capture，--records 等显式消费者保留完整记录与重放。
+
+通用 Program/编译执行入口保留。专用卡牌规则导出为各游戏的 `cardDefinition`，通过 `createCardLoader({ controlled: true | false })` 装载；加载结果仍为既有 Core/Instance/capture/persistence，GameContract 与 BaseGameBinder 不变。专用 Card Core 解释静态效果步骤，内部同步推进，遇端口才返回；受控模式提供步骤预算、分支隔离、存档与记录，不宣称任意 JS 的编译沙箱保障。
+
+GameContract 作者适配函数按用户确定的纯只读契约借用稳定发布数据，两模式一致。活动世界、schema 可写输入、玩家回调及公开返回仍彼此隔离；不为每次纯适配调用复制整份 view。
+
+```sh
+npm run card -- --game forge-duel --seed 87
+npm run card -- --game doudizhu --seed 31 --native
+npm run card -- --game forge-duel --records /tmp/forge-card-records.json
+npm run benchmark:card -w @bear-forge/forge-duel -- card-controlled
+npm run benchmark:card -w @bear-forge/doudizhu -- instance-controlled
+```
+
+完整游戏基准使用 game-native/game-controlled（benchmark:card 默认 game-controlled），两模式都按收到的合法选项选动作并实际接收事件，计时前与独立旧游戏逐项比较完整交互。card-native、card-controlled、card-controlled-recorded、instance-native、instance-controlled、basegame-native、basegame-controlled 保留为局部诊断；裸 Core/Instance 不包含完整交互，不能据此计算合理包装预算或完整原生下界。游戏规则与装载、声明语义、正确性证明及边界见 [专用后端方案](docs/card-core-spec.md)、[证明](docs/card-core-proof.md)。实际进度与尚未完成的验证只见 docs/plan.md。

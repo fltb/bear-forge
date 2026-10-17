@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createNativeLoader } from '@bear-forge/runtime-native';
+import { createCardLoader } from '@bear-forge/runtime-card';
 import { createGameBinder } from '@bear-forge/game-host';
 import { VirtualSession, driveSession } from '@bear-forge/session';
 import { game as module } from '../src/index.ts';
@@ -10,7 +10,7 @@ const unwrap = (x: any) => {
   return x.value;
 };
 test('real game session converts virtual deadline to accepted timeout control, not player action', async () => {
-  const loaded = unwrap(await createNativeLoader().load(module.program)),
+  const loaded = unwrap(await createCardLoader({controlled:false}).load(module.definition)),
     instance = unwrap(await loaded.core.start({
       game: {
         profile: 'competitive-2016-bear-1',
@@ -74,7 +74,7 @@ test('real game session converts virtual deadline to accepted timeout control, n
 });
 
 test('session driver preserves a real adapter fault instead of inventing an invalid-action pause',async()=>{
-  const loaded=unwrap(await createNativeLoader().load(module.program));
+  const loaded=unwrap(await createCardLoader({controlled:false}).load(module.definition));
   const instance=unwrap(await loaded.core.start({game:{profile:'competitive-2016-bear-1',firstBidder:'0',initialGameTime:0},seed:19}));
   const contract={...module.contract,ports:{...module.contract.ports,decision:{...module.contract.ports.decision,
     respond(){throw new Error('adapter failure');}

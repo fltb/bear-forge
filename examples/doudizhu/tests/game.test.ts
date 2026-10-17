@@ -1,7 +1,8 @@
+import { runCard } from '../../../packages/runtime-card/tests/run-support.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { IO, PortCall } from '@bear-forge/contracts/core';
-import { game, program, FrameSchema } from '../src/index.ts';
+import { game, FrameSchema } from '../src/index.ts';
 import type { DouDizhuPorts, DouDizhuRequest, SessionInput, Setup, Frame, Input, Seat, Action, AuditEvent } from '../src/index.ts';
 import { legalActions, prepareAction, prepareControl, observe } from '../src/module.ts';
 import { apply, settle, stage } from '../src/rules.ts';
@@ -43,7 +44,7 @@ async function run(seed=11,seat:Seat='0',override?:(frame:Frame,index:number)=>T
     // The discriminated switch above validates the port/result pairing; TS does not narrow A.
     return output as DouDizhuPorts[A['port']]['output'];
   }};
-  const final=await program({game:setup(seat),seed},io);frames.push(final);
+  const final=await runCard(game.definition, {game:setup(seat),seed},io);frames.push(final);
   const ended=game.contract.finish(final);
   return {frames,inputs,events,result:ended.result};
 }
@@ -132,10 +133,10 @@ test('terminal frames require an authoritative result, reject extra fields and e
 });
 
 test('native inner SDK uses decision and event ports; seed is explicit controlled setup',async()=>{
-  assert.deepEqual(Object.keys(game.program.schemas.ports),['decision','event']);
-  assert.ok(game.program.schemas.setup.safeParse({game:setup(),seed:0}).success);
-  for(const seed of [-1,0.5,4294967296,NaN])assert.equal(game.program.schemas.setup.safeParse({game:setup(),seed}).success,false);
-  assert.equal(game.program.schemas.setup.safeParse(setup()).success,false);
+  assert.deepEqual(Object.keys(game.definition.schemas.ports),['decision','event']);
+  assert.ok(game.definition.schemas.setup.safeParse({game:setup(),seed:0}).success);
+  for(const seed of [-1,0.5,4294967296,NaN])assert.equal(game.definition.schemas.setup.safeParse({game:setup(),seed}).success,false);
+  assert.equal(game.definition.schemas.setup.safeParse(setup()).success,false);
   const a=await run(1),b=await run(2),again=await run(1);
   assert.deepEqual(a,again);
   assert.notDeepEqual(a.frames[0]!.state.hands,b.frames[0]!.state.hands);
@@ -143,7 +144,7 @@ test('native inner SDK uses decision and event ports; seed is explicit controlle
 
 
 test('complete games use pure action callbacks and independent optional timeout control',async()=>{
-  const {nativeGame}=await import('../../../packages/contracts/tests/support/native-game.ts');
+  const {nativeGame}=await import('../../../packages/runtime-card/tests/game-support.ts');
   for(const timed of [false,true]){
     const base=await nativeGame(game,{game:setup(),seed:31});
     assert.equal(base.fork,undefined);assert.equal(base.save,undefined);
@@ -188,7 +189,7 @@ test('complete games use pure action callbacks and independent optional timeout 
 });
 
 test('session clock advances independently and equality deadline rejects a pure action',async()=>{
-  const {nativeGame}=await import('../../../packages/contracts/tests/support/native-game.ts');const base=await nativeGame(game,{game:setup(),seed:7});
+  const {nativeGame}=await import('../../../packages/runtime-card/tests/game-support.ts');const base=await nativeGame(game,{game:setup(),seed:7});
   if(!base.bindControl)throw new Error('session control required');await base.bindControl(async request=>({kind:'reply',value:{kind:'clock',at:request.data.deadlines[0]!.at}}));
   const advanced=await base.run();assert.ok(advanced.ok);if(!advanced.ok)return;assert.equal(advanced.value.accepted?.kind,'control');
   assert.equal(advanced.value.state.kind,'request');if(advanced.value.state.kind!=='request')return;

@@ -1,3 +1,4 @@
+import { runCard } from '../../../packages/runtime-card/tests/run-support.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { create, apply, legal, baseDeck, observe, cards, game } from '../src/index.ts';
@@ -188,7 +189,7 @@ test('an independent brute-force candidate oracle agrees with full legal enumera
 });
 test('the real author loop terminates and emits stable carrying, draw, availability, use and result facts', async () => {
   let calls = 0;
-  const end = await game.program.run(setup, {
+  const end = await runCard(game.definition, setup, {
     async call(call: any) {
       assert.ok(++calls < 400);
       if (call.port === 'event') return null;

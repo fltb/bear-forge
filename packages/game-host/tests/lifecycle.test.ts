@@ -57,6 +57,54 @@ async function start(mode: G['setup'], contract = fixture.contract) {
   return unwrap(await createGameBinder().bind<G>({ instance, contract }));
 }
 
+for (const kind of ['request', 'event'] as const) for (const mode of ['proxy', 'getter'] as const) {
+  test(`adapter ${kind} collections reject ${mode} without executing it`, async () => {
+    let traps = 0;
+    function hostile<T>(items: T[]): T[] {
+      if (mode === 'proxy') return new Proxy(items, { get(target, key, receiver) { traps++; return Reflect.get(target, key, receiver); } });
+      const value = items[0]; Object.defineProperty(items, '0', { get() { traps++; return value; }, enumerable: true }); return items;
+    }
+    const contract = { ...fixture.contract, ports: { ...fixture.contract.ports,
+      ...(kind === 'request' ? { ask: { ...fixture.contract.ports.ask, receive: (view: number) => ({ view, requests: hostile([{ key: 'pick', player: 'a' as const, type: 'pick' as const, data: null }]) }) } }
+        : { event: { ...fixture.contract.ports.event, receive: (event: number) => ({ events: hostile([event]), output: null }) } })
+    } };
+    if (kind === 'request') await assert.rejects(() => start('done', contract));
+    else {
+      const game = await start('event', contract);
+      unwrap(await game.bind({ player: 'a', onRequest: async () => ({ kind: 'reply', value: 1 }), onEvent: async () => { throw Error('invalid event must not be delivered'); } }));
+      assert.equal(unwrap(await game.run()).state.kind, 'fault');
+    }
+    assert.equal(traps, 0);
+  });
+}
+for (const mode of ['proxy', 'getter'] as const) test(`prepared replies reject ${mode} metadata before reading it`, async () => {
+  let traps = 0;
+  const prepared = mode === 'proxy' ? new Proxy({ valid: true, output: 1 }, { get(target, key, receiver) { traps++; return Reflect.get(target, key, receiver); } })
+    : Object.defineProperty({ output: 1 }, 'valid', { get() { traps++; return true; }, enumerable: true });
+  const game = await start('done', { ...fixture.contract, ports: { ...fixture.contract.ports, ask: { ...fixture.contract.ports.ask, respond: () => prepared as any } } });
+  unwrap(await game.bind({ player: 'a', onRequest: async () => ({ kind: 'reply', value: 1 }) }));
+  assert.equal(unwrap(await game.run()).state.kind, 'fault');
+  assert.equal(traps, 0);
+});
+
+test('normal advancement consumes run state and inspects the owned instance only at initial bind', async () => {
+  const loaded = unwrap(await createNativeLoader().load(fixture.program));
+  let inspections = 0;
+  function wrap(instance: any): any {
+    return { ...instance,
+      async inspect() { inspections++; return instance.inspect(); },
+      async transfer() { const result = await instance.transfer(); return result.ok ? { ...result, value: wrap(result.value) } : result; }
+    };
+  }
+  const game = unwrap(await createGameBinder().bind<G>({ instance: wrap(unwrap(await loaded.core.start('event'))), contract: fixture.contract }));
+  assert.equal(inspections, 1);
+  unwrap(await game.bind({ player: 'a', onRequest: async () => ({ kind: 'reply', value: 1 }), onEvent: async () => ({ kind: 'reply', value: null }) }));
+  const result = unwrap(await game.run());
+  assert.equal(result.state.kind, 'ended');
+  assert.equal(inspections, 1, 'request, event and terminal transitions reuse run.state');
+  unwrap(await game.close());
+});
+
 test('game contract faults cannot execute thrown-value coercion while creating diagnostics', async () => {
   let calls=0;
   const thrown={toString(){calls++;throw Error('secondary');}};

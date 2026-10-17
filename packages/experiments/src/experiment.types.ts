@@ -1,4 +1,6 @@
-import type { GameModule, GameTypes } from '@bear-forge/contracts/authoring';
+import type {LoadedCore} from '@bear-forge/contracts/loading';
+import type {Outcome} from '@bear-forge/contracts/instance';
+import type { GameModule, GameTypes, GameContract } from '@bear-forge/contracts/authoring';
 import type { Policy } from '@bear-forge/policies';
 export type TaskInput = { id: string; seed: number };
 export type Registration = {
@@ -55,9 +57,13 @@ export type ExecutionHooks = {
   point?: (stage: 'before-advance' | 'after-advance' | 'after-snapshot' | 'before-commit' | 'after-commit', taskId: string) => void | Promise<void>;
 };
 
-/** Outer experiment composition; game execution still uses the frozen GameModule. */
+/** Composition dependency, outside the frozen execution protocols. */
+export type ExecutionProvider<G extends GameTypes> = {
+  identity: unknown;
+  load: (options: { controlled: boolean; stepBudget: number; snapshotDirectory?: string }) => Promise<Outcome<LoadedCore<G['setup'], G['ports'], G['programResult']>>>;
+};
+/** Both authoring backends produce the same LoadedCore consumed by the runner. */
 export type ExperimentDefinition<G extends GameTypes, T extends TaskInput, C extends Registration, S extends { id: string }> = {
-  module: GameModule<G>;
   parseRegistration: (value: unknown) => C;
   tasks: (config: C) => T[];
   setup: (task: T) => G['setup'];
@@ -65,5 +71,4 @@ export type ExperimentDefinition<G extends GameTypes, T extends TaskInput, C ext
   facts: (record: unknown) => unknown[];
   summarize: (result: TaskResult<T>) => S;
   identity: () => Promise<unknown>;
-  artifacts: { controlled: string; native: string };
-};
+} & ({ module: GameModule<G>; artifacts: { controlled: string; native: string } } | { contract: GameContract<G>; execution: ExecutionProvider<G> });

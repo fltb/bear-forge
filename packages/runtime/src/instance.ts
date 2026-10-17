@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { exceptionMessage } from './exception.ts';
 import { Records } from './records.ts';
-import { copy, read, keys, fields } from '@bear-forge/boundary';
+import { registerStopOwner, exportStop, isInputlessReply } from './stop-ownership.ts';
+import { keys, fields } from '@bear-forge/boundary';
+import { copyOwned as copy, readOwned as read, retainOwned, isOwnedTree, isDenseTree } from '../../boundary/src/values.ts';
 import { InstanceIdSchema, CallIdSchema } from '@bear-forge/contracts/instance';
 import type { Instance, InstanceStop, InstanceError, Outcome, PortBindings, PauseReason, InstanceRunStop } from '@bear-forge/contracts/instance';
 import type { PortShape } from '@bear-forge/contracts/core';
@@ -105,7 +107,7 @@ export async function callback<T>(invoke: () => Promise<unknown>, signal: AbortS
 export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
   readonly id = InstanceIdSchema.parse(randomUUID());
   state!: InstanceStop<P, R>;
-  records: Records<InstanceRecord<S, P, R>>;
+  records: Records<InstanceRecord<S, P, R>> | null;
   bindings: PortBindings<P> | null = null;
   computing = false;
   driving = false;
@@ -117,20 +119,33 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
   constructor(engine: Execution, schemas: RuntimeSchemas<S, P, R>, setup: S, restored?: {
     state: InstanceStop<P, R>;
     records: InstanceRecord<S, P, R>[] | Records<InstanceRecord<S, P, R>>;
-  }) {
+    /** Internal provider capability: state is an already detached, never mutated
+     * stop value. Host reads still copy it. This avoids copying a whole pending
+     * game view during an in-memory fork. Not a public protocol option. */
+    shareState?: true;
+  }, recording = true) {
     this.engine = engine;
     this.schemas = schemas;
-    this.records = restored?.records instanceof Records ? restored.records.fork() : new Records();
-    if (restored && !(restored.records instanceof Records)) {
-      for (const record of copy(restored.records)) this.records.push(record);
-    } else if (!restored) this.records.push({ sequence: 0, kind: 'started', setup: copy(setup) });
-    if (restored) this.state = copy(restored.state);else this.refresh();
+    this.records = recording ? restored?.records instanceof Records ? restored.records.fork() : new Records() : null;
+    if (this.records) {
+      if (restored && !(restored.records instanceof Records)) {
+        for (const record of copy(restored.records)) this.records.push(record);
+      } else if (!restored) this.records.push({ sequence: 0, kind: 'started', setup: copy(setup) });
+    }
+    if (restored) this.state = restored.shareState ? restored.state : copy(restored.state);else this.refresh();
   }
   append(record: any) {
+    if (!this.records) return;
     this.records.push({
       sequence: this.records.length,
       ...copy(record)
     });
+  }
+  /** read() owns and isolates these payloads before they enter state/records.
+   * Private payloads are never edited; inspect, handlers and capture copy on
+   * exit. Replies stay private here; advance receives an unbranded copy. */
+  private appendOwned(record: any) {
+    this.records!.push({ sequence: this.records!.length, ...record });
   }
   refresh() {
     if (this.state?.kind === 'fault') return;
@@ -143,29 +158,29 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
           input: read((this.schemas.ports as any)[raw.call.port].input, raw.call.input)
         };
         const callId = CallIdSchema.parse(randomUUID());
-        this.state = {
+        this.state = retainOwned({
           kind: 'call',
           callId,
           call
-        } as InstanceStop<P, R>;
-        this.append({
+        }, isOwnedTree(call.input), isDenseTree(call.input)) as InstanceStop<P, R>;
+        if (this.records) this.appendOwned({
           kind: 'called',
           callId,
           call
         });
       } else if (raw.kind === 'done') {
         const result = read(this.schemas.result, raw.result);
-        this.state = {
+        this.state = retainOwned({
           kind: 'done',
           result
-        };
-        this.append({
+        }, isOwnedTree(result), isDenseTree(result));
+        if (this.records) this.appendOwned({
           kind: 'completed',
           result
         });
       } else {
         this.state = copy(raw) as InstanceStop<P, R>;
-        this.append({
+        if (this.records) this.append({
           kind: 'faulted',
           error: raw.error
         });
@@ -191,7 +206,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
         message: exceptionMessage(cause)
       }
     };
-    this.append({
+    if (this.records) this.append({
       kind: 'faulted',
       error: this.state.error
     });
@@ -232,7 +247,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
       },
       async inspect() {
         const e = self.availability(token);
-        return e ?? ok(copy(self.state));
+        return e ?? ok(exportStop(handle, 'inspect', self.state, this));
       },
       async close() {
         const e = self.availability(token, true);
@@ -249,6 +264,9 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
           dispose() {}
         };
         self.schemas = {} as RuntimeSchemas<S, P, R>;
+        // Closed handles stay callable (and return instance_closed), but must
+        // not retain a second full pending view outside the capture records.
+        self.state = { kind: 'fault', error: { kind: 'fault', code: 'program_failed', message: 'Instance closed' } };
         return ok(undefined);
       },
       async run(options) {
@@ -257,7 +275,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
         if (options !== undefined && (!fields(options, [], ['signal']) || options.signal !== undefined && !(options.signal instanceof AbortSignal))) return fail('invalid_argument');
         if (self.state.kind !== 'call') return ok({
           accepted: false,
-          state: copy(self.state),
+          state: exportStop(handle, 'run', self.state, this),
           pause: null
         });
         self.driving = true;
@@ -274,7 +292,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
           if (aborter.signal.aborted) pause = 'cancelled';else {
             const handler = (self.bindings as any)?.[current.call.port];
             if (!handler) pause = 'unbound';else {
-              const returned = await callback<unknown>(() => handler({
+              const returned = await callback<unknown>(() => isInputlessReply(handler) ? handler() : handler({
                 instanceId: self.id,
                 callId: current.callId,
                 input: copy(current.call.input)
@@ -296,7 +314,11 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
                 if (pause === null && !budgetFault) {
                   if (aborter.signal.aborted) pause = 'cancelled';else {
                     accepted = true;
-                    self.append({
+                    // The execution provider may mutate an accepted reply or
+                    // publish it in its next call. Keep the immutable original
+                    // in records and hand off an unbranded, independent copy.
+                    const engineOutput = copy(output);
+                    if (self.records) self.appendOwned({
                       kind: 'returned',
                       callId: current.callId,
                       reply: {
@@ -306,7 +328,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
                     });
                     self.computing = true;
                     try {
-                      await self.engine.advance(output);
+                      await self.engine.advance(engineOutput);
                       self.refresh();
                     } catch (cause) {
                       self.setFault('program_failed', cause);
@@ -321,7 +343,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
           }
           return ok({
             accepted,
-            state: copy(self.state),
+            state: exportStop(handle, 'run', self.state, this),
             pause: self.state.kind === 'call' ? pause : null
           } as InstanceRunStop<P, R>);
         } finally {
@@ -332,6 +354,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
         }
       }
     };
+    registerStopOwner(handle);
     if (this.forkHandler) handle.fork = async () => {
       const e = self.availability(token);
       if (e) return e;

@@ -2,6 +2,40 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { copy, sameData, read, keys, admitSchema } from '../src/index.ts';
+import { admittedCopy, readOwned } from '../src/values.ts';
+test('inherited descriptor value fields cannot turn accessors into boundary data', () => {
+  let getters = 0;
+  const accessor = { get n() { getters++; return 1; } };
+  const privateInput = readOwned(z.any(), { n: 1 });
+  const operations = [() => copy(accessor), () => keys(accessor), () => admittedCopy(accessor),
+    () => readOwned(z.any(), accessor), () => readOwned({ parse: () => accessor }, privateInput)];
+  const rejected: boolean[] = [];
+  Object.defineProperty(Object.prototype, 'value', { value: 1, writable: true, configurable: true });
+  try {
+    for (const operation of operations) {
+      try { operation(); rejected.push(false); }
+      catch (error) { rejected.push(error instanceof TypeError); }
+    }
+  } finally { delete (Object.prototype as any).value; }
+  assert.deepEqual(rejected, operations.map(() => true));
+  assert.equal(getters, 0);
+});
+test('private DTO copying agrees with the public inspection path for values and rejection order', () => {
+  const inspection = { getPrototypeOf: Object.getPrototypeOf, getOwnPropertyDescriptor: Object.getOwnPropertyDescriptor, ownKeys: Reflect.ownKeys };
+  const shared: any = JSON.parse('{"__proto__":{"n":1},"constructor":2}'); shared.self = shared;
+  const array: any[] = [, shared, undefined, -0, NaN, 3n];
+  const hidden: any = { child: () => 1 }; Object.defineProperty(hidden, 'hidden', { value: 1 });
+  let calls = 0;
+  const mixed: any = { get x() { calls++; return 1; } }; mixed[Symbol('x')] = 1;
+  const proxy = new Proxy({}, { ownKeys() { calls++; return []; } });
+  for (const source of [array, shared, { a: shared, b: shared }, hidden, mixed, proxy, new Date(), Object.create(null)]) {
+    let expected: any, failure: unknown;
+    try { expected = copy(source, inspection); } catch (e) { failure = e; }
+    if (failure) assert.throws(() => admittedCopy(source), { name: (failure as Error).name, message: (failure as Error).message });
+    else { const actual = admittedCopy(source); assert.equal(sameData(actual, expected), true); assert.deepEqual(actual, expected); assert.deepEqual(Object.keys(actual), Object.keys(expected)); }
+  }
+  assert.equal(calls, 0);
+});
 test('production validation compares against a baseline unavailable to schema callbacks', () => {
   const schema = z.any().superRefine(value => { value.child.n++; });
   admitSchema(schema);

@@ -45,7 +45,7 @@ test('frozen old game and compiled candidate calls, replies, facts and final fra
     `import {compileEntry} from '@bear-forge/compiler';
      const artifact=await compileEntry(process.argv[1]);
      process.stdout.write(Buffer.from(artifact.content).toString('base64'));`,
-    new URL('../src/controlled-entry.ts', import.meta.url).pathname
+    new URL('./generic/controlled-entry.ts', import.meta.url).pathname
   ], { maxBuffer: 64 * 1024 * 1024 });
   const artifact = { content: new Uint8Array(Buffer.from(built.stdout, 'base64')) } as CompiledProgram<ProgramSetup, DouDizhuPorts, Frame>;
   await writeFile(join(directory, 'artifact'), artifact.content);

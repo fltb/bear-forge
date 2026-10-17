@@ -51,7 +51,7 @@ export function createControlledLoader(options: {
       function instantiate(setup: S, data?: {
         engine: string;
         state: InstanceStop<P, R>;
-        records: Controller<S, P, R>['records'] | any[];
+        records: NonNullable<Controller<S, P, R>['records']> | any[];
       }, branched?: ProgramExecution): Instance<P, R> {
         const execution = branched ?? registered.fresh(options.stepBudget);
         if (data && !branched) execution.restore(data.engine);
@@ -152,7 +152,7 @@ export function createControlledLoader(options: {
             return ok(instantiate(setup, {
               engine: '',
               state: controller.state,
-              records: controller.records
+              records: controller.records!
             }, execution.fork()));
           } catch (e) {
             return fail('program_failed', exceptionMessage(e));
@@ -198,7 +198,7 @@ export function createControlledLoader(options: {
                 hash,
                 engine: c.engine.snapshot!(),
                 state: c.state,
-                records: c.records.slice()
+                records: c.records!.slice()
               };
               await store.put(id, serialize(content));
               return ok(InstanceSnapshotSchema.parse({

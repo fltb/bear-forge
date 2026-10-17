@@ -28,6 +28,16 @@ flowchart TB
   Analysis[捕捉 / 分析] -->|可选记录读取| Core
 ```
 
+## 完整原生 GameHost 与受控能力
+
+专用卡牌路径的性能单位是能够完成实际玩家交互的一局 GameHost。正常游戏包括规则、观察、选项、动作/控制验证、事件交付和终局；这些工作在原生与受控两种模式中相同。Core 执行规则，Instance 持有唯一现场，BaseGame 表达交互职责；三个公共接口不要求三个内部世界、逐层复制或逐层建立所有权系统。
+
+默认原生使用普通状态直接执行正常游戏，不构造未启用的 COW、版本页、训练采集、调用/步骤记录或存档数据。游戏历史不能删除。显式记录消费者使用既有可选能力，单列其成本。受控复用同一正常游戏路径，增加状态隔离、预算、记录与分支/持久化能力；只有请求 save/restore 才付对应编解码成本。
+
+框架内部转发稳定数据只传引用与小量元数据；跨真实消费者边界仍保持校验和数据隔离。用户已选择 GameContract 纯只读借用：作者适配函数在两模式下共享稳定发布数据，执行世界仍不外泄；schema、玩家和公开返回值保持独立副本。未知 Instance 返回先隔离准入，不因实现形状或类型就取得私有借用资格。不增加公开开关或新的运行层。原生游戏本身的重复导出、校验和历史扫描也要审查，不能将其作为固定底座。
+
+以上是用户更正后的目标结构，尚未全部实现。七条局部路径只用于定位，完整基准与双模式独立目标见 card-core-spec.md；当前按用户“继续”恢复实施，进度见 plan.md。
+
 ## 代码与实例上下文
 
 这是三层内部的代码/数据边界，不增加公共协议层或 Context 导出类型。
@@ -112,7 +122,7 @@ src/internal                      类型检查辅助工具
 
 基础入口不导出保存、记录、训练或搜索辅助类型。基本 Core/Instance/Game 声明不依赖可选功能声明；loading 在接线时组合实际提供的能力。各模块 tests/architecture.test.ts 检查自身源码的依赖边界，包含在该模块的 npm test 中；根目录通过 workspaces 汇总。
 
-游戏目录：schemas.ts 定义领域数据；types.ts 特化公开契约；program.ts 是主循环；sdk.ts 组合公共 game-sdk lib 与实例内随机流；rules.ts/patterns.ts 实现规则；module.ts 声明 GameModule 与纯处理器。
+游戏目录：schemas.ts 定义领域数据；types.ts 特化公开契约；card.ts 是专用结算流程，deal.ts 承载显式随机流发牌；rules.ts/patterns.ts 实现纯规则；contract.ts 声明纯处理器，module.ts 装配同一卡牌定义和契约。旧通用 async 主循环移入 tests/generic，公共 GameModule 协议仍用于通用程序。
 
 C01 交付公共声明、完整斗地主及原生协议消费者。生产执行、保存续延及正式绑定器在 C02/C03 验收。
 
@@ -125,3 +135,11 @@ C01 交付公共声明、完整斗地主及原生协议消费者。生产执行�
 生产模块、原生与受控两条路径、游戏领域记录、策略、实验存储和关系展示的实施方案见 [implementation-spec.md](implementation-spec.md)。这些模块通过现有公开接口组合，不修改本页三层边界。实现目录与审核入口见 project-overview.md；进度以 plan.md 为准。
 
 执行实例均在主 runtime 内直接调用编译产物，代码按产物缓存，模块变量/闭包/执行帧按实例持有。受控路径仅在 Program 装载时创建 V8 Realm；创建 Instance、fork 和 restore 不创建 Realm。没有 Worker 或执行子进程。只有编译预算检查，不提供硬超时。测试中的新进程用于证明关闭程序后仍能从持久快照恢复，不是执行器的实例承载机制。
+
+## 并列卡牌后端
+
+用户 2026-10-17 授权专用卡牌路径。通用源码→编译产物→ProgramExecution 与卡牌定义→CardProgram/CardMachine 两条路径并列，共同实现 Core/Instance/BaseGame 协议。后者在 packages/card-engine 声明步骤和同步推进，在 packages/runtime-card 实现 COW 数据图、装载、快照和记录重放；不依赖 compiler/runtime-controlled/runtime-native。
+
+Card Core 共享静态定义，Card Instance 的单一图根保存世界、结算帧、局部值、待决调用、随机流和游标。原生模式用普通数据，受控模式以持久索引和数组固定页实现写时分离。Controller 和 BaseGameBinder 仍管理外部调用和玩家交互。受控卡牌路径的同步规则操作属于受信任有界函数；任意 JS 的语义/宿主访问准入仍由原通用路径负责。详见 card-core-spec.md 与 card-core-proof.md。
+
+入口迁移和薄封装按后续推进授权实施：两游戏所有正式消费方装载同一卡牌定义；实验通过既有 LoadedCore 提供者装配选择模式，不再为卡牌游戏编译通用 Program。Instance/BaseGame 内部共享私有稳定停止态和 view，run 的返回状态直接用于刷新；GameContract 按用户确认的纯只读契约借用，schema、玩家及公开交付仍使用独立普通 DTO。私有发布值不是活动世界，不能把规则状态移出 Instance 或冻结 COW 代理。完整执行步骤与指标见 card-core-spec.md 的“入口迁移与薄封装执行方案”；实现、检查及性能是否完成仅以 plan.md 的证据为准。

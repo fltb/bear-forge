@@ -1,6 +1,6 @@
 # 斗地主：规则配置与接口验证
 
-游戏包使用声明端口与 GameModule；原生测试通过逐玩家回调执行真实规则程序。生产执行、驱动与保存由 C02/C03 验收。
+游戏包导出 cardDefinition 与生产 GameContract；原生和受控模式均通过专用卡牌 Core 推进，逐玩家回调由既有 BaseGame 承接。通用后端兼容测试单独保留在 tests/generic。
 
 规则基准：[《竞技二打一扑克竞赛规则》2016 年 2 月，国家体育总局棋牌运动管理中心署名，全文镜像](https://www.pagat.com/docs/landlord412005.doc)。[总局发布说明](https://www.sport.gov.cn/n20001280/n20067662/n20067613/c22917445/content.html)。实现单副牌第五至十一条、术语与附录一记分；多人赛事 MP、瑞士移位和赛事组织不属于单副牌规则。配置 ID：competitive-2016-bear-1。
 
@@ -17,9 +17,9 @@
 
 ## 公共契约消费
 
-ProgramSetup={game:Setup,seed:uint32}。program.ts 创建 SDK；SDK 内局部随机流驱动发牌；decision 端口发布 Frame 并等待 Input，event 端口发布 AuditEvent[] 并等待 null。state、随机局部和 published 事件位置由 Instance 保存。
+ProgramSetup={game:Setup,seed:uint32}。card.ts 声明同步结算步骤；实例内显式随机流由 deal.ts 驱动发牌；decision 端口发布 Frame 并等待 Input，event 端口发布 AuditEvent[] 并等待 null。state、随机局部和 published 事件位置由 Instance 保存。
 
-module.ts 声明 GameModule。request.receive 从 Frame 产生 {view,requests}；每个请求 key=slotId、player=席位、type='action'、data={actionSpec}。请求不含截止时间。GameContract 的 observe/projectEvent 分别生成玩家状态和可见事件。
+module.ts 装配同一 cardDefinition 与 contract.ts 中的纯适配契约；不伪造通用 GameModule.program。request.receive 从 Frame 产生 {view,requests}；每个请求 key=slotId、player=席位、type='action'、data={actionSpec}。请求不含截止时间。GameContract 的 observe/projectEvent 分别生成玩家状态和可见事件。
 
 ## 动作与会话控制
 
@@ -56,8 +56,8 @@ module.ts 声明 GameModule。request.receive 从 Frame 产生 {view,requests}�
 | 玩家请求身份 | 本模块 game.test.ts 验证错 key/错玩家；共享消费者的旧调用/其他实例拒绝由 packages/game-sdk/tests/game-integration.test.ts 验证 |
 | 事件 | 玩家投影与最终可见历史逐条一致 |
 
-运行 npm run check。C01 原生消费者执行真实 program/IO/GameContract；C02/C03 验收生产受控执行、完整续延保存和正式绑定器。
+运行 npm run check。卡牌两模式执行真实 Card Core/Instance/BaseGame，覆盖完整续延保存与正式绑定器；旧通用 program/IO 夹具仍验证原执行后端。
 
-## 内侧 SDK 接线
+## 卡牌 Core 接线
 
-schemas.ts 的 gamePorts 为 decision（request）和 event（event）声明类别与输入/返回 schema；programSchemas.ports 直接使用它。sdk.ts 在程序内调用 @bear-forge/game-sdk 的 createGameSDK，并组合游戏自己的发牌与随机流。外侧 module.ts 的端口类别取自同一声明。状态、合法动作、事件、会话控制和终局仍按 protocol.md 的对应表转换；主循环和牌型规则无需改变。
+schemas.ts 的 gamePorts 为 decision（request）和 event（event）声明类别与输入/返回 schema；programSchemas.ports 直接使用它。card.ts 通过 card.request 直接产生声明端口等待，将随机流、发牌、结算栈和事件游标保存在实例内；原生/受控只切换存储与记录能力。外侧 contract.ts 的端口类别取自同一声明。状态、合法动作、事件、会话控制和终局仍按 protocol.md 的对应表转换；主循环和牌型规则无需改变。

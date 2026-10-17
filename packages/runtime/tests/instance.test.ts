@@ -3,6 +3,31 @@ import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { callback, Controller } from '../src/index.ts';
 import type { RawStop } from '../src/index.ts';
+test('execution may mutate and republish a reply without inheriting host ownership certificates', async () => {
+  for (const mode of ['cycle', 'accessor'] as const) {
+    let getters = 0, raw: RawStop = { kind: 'call', call: { port: 'echo', input: null } };
+    const schema = z.any();
+    const controller = new Controller({ current: () => raw, async advance(value: any) {
+      if (mode === 'cycle') value.self = value;
+      else Object.defineProperty(value, 'secret', { get() { getters++; return 1; }, enumerable: true });
+      raw = { kind: 'call', call: { port: 'echo', input: value } };
+    }, dispose() {} }, { setup: z.null(), result: schema, ports: { echo: { input: schema, output: schema } } }, null);
+    const handle = controller.handle();
+    await handle.bind({ echo: async () => ({ kind: 'reply', value: { values: [1, 2] } }) });
+    const step = await handle.run(); assert.equal(step.ok, true);
+    if (!step.ok) throw Error('run failed');
+    if (mode === 'cycle') {
+      assert.equal(step.value.state.kind, 'call');
+      if (step.value.state.kind !== 'call') throw Error('missing republished cycle');
+      const input: any = step.value.state.call.input; assert.equal(input.self, input);
+    } else assert.equal(step.value.state.kind, 'fault');
+    assert.equal(getters, 0);
+    const returned = controller.records!.slice().find(record => record.kind === 'returned');
+    assert.ok(returned?.kind === 'returned');
+    assert.deepEqual(returned.reply.output, { values: [1, 2] });
+    await handle.close();
+  }
+});
 test('handler pause/error/invalid reply remain distinct', async () => {
   const signal = new AbortController().signal;
   assert.deepEqual(await callback(async () => ({

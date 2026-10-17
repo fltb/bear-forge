@@ -1,17 +1,27 @@
-import { copy, read, fields } from '@bear-forge/boundary';
+import { fields } from '@bear-forge/boundary';
+import { types } from 'node:util';
+import { copyOwned as copy, readOwned as read, retainOwned, isOwned, isOwnedTree, isDenseTree } from '../../boundary/src/values.ts';
 import { callback, exceptionMessage } from '@bear-forge/runtime';
+import { invokeOwnedStop, inputlessReply } from '../../runtime/src/stop-ownership.ts';
 import { RequestIdSchema, GameErrorSchema, JsonValueSchema, InputOptionsSchema } from '@bear-forge/contracts/game';
 import type { BaseGameBinder } from '@bear-forge/contracts/loading';
-function requireAcyclic(value: unknown, ancestors = new Set<object>()): void {
+/** GameContract adapters only read stable published data. Unknown provider
+ * values first become private DTOs; players and parsers still receive copies. */
+function adapterValue<T>(value: T): T {
+  return isOwned(value) ? value : retainOwned(copy(value));
+}
+function requireAcyclic(value: unknown, ancestors?: Set<object>): void {
   if (value === null || typeof value !== 'object') return;
-  if (ancestors.has(value)) throw new TypeError('Cyclic JSON value');
-  ancestors.add(value);
+  if (isOwnedTree(value)) return;
+  const path = ancestors ?? new Set<object>();
+  if (path.has(value)) throw new TypeError('Cyclic JSON value');
+  path.add(value);
   for (const key of Object.keys(value)) {
     const field = Object.getOwnPropertyDescriptor(value, key);
-    if (!field || !('value' in field)) throw new TypeError('Invalid JSON value');
-    requireAcyclic(field.value, ancestors);
+    if (!field || !Object.hasOwn(field, 'value')) throw new TypeError('Invalid JSON value');
+    requireAcyclic(field.value, path);
   }
-  ancestors.delete(value);
+  path.delete(value);
 }
 function jsonValue(value: unknown) {
   const checked = read(JsonValueSchema, value);
@@ -34,16 +44,26 @@ function reject(code: string, message = code): any {
   };
 }
 function checkedPrepared(value: any) {
-  if (!value || typeof value.valid !== 'boolean' || (value.valid
+  if (!fields(value, ['valid'], ['output', 'reason']) || typeof value.valid !== 'boolean' || (value.valid
     ? !fields(value, ['valid', 'output'])
     : !fields(value, ['valid', 'reason']) || typeof value.reason !== 'string')) throw Error('Invalid respond result');
   return value.valid ? { valid: true, output: copy(value.output) } : { valid: false, reason: value.reason };
 }
+function dataArray(value: unknown): unknown[] {
+  if (types.isProxy(value) || !Array.isArray(value)) throw Error('Invalid array projection');
+  return value;
+}
+function* dataItems(values: unknown[]): Iterable<unknown> {
+  for (let i = 0; i < values.length; i++) {
+    const field = Object.getOwnPropertyDescriptor(values, String(i));
+    if (field && !Object.hasOwn(field, 'value')) throw Error('Invalid array item');
+    yield field?.value;
+  }
+}
 const equal = (a: any, b: any) => a.instanceId === b.instanceId && a.callId === b.callId && a.key === b.key;
 /** Owns an Instance through its public transfer/bind/run interfaces. */
-export function createGameBinder(): BaseGameBinder {
-  return {
-    async bind(input: any): Promise<any> {
+type Derived = { view: any; hasView: boolean; state: any; raw: any; requests: any[]; events: any[]; eventOutput: any; port: any };
+async function bindGame(input: any, shared?: Derived): Promise<any> {
       if (!fields(input, ['instance', 'contract'], ['persistence']) || !input.instance || typeof input.instance.transfer !== 'function' || !input.contract) return reject('invalid_argument');
       const ownership = await input.instance.transfer();
       if (!ownership.ok) return reject('invalid_argument', ownership.error.message);
@@ -75,23 +95,29 @@ export function createGameBinder(): BaseGameBinder {
           error
         };
         closed = true;
+        view = raw = eventOutput = port = undefined;
+        hasView = false; requests = []; events = [];
+        bindings.clear(); controlHandler = null;
         activeDriver?.abort();
         await instance.close();
         return copy(state);
       }
-      async function refresh(): Promise<any> {
-        const inspected = await instance.inspect();
-        if (!inspected.ok) throw Error(inspected.error.message);
-        raw = inspected.value;
+      async function refresh(stop?: any): Promise<any> {
+        if (stop === undefined) {
+          const inspected = await invokeOwnedStop(instance, 'inspect');
+          if (!inspected.ok) throw Error(inspected.error.message);
+          raw = inspected.value;
+        } else raw = stop;
         if (raw.kind === 'fault') {
           // Program termination remains readable. Only adapter contract failures
           // revoke the owned instance and close the game handle.
           state = copy(raw);
+          view = eventOutput = port = undefined; hasView = false; requests = []; events = [];
           return state;
         }
         try {
           if (raw.kind === 'done') {
-            const ended = contract.finish(copy(raw.result));
+            const ended = contract.finish(adapterValue(raw.result));
             if (!fields(ended, ['view', 'result'])) throw Error('Invalid finish result');
             view = read(contract.schemas.view, ended.view);
             hasView = true;
@@ -99,15 +125,18 @@ export function createGameBinder(): BaseGameBinder {
               kind: 'ended',
               result: read(contract.schemas.result, ended.result)
             };
+            retainOwned(state, isOwnedTree(state.result), isDenseTree(state.result));
+            requests = []; events = []; eventOutput = port = undefined;
             return state;
           }
           if (!Object.hasOwn(contract.ports, raw.call.port)) throw Error('Undeclared game port');
           port = contract.ports[raw.call.port];
           if (!port || !['request', 'event'].includes(port.kind)) throw Error('Invalid game port');
           if (port.kind === 'event') {
-            const received = port.receive(copy(raw.call.input));
-            if (!fields(received, ['events', 'output']) || !Array.isArray(received.events)) throw Error('Invalid event result');
-            events = Array.from(received.events, (e: any) => read(contract.schemas.event, e));
+            requests = [];
+            const received = port.receive(adapterValue(raw.call.input));
+            if (!fields(received, ['events', 'output'])) throw Error('Invalid event result');
+            events = Array.from(dataItems(dataArray(received.events)), (e: any) => read(contract.schemas.event, e));
             eventOutput = copy(received.output);
             state = {
               kind: 'event',
@@ -115,12 +144,15 @@ export function createGameBinder(): BaseGameBinder {
             };
             return state;
           }
-          const received = port.receive(copy(raw.call.input));
-          if (!fields(received, ['view', 'requests']) || !Array.isArray(received.requests) || (!received.requests.length && !port.session)) throw Error('Invalid request result');
+          events = []; eventOutput = undefined;
+          const received = port.receive(adapterValue(raw.call.input));
+          if (!fields(received, ['view', 'requests'])) throw Error('Invalid request result');
+          const declarations = dataArray(received.requests);
+          if (!declarations.length && !port.session) throw Error('Invalid request result');
           view = read(contract.schemas.view, received.view);
           hasView = true;
           const keys = new Set();
-          requests = Array.from(received.requests, (r: any) => {
+          requests = Array.from(dataItems(declarations), (r: any) => {
             if (!fields(r, ['key', 'player', 'type', 'data']) || typeof r.key !== 'string' || typeof r.type !== 'string' || keys.has(r.key) || !Object.hasOwn(contract.schemas.actions, r.type)) throw Error('Invalid request declaration');
             keys.add(r.key);
             const player = playerValue(r.player),
@@ -132,28 +164,36 @@ export function createGameBinder(): BaseGameBinder {
               data
             };
             const options = read(InputOptionsSchema,
-              read(contract.inputs[r.type].options, contract.inputs[r.type].describe(copy(view), copy(request))));
+              read(contract.inputs[r.type].options, contract.inputs[r.type].describe(adapterValue(view), request)));
             requireAcyclic(options);
             if (options.kind === 'exact') {
-              for (const value of options.values) read(contract.schemas.actions[r.type].action, value);
+              // Options are already an isolated private graph. Each advertised
+              // value can be borrowed as a schema baseline, never as callback
+              // input; read still invokes the action parser on its own copy.
+              for (const value of options.values) read(contract.schemas.actions[r.type].action, retainOwned(value, isOwnedTree(options), isDenseTree(options)));
             }
-            return {
-              id: RequestIdSchema.parse({
+            const id = RequestIdSchema.parse({
                 instanceId: instance.id,
                 callId: raw.callId,
                 key: r.key
-              }),
+              });
+            const observation = read(contract.schemas.observation, contract.observe(adapterValue(view), player));
+            return retainOwned({
+              id,
               player,
               type: r.type,
               data,
-              observation: read(contract.schemas.observation, contract.observe(copy(view), player)),
+              observation,
               options
-            };
+            }, isOwnedTree(data) && isOwnedTree(observation) && isOwnedTree(options), isDenseTree(data) && isDenseTree(observation) && isDenseTree(options));
           });
-          state = {
+          // Each request's data/observation/options was independently isolated;
+          // the new identity shells contain only scalar fields.
+          retainOwned(requests, requests.every(isOwnedTree), requests.every(isDenseTree));
+          state = retainOwned({
             kind: 'request',
             requests
-          };
+          }, isOwnedTree(requests), isDenseTree(requests));
           return state;
         } catch (e) {
           return fault(reject('invalid_output', exceptionMessage(e)).error);
@@ -183,11 +223,11 @@ export function createGameBinder(): BaseGameBinder {
             key: request.id.key,
             player: request.player,
             type: request.type,
-            data: copy(request.data)
+            data: adapterValue(request.data)
           };
           let prepared;
           try {
-            prepared = checkedPrepared(port.respond(copy(view), authorRequest, copy(action)));
+            prepared = checkedPrepared(port.respond(adapterValue(view), authorRequest, adapterValue(action)));
           } catch (e) {
             const rejected = reject('invalid_output', exceptionMessage(e));
             await fault(rejected.error);
@@ -199,7 +239,9 @@ export function createGameBinder(): BaseGameBinder {
           });
           return ok({
             valid: true,
-            output: copy(prepared.output),
+            // checkedPrepared already detached this output from the adapter.
+            // Only the private driver receives it; no second graph is needed.
+            output: prepared.output,
             accepted: {
               kind: 'action',
               player,
@@ -222,7 +264,7 @@ export function createGameBinder(): BaseGameBinder {
             controlRequest = {
               instanceId: instance.id,
               callId: raw.callId,
-              data: read(port.session.requestSchema, port.session.request(copy(view)))
+              data: read(port.session.requestSchema, port.session.request(adapterValue(view)))
             };
           } catch (e) {
             await fault(reject('invalid_output', exceptionMessage(e)).error);
@@ -314,7 +356,7 @@ export function createGameBinder(): BaseGameBinder {
                 return;
               }
               try {
-                const prepared = checkedPrepared(port.session.respond(copy(view), value));
+                const prepared = checkedPrepared(port.session.respond(adapterValue(view), adapterValue(value)));
                 finish(prepared.valid ? {
                   output: prepared.output,
                   accepted: {
@@ -343,7 +385,7 @@ export function createGameBinder(): BaseGameBinder {
             let projected,
               visible = false;
             try {
-              const packet = contract.projectEvent(copy(event), player);
+              const packet = contract.projectEvent(adapterValue(event), player);
               visible = packet !== null;
               if (visible) {
                 if (!fields(packet, ['event'])) throw Error('Invalid event projection');
@@ -423,7 +465,7 @@ export function createGameBinder(): BaseGameBinder {
           if (state.kind === 'fault') return { ok: false, error: copy(state.error) };
           if (state.kind === 'event' || !hasView) return reject('view_unavailable');
           try {
-            return ok(read(contract.schemas.observation, contract.observe(copy(view), player)));
+            return ok(copy(read(contract.schemas.observation, contract.observe(adapterValue(view), player))));
           } catch (e) {
             const rejected = reject('invalid_output', exceptionMessage(e));
             await fault(rejected.error);
@@ -480,39 +522,36 @@ export function createGameBinder(): BaseGameBinder {
             while (true) {
               if (state.kind === 'ended' || state.kind === 'fault') return ok({
                 state: copy(state),
-                accepted,
+                accepted: copy(accepted),
                 pause: null
               });
               if (signal.aborted) return ok({
                 state: copy(state),
-                accepted,
+                accepted: copy(accepted),
                 pause: 'cancelled'
               });
               if (accepted && state.kind === 'request') return ok({
                 state: copy(state),
-                accepted,
+                accepted: copy(accepted),
                 pause: null
               });
               const next = state.kind === 'event' ? await deliver(signal) : await choose(signal);
               if (state.kind === 'fault') return ok({
                 state: copy(state),
-                accepted,
+                accepted: copy(accepted),
                 pause: null
               });
               if ('pause' in next) return ok({
                 state: copy(state),
-                accepted,
+                accepted: copy(accepted),
                 pause: next.pause
               });
               computing = true;
               const bound = await instance.bind({
-                [raw.call.port]: async () => ({
-                  kind: 'reply',
-                  value: next.output
-                })
+                [raw.call.port]: inputlessReply(next.output)
               });
               if (!bound.ok) throw Error(bound.error.message);
-              const step = await instance.run({ signal });
+              const step = await invokeOwnedStop(instance, 'run', { signal });
               if (!step.ok) throw Error(step.error.message);
               if (step.value.accepted && next.accepted) accepted = next.accepted;
               if (!step.value.accepted) {
@@ -521,17 +560,17 @@ export function createGameBinder(): BaseGameBinder {
                   await fault(reject('invalid_output', 'Game adapter produced an invalid port reply').error);
                   return ok({
                     state: copy(state),
-                    accepted,
+                    accepted: copy(accepted),
                     pause: null
                   });
                 }
                 return ok({
                   state: copy(state),
-                  accepted,
+                  accepted: copy(accepted),
                   pause: step.value.pause
                 });
               }
-              await refresh();
+              await refresh(step.value.state);
               computing = false;
             }
           } catch (e) {
@@ -539,7 +578,7 @@ export function createGameBinder(): BaseGameBinder {
             await fault(reject('program_failed', exceptionMessage(e)).error);
             return ok({
               state: copy(state),
-              accepted,
+              accepted: copy(accepted),
               pause: null
             });
           } finally {
@@ -556,6 +595,8 @@ export function createGameBinder(): BaseGameBinder {
           closed = true;
           bindings.clear();
           controlHandler = null;
+          view = raw = state = eventOutput = port = undefined;
+          hasView = false; requests = []; events = [];
           const result = await instance.close();
           return result.ok ? ok(undefined) : reject('program_failed', result.error.message);
         }
@@ -565,10 +606,7 @@ export function createGameBinder(): BaseGameBinder {
         if (error) return error;
         if (state.kind === 'fault') return { ok: false, error: copy(state.error) };
         const fork = await instance.fork();
-        return fork.ok ? createGameBinder().bind({
-          ...input,
-          instance: fork.value
-        }) : reject(fork.error.code === 'capability_unavailable' ? 'capability_unavailable' : 'program_failed', fork.error.message);
+        return fork.ok ? bindGame({ ...input, instance: fork.value }, { view, hasView, state, raw, requests, events, eventOutput, port }) : reject(fork.error.code === 'capability_unavailable' ? 'capability_unavailable' : 'program_failed', fork.error.message);
       };
       if (!Object.values(contract.ports).some((p: any) => p.kind === 'request' && p.session)) delete game.bindControl;
       if (input.persistence) game.save = async () => {
@@ -579,7 +617,14 @@ export function createGameBinder(): BaseGameBinder {
         return saved.ok ? saved : reject('program_failed', saved.error.message);
       };
       try {
-        await refresh();
+        if (shared) {
+          ({ view, hasView, raw, events, eventOutput, port } = shared);
+          requests = shared.requests.map(request => retainOwned({ ...request,
+            id: { ...request.id, instanceId: instance.id }
+          }, isOwnedTree(request), isDenseTree(request)));
+          retainOwned(requests, requests.every(isOwnedTree), requests.every(isDenseTree));
+          state = shared.state.kind === 'request' ? retainOwned({ kind: 'request', requests }, isOwnedTree(requests), isDenseTree(requests)) : shared.state;
+        } else await refresh();
         return closed ? {
           ok: false,
           error: state.error
@@ -588,6 +633,7 @@ export function createGameBinder(): BaseGameBinder {
         await instance.close();
         return reject('invalid_output', exceptionMessage(e));
       }
-    }
-  };
+  }
+export function createGameBinder(): BaseGameBinder {
+  return { bind: bindGame };
 }

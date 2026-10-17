@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createNativeLoader } from '@bear-forge/runtime-native';
+import { createCardLoader } from '@bear-forge/runtime-card';
 import { game as module } from '@bear-forge/doudizhu';
 import { createGameBinder } from '../src/index.ts';
 const unwrap = <T,>(x: {
@@ -17,7 +17,7 @@ const unwrap = <T,>(x: {
   }).value;
 };
 test('production binder owns real runner and completes a full game using public choices', async () => {
-  const loaded = unwrap(await createNativeLoader().load(module.program));
+  const loaded = unwrap(await createCardLoader({controlled:false}).load(module.definition));
   const instance = unwrap(await loaded.core.start({
     game: {
       profile: 'competitive-2016-bear-1',

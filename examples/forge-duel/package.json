@@ -15,7 +15,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run build --workspace @bear-forge/runtime-controlled && node --experimental-strip-types --test tests/*.test.ts",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "benchmark:card": "node --experimental-strip-types tests/card-benchmark.ts"
   },
   "dependencies": {
     "@bear-forge/contracts": "*",
@@ -24,12 +25,14 @@
     "@bear-forge/policies": "*",
     "@bear-forge/experiments": "*",
     "@bear-forge/analysis": "*",
-    "@bear-forge/card-engine": "*"
+    "@bear-forge/card-engine": "*",
+    "@bear-forge/runtime-card": "*"
   },
   "devDependencies": {
     "@bear-forge/compiler": "*",
     "@bear-forge/runtime-controlled": "*",
     "@bear-forge/runtime-native": "*",
-    "@bear-forge/game-host": "*"
+    "@bear-forge/game-host": "*",
+    "@bear-forge/boundary": "*"
   }
 }

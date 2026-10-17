@@ -60,7 +60,7 @@ export async function implementationIdentity(directories: readonly string[], met
       }
     }
   }
-  const platformDirectories = ['packages/contracts/src', 'packages/game-sdk/src', 'packages/boundary/src', 'packages/runtime/src', 'packages/runtime-native/src', 'packages/runtime-controlled/src', 'packages/compiler/src', 'vendor/effectful/core', 'vendor/effectful/continuations', 'vendor/effectful/serialization', 'packages/experiments/src', 'packages/game-host/src', 'packages/policies/src'];
+  const platformDirectories = ['packages/contracts/src', 'packages/game-sdk/src', 'packages/card-engine/src', 'packages/runtime-card/src', 'packages/boundary/src', 'packages/runtime/src', 'packages/runtime-native/src', 'packages/runtime-controlled/src', 'packages/compiler/src', 'vendor/effectful/core', 'vendor/effectful/continuations', 'vendor/effectful/serialization', 'packages/experiments/src', 'packages/game-host/src', 'packages/policies/src'];
   for (const [index, directory] of [...platformDirectories, ...directories].entries()) {
     await add(directory, index >= platformDirectories.length);
     for (let parent = dirname(directory); parent !== '.' && parent !== '/'; parent = dirname(parent)) {

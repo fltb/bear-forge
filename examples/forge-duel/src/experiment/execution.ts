@@ -1,6 +1,7 @@
 import { ExperimentFiles as Files, createExperimentRunner, implementationIdentity } from '@bear-forge/experiments';
 import type { Types } from '../game.types.ts';
 import { game } from '../module.ts';
+import {createCardLoader,fileSnapshotStore} from '@bear-forge/runtime-card';
 import { policy } from './policy.ts';
 import { RegistrationSchema } from './registration.schemas.ts';
 import { createTasks } from './tasks.ts';
@@ -10,7 +11,12 @@ export class ExperimentFiles extends Files<TaskResult, TaskSummary> {
   constructor(directory: string) { super(directory, taskSummary); }
 }
 export const { runTask, runExperiment } = createExperimentRunner<Types, TaskInput, Registration, TaskSummary>({
-  module: game,
+  contract: game.contract,
+  execution: {
+    identity: { kind: 'card', rule: game.definition.id },
+    load: ({ controlled, stepBudget, snapshotDirectory }) => createCardLoader({ controlled, stepBudget, recordCore: true,
+      ...(snapshotDirectory ? { snapshots: fileSnapshotStore(snapshotDirectory) } : {}) }).load(game.definition),
+  },
   parseRegistration: value => RegistrationSchema.parse(value),
   tasks: createTasks,
   setup: task => ({ profile: 'forge-duel-v1', seed: task.seed, first: '0', decks: task.decks }),
@@ -23,7 +29,6 @@ export const { runTask, runExperiment } = createExperimentRunner<Types, TaskInpu
   identity: () => implementationIdentity(['examples/forge-duel/src'], {
     rule: 'forge-duel-v1', policies: ['first-legal@1', 'last-legal@1', 'random-legal@1', 'forge-rule@1'], encoder: 'plain-request@1'
   }),
-  artifacts: { controlled: 'build/forge-duel.program', native: 'build/forge-duel.native.json' }
 });
 export { RegistrationSchema, createTasks };
 export { trajectories } from './trajectory.ts';

@@ -79,7 +79,7 @@ test('bounded concurrent batches reproduce independent sequential tasks; memory 
 
 test('experiment classification uses failure identity and protocol codes, never message keywords', async () => {
   const {createExperimentRunner}=await import('@bear-forge/experiments');
-  const {game}=await import('../src/module.ts');
+  const {game}=await import('./generic/module.ts');
   const input=createTasks(config)[0]!;
   const failures=[Error('budget exceeded'),Error('timed out'),Object.assign(Error('budget'),{code:'budget_exceeded',name:'NativeBudgetError'})];
   const definition={

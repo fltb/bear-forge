@@ -6,7 +6,7 @@ import { ProgramExecution, decode } from '../../../packages/runtime-controlled/s
 import { baseDeck } from '../src/index.ts';
 
 test('real game snapshots exclude dependency initialization frames and forks reuse loaded code', async t => {
-  const artifact=decode((await compileEntry(fileURLToPath(new URL('../src/module.ts',import.meta.url)),'program')).content);
+  const artifact=decode((await compileEntry(fileURLToPath(new URL('./generic/module.ts',import.meta.url)),'program')).content);
   const instance=new ProgramExecution(artifact);
   instance.start({profile:'forge-duel-v1',seed:9,first:'0',decks:{'0':baseDeck,'1':baseDeck}});
   const serializer=instance.loaded.effects.S, write=serializer.write;

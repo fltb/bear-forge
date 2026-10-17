@@ -1,9 +1,9 @@
 import { invoke, operation } from '@bear-forge/card-engine';
 import type { EffectDefinition } from '@bear-forge/card-engine';
-import type { State, Input, Action } from './schemas.ts';
-import type { DouDizhuPorts } from './types.ts';
-import { validateInput, advanceClock, consumeInput, resolveBid, resolveDouble, resolveRedouble, resolvePass, resolvePlay } from './rules.ts';
-import type { ResolvedInput } from './rules.ts';
+import type { State, Input, Action } from '../../src/schemas.ts';
+import type { DouDizhuPorts } from '../../src/types.ts';
+import { validateInput, advanceClock, consumeInput, resolveBid, resolveDouble, resolveRedouble, resolvePass, resolvePlay } from '../../src/rules.ts';
+import type { ResolvedInput } from '../../src/rules.ts';
 type Effect<A> = EffectDefinition<State, DouDizhuPorts, A, void>;
 const bid: Effect<ResolvedInput> = { id: 'bid', async run(c, input) { operation(c, resolveBid, input); } };
 const double: Effect<ResolvedInput> = { id: 'double', async run(c, input) { operation(c, resolveDouble, input); } };

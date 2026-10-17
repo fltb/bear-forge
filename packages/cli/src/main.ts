@@ -1,10 +1,13 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { compileEntry, compileNativeEntry } from '@bear-forge/compiler';
+import {build} from 'esbuild';
+import {pathToFileURL} from 'node:url';
+import {createCardLoader} from '@bear-forge/runtime-card';
 import { ExperimentFiles, runExperiment, RegistrationSchema } from '@bear-forge/forge-duel/experiment/execution';
 import type { TaskResult } from '@bear-forge/forge-duel/experiment/execution';
 import { analyze } from '@bear-forge/forge-duel/experiment/analysis';
 import { createEvidenceServer } from '@bear-forge/forge-duel-viewer';
+import { runCardGame, replayCardGame } from './card.ts';
 export function argumentsOf(args: string[]) {
   const flags: Record<string, string | boolean> = {};
   for (let i = 0; i < args.length; i++) {
@@ -19,6 +22,8 @@ export async function main(args = process.argv.slice(2)) {
     flags = argumentsOf(rest);
   const allowed: Record<string, string[]> = {
     'build:games': [],
+    'card:run': ['game', 'native', 'seed', 'records'],
+    'card:replay': ['game', 'native', 'records'],
     experiment: ['output', 'config', 'resume', 'concurrency', 'memory-mb', 'compute-steps'],
     analyze: ['output', 'experiment'],
     demo: ['output', 'concurrency', 'memory-mb', 'compute-steps'],
@@ -27,15 +32,31 @@ export async function main(args = process.argv.slice(2)) {
   for (const key of Object.keys(flags)) if (!allowed[command!]?.includes(key)) throw Error('Unknown option --' + key);
   const budgets = Object.fromEntries([['concurrency', 'concurrency'], ['memory-mb', 'memoryBudgetMB'], ['compute-steps', 'computeStepBudget']].filter(([flag]) => flags[flag!] !== undefined).map(([flag, field]) => [field, Number(flags[flag!])]));
   const directory = typeof flags.output === 'string' ? flags.output : './data/forge';
+  if (command === 'card:run' || command === 'card:replay') {
+    if (flags.game !== 'forge-duel' && flags.game !== 'doudizhu') throw Error('--game must be forge-duel or doudizhu');
+    if (flags.native !== undefined && flags.native !== true) throw Error('--native takes no value');
+    const seed = Number(flags.seed ?? 991); if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw Error('Invalid seed');
+    if (flags.records !== undefined && typeof flags.records !== 'string') throw Error('--records requires a path');
+    if (command === 'card:replay') {
+      if (typeof flags.records !== 'string') throw Error('--records is required');
+      console.log(JSON.stringify(await replayCardGame({ game: flags.game, controlled: flags.native !== true, records: flags.records })));
+      return;
+    }
+    console.log(JSON.stringify(await runCardGame({ game: flags.game, controlled: flags.native !== true, seed, ...(typeof flags.records === 'string' ? { records: flags.records } : {}) })));
+    return;
+  }
   if (command === 'build:games') {
     await mkdir('./build', {
       recursive: true
     });
-    for (const [name, path] of [['doudizhu', 'examples/doudizhu/src/controlled-entry.ts'], ['forge-duel', 'examples/forge-duel/src/module.ts']]) {
-      const program = await compileEntry(resolve(path!), 'program');
-      await writeFile('./build/' + name + '.program', program.content);
-      await writeFile('./build/' + name + '.native.json', JSON.stringify(await compileNativeEntry(resolve(path!), 'program')));
-      console.log('Compiled ' + name);
+    for (const name of ['doudizhu', 'forge-duel']) {
+      const outfile = resolve('build', name + '.card.mjs');
+      await build({ entryPoints: [resolve('examples', name, 'src/module.ts')], outfile,
+        bundle: true, platform: 'node', format: 'esm', target: 'node22', packages: 'external' });
+      const {game} = await import(pathToFileURL(outfile).href);
+      const linked = await createCardLoader({controlled:false}).load(game.definition);
+      if (!linked.ok) throw Error(linked.error.message);
+      console.log('Linked Card Core ' + name);
     }
     return;
   }

@@ -1,3 +1,4 @@
+import { runCard } from '../../../packages/runtime-card/tests/run-support.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { game } from '../src/module.ts';
@@ -67,7 +68,7 @@ for (const firstBidder of ['0', '1', '2'] as Seat[]) for (const reverse of [fals
     assert.ok(clockSent && timeoutSent);
     assert.ok(expected.state.deal >= 2);
     let cursor = 0;
-    const actual = await game.program.run(structuredClone(setup), {
+    const actual = await runCard(game.definition, structuredClone(setup), {
       async call(call: any) {
         const recorded = tape[cursor++];
         assert.ok(recorded, 'candidate emitted extra call');

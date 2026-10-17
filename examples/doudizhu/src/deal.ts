@@ -1,12 +1,6 @@
-import { createGameSDK } from '@bear-forge/game-sdk';
-import { gamePorts } from './schemas.ts';
-import type { IO, GameSDK } from '@bear-forge/contracts';
-import type { DouDizhuPorts } from './types.ts';
-import type { State } from './schemas.ts';
-import { event, stage } from './rules.ts';
-
-/** Domain composition over the registered toolkit; no private runtime interface. */
-async function deal(s: State, random: (maximum: number) => number) {
+import type {State} from './schemas.ts';
+import {event,stage} from './rules.ts';
+export function dealState(s: State, random: (maximum: number) => number) {
   const deck = Array.from({ length: 54 }, (_, i) => i);
   for (let i = deck.length - 1; i > 0; i--) {
     const j = random(i + 1);
@@ -22,17 +16,4 @@ async function deal(s: State, random: (maximum: number) => number) {
   s.doubles = { '0': null, '1': null, '2': null }; s.doublesRevealed = false; s.redoubled = false;
   s.last = null; s.passes = 0; s.bombs = 0; s.rockets = 0; s.playCounts = { '0': 0, '1': 0, '2': 0 }; s.result = null;
   s.phase = 'bidding'; event(s, { type: 'deal', deal: s.deal, firstBidder: s.firstBidder }); stage(s, [s.turn]);
-}
-
-/** Called inside the controlled program: random and SDK closures belong to its Instance. */
-export function createSDK(io: IO<DouDizhuPorts>, seed: number): GameSDK<DouDizhuPorts> & { deal: (state: State) => Promise<void> } {
-  let random = seed >>> 0;
-  const integer = (maximum: number) => {
-    random = (Math.imul(random, 1664525) + 1013904223) >>> 0;
-    return random % maximum;
-  };
-  return {
-    ...createGameSDK<DouDizhuPorts>(io, gamePorts),
-    deal: (state: State) => deal(state, integer),
-  };
 }

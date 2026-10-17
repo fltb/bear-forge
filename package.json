@@ -11,6 +11,7 @@
     "packages/runtime-controlled",
     "packages/game-sdk",
     "packages/card-engine",
+    "packages/runtime-card",
     "examples/doudizhu",
     "packages/game-host",
     "packages/policies",
@@ -27,14 +28,15 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "check": "npm run check --workspaces --if-present",
-    "build:games": "npm run build:runtime && node --experimental-strip-types packages/cli/src/main.ts build:games",
+    "build:games": "node --experimental-strip-types packages/cli/src/main.ts build:games",
     "experiment": "node --experimental-strip-types packages/cli/src/main.ts experiment",
     "analyze": "node --experimental-strip-types packages/cli/src/main.ts analyze",
     "serve": "node --experimental-strip-types packages/cli/src/main.ts serve",
     "demo": "node --experimental-strip-types packages/cli/src/main.ts demo",
     "build:viewer": "npm run build --workspace @bear-forge/forge-duel-viewer",
     "build:runtime": "npm run build --workspace @bear-forge/runtime-controlled",
-    "build": "npm run build:games && npm run build:viewer"
+    "build": "npm run build:runtime && npm run build:games && npm run build:viewer",
+    "card": "node --experimental-strip-types packages/cli/src/main.ts card:run"
   },
   "engines": {
     "node": ">=22.18.0"

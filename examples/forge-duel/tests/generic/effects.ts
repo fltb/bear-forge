@@ -1,10 +1,10 @@
 import { invoke, operation, request, repeat, sequence } from '@bear-forge/card-engine';
 import type { EffectDefinition } from '@bear-forge/card-engine';
-import type { State, Action } from './forge.schemas.ts';
-import type { Ports } from './game.types.ts';
+import type { State, Action } from '../../src/forge.schemas.ts';
+import type { Ports } from '../../src/game.types.ts';
 import { available, validateAction, startAction, finishAction, endTurn, payCard, placeCard,
-  cardEffects, runCardStep, startAttack, attackDamage, counterDamage, deaths } from './rules.ts';
-import type { CardStep, CardEffectInput } from './rules.ts';
+  cardEffects, runCardStep, startAttack, attackDamage, counterDamage, deaths } from '../../src/rules.ts';
+import type { CardStep, CardEffectInput } from '../../src/rules.ts';
 
 type Effect<A, R = void> = EffectDefinition<State, Ports, A, R>;
 const damageEffect: Effect<CardEffectInput> = { id: 'damage', async run(c, input) { runCardStep(c.state, 'damage', input); } };

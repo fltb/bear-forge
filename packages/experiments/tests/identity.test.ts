@@ -1,9 +1,41 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, copyFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { implementationIdentity } from '../src/identity.ts';
+
+test('frozen implementation identity detects changes in the dedicated card engine and provider', async () => {
+  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  const directory = await mkdtemp(join(root, 'identity-fixture-'));
+  try {
+    // Run the real implementation against a tiny isolated workspace, so this
+    // check cannot change production sources or concurrent experiment hashes.
+    for (const group of ['packages', 'vendor/effectful']) {
+      for (const entry of await readdir(join(root, group), { withFileTypes: true })) {
+        if (entry.isDirectory()) await mkdir(join(directory, group, entry.name, 'src'), { recursive: true });
+      }
+    }
+    await mkdir(join(directory, 'game'));
+    await writeFile(join(directory, 'package.json'), '{"type":"module"}');
+    await writeFile(join(directory, 'package-lock.json'), '{}');
+    const implementation = join(directory, 'packages/experiments/src/identity.ts');
+    await copyFile(fileURLToPath(new URL('../src/identity.ts', import.meta.url)), implementation);
+    const { implementationIdentity: identify } = await import(implementation);
+    const engine = join(directory, 'packages/card-engine/src/card.ts');
+    const provider = join(directory, 'packages/runtime-card/src/loader.ts');
+    await writeFile(engine, 'export const instruction = 1;');
+    await writeFile(provider, 'export const provider = 1;');
+    const first = (await identify(['game'], {})).sourceDigest;
+    await writeFile(engine, 'export const instruction = 2;');
+    const second = (await identify(['game'], {})).sourceDigest;
+    assert.notEqual(second, first, 'changed card instructions must invalidate frozen experiments');
+    await writeFile(provider, 'export const provider = 2;');
+    assert.notEqual((await identify(['game'], {})).sourceDigest, second, 'changed card state management must invalidate frozen experiments');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('frozen implementation identity includes admitted JSON, MTS and package metadata', async () => {
   const root = fileURLToPath(new URL('../../../', import.meta.url));

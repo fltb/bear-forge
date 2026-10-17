@@ -120,3 +120,39 @@ test('one experiment owns one controlled provider across task commits and keeps 
     await rm(directory, {recursive: true, force: true});
   }
 });
+
+test('an injected provider is shared by tasks and rejects historical or changed artifacts before loading', async () => {
+  type G = { setup: number; ports: {}; programResult: number; view: number; player: 'a'; observation: number;
+    actions: {}; event: never; playerEvent: never; result: number; control: { request: never; input: never } };
+  const { createNativeLoader } = await import('@bear-forge/runtime-native');
+  const { z } = await import('zod');
+  const directory = await mkdtemp(join(tmpdir(), 'bear-injected-provider-'));
+  let loads = 0;
+  const tasks = [{ id: 'a', seed: 1 }, { id: 'b', seed: 2 }];
+  const definition = {
+    contract: { schemas: { view: z.number(), result: z.number() }, ports: {},
+      finish: (result: number) => ({ view: result, result }) } as any,
+    execution: { identity: { kind: 'test-provider', rule: 'same-definition' }, async load() {
+      loads++;
+      return createNativeLoader().load({ schemas: { setup: z.number(), result: z.number(), ports: {} }, async run(setup: number) { return setup; } });
+    } },
+    parseRegistration: (value: unknown) => value as any, tasks: () => tasks,
+    setup: (task: any) => task.seed, policies: () => ({}), facts: () => [],
+    summarize: (value: any) => ({ id: value.id, result: value.result }), identity: async () => ({ source: 'fixed' })
+  };
+  try {
+    const runner = createExperimentRunner<G, typeof tasks[number], any, { id: string; result: unknown }>(definition);
+    const output = await runner.runExperiment(directory, { id: 'injected', engine: 'native', maxAttempts: 1, maxSteps: 2 } as any);
+    assert.equal(loads, 1);
+    assert.deepEqual(output.results, [{ id: 'a', result: 1 }, { id: 'b', result: 2 }]);
+    const files = new ExperimentFiles(directory, value => value);
+    const frozen = await files.read('native-artifact');
+    assert.deepEqual(frozen, definition.execution.identity);
+    for (const wrong of [{ code: 'historical', exportName: 'program' }, { kind: 'test-provider', rule: 'changed' }]) {
+      await files.write('native-artifact', wrong);
+      await assert.rejects(() => runner.runExperiment(directory), /another provider/);
+      assert.equal((await runner.runTask(tasks[0]!, { id: 'injected', engine: 'native', maxSteps: 2 } as any, 1, files as any)).status, 'fault');
+      assert.equal(loads, 1);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

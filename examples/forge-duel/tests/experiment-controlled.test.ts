@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { programDigest } from '@bear-forge/runtime-controlled';
+import { game } from '../src/module.ts';
 import { ExperimentFiles, runTask, createTasks, RegistrationSchema, trajectories } from '@bear-forge/forge-duel/experiment/execution';
 // Normalize only generated protocol identities, preserving their repeated-use
 // relationships across observations, accepted replies and durable commits.
@@ -34,7 +34,7 @@ function semantic(row: any) {
   return visit({ input: row.input, status: row.status, result: row.result, facts: row.facts,
     packets: row.packets, decisions: row.decisions, commits: row.commits, policy: row.policy });
 }
-test('compiled Forge Duel checkpoints resume with policy state, trace prefix and same complete native result', async () => {
+test('Card Core Forge Duel checkpoints resume with policy state, trace prefix and same complete native result', async () => {
   const config = RegistrationSchema.parse({
       version: 1,
       game: 'forge-duel-v1',
@@ -54,20 +54,8 @@ test('compiled Forge Duel checkpoints resume with policy state, trace prefix and
     }),
     directory = await mkdtemp(join(tmpdir(), 'bear-controlled-experiment-')),
     files = new ExperimentFiles(directory);
-  // Build-time Babel/TypeScript heaps are not game execution memory. Production
-  // also builds the artifact before starting the experiment; keep that boundary
-  // here without raising or bypassing the runtime's RSS budget.
-  const built = await promisify(execFile)(process.execPath, ['--input-type=module', '-e',
-    `import {compileEntry} from '@bear-forge/compiler';
-     const artifact=await compileEntry(process.argv[1],'program');
-     process.stdout.write(Buffer.from(artifact.content).toString('base64'));`,
-    new URL('../src/module.ts', import.meta.url).pathname,
-  ], { maxBuffer: 64 * 1024 * 1024 });
-  const content = new Uint8Array(Buffer.from(built.stdout, 'base64'));
-  await files.write('artifact', {
-    content: Buffer.from(content).toString('base64'),
-    digest: programDigest(content)
-  });
+  const executable = { kind: 'card', rule: game.definition.id };
+  await files.write('artifact', executable);
   const input = createTasks(config)[0]!;
   await files.register(config, [input]);
   await assert.rejects(() => promisify(execFile)(process.execPath, ['--experimental-strip-types', new URL('./crash-controlled-child.ts', import.meta.url).pathname, directory]));
@@ -88,10 +76,7 @@ test('compiled Forge Duel checkpoints resume with policy state, trace prefix and
   assert.deepEqual(semantic(resumed), semantic(native));
   for (const checkpointEvery of [0, 5]) {
     const fresh = new ExperimentFiles(await mkdtemp(join(tmpdir(), 'bear-checkpoint-frequency-')));
-    await fresh.write('artifact', {
-      content: Buffer.from(content).toString('base64'),
-      digest: programDigest(content)
-    });
+    await fresh.write('artifact', executable);
     const uninterrupted = await runTask(input, {
       ...config,
       checkpointEvery
@@ -111,7 +96,7 @@ test('compiled Forge Duel checkpoints resume with policy state, trace prefix and
     const variant = RegistrationSchema.parse({ ...config, seed, policies: [script] });
     const task = createTasks(variant)[0]!;
     const storage = new ExperimentFiles(await mkdtemp(join(tmpdir(), 'bear-controlled-seeded-')));
-    await storage.write('artifact', { content: Buffer.from(content).toString('base64'), digest: programDigest(content) });
+    await storage.write('artifact', executable);
     let controlled;
     let checkpoints = 0;
     for (;;) {

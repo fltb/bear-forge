@@ -15,11 +15,14 @@
     "@bear-forge/session": "*",
     "@bear-forge/experiments": "*",
     "@bear-forge/policies": "*",
-    "@bear-forge/game-host": "*"
+    "@bear-forge/game-host": "*",
+    "@bear-forge/runtime-card": "*",
+    "@bear-forge/boundary": "*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "benchmark:card": "node --experimental-strip-types tests/card-benchmark.ts"
   }
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createResolution, invoke } from '@bear-forge/card-engine';
-import { actionEffect } from '../src/effects.ts';
+import { actionEffect } from './generic/effects.ts';
 import type { State, Definition, Unit } from '../src/forge.schemas.ts';
 import type { Ports } from '../src/game.types.ts';
 import { create, apply, legal, baseDeck, cards } from './reference/rules.ts';

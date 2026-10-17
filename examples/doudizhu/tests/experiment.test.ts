@@ -1,3 +1,4 @@
+import { createCardLoader, fileSnapshotStore } from '@bear-forge/runtime-card';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createExperimentRunner } from '@bear-forge/experiments';
@@ -8,7 +9,13 @@ import type { DouDizhuTypes } from '../src/index.ts';
 
 test('the shared experiment runner completes a real three-player Dou Dizhu game', async () => {
   const runner = createExperimentRunner<DouDizhuTypes, TaskInput, Registration, TaskResult>({
-    module: game,
+    contract: game.contract,
+    execution: {
+      identity: { kind: 'card', rule: game.definition.id },
+      load: ({ controlled, stepBudget, snapshotDirectory }) => createCardLoader({ controlled, stepBudget, recordCore: true,
+        ...(snapshotDirectory ? { snapshots: fileSnapshotStore(snapshotDirectory) } : {})
+      }).load(game.definition)
+    },
     parseRegistration: () => { throw Error('This test runs an individual task'); },
     tasks: () => [{ id: 'three-player', seed: 7 }],
     setup: task => ({ seed: task.seed, game: {
@@ -17,8 +24,7 @@ test('the shared experiment runner completes a real three-player Dou Dizhu game'
     policies: () => Object.fromEntries(['0', '1', '2'].map(player => [player, createScript('last')])),
     facts: () => [],
     summarize: value => value,
-    identity: async () => ({ game: 'doudizhu' }),
-    artifacts: { controlled: 'build/doudizhu.program', native: 'build/doudizhu.native.json' }
+    identity: async () => ({ game: 'doudizhu' })
   });
   const result = await runner.runTask({ id: 'three-player', seed: 7 }, {
     id: 'three-player', maxSteps: 600, maxAttempts: 1

@@ -1,4 +1,6 @@
-# 同一结算内核服务斗地主与 Forge Duel
+# 历史 TS 组合库：斗地主与 Forge Duel
+
+2026-10-17：专用执行后端以 card-core-spec.md 为准。本文保留原 async 组合库与通用执行入口的历史设计，不代表不经编译的卡牌 Core。
 
 本文件定义 TS 卡牌领域结算层的设计与迁移验收，属于 implementation-spec.md 的细化。目标是同一个内核服务现有 competitive-2016-bear-1 与 forge-duel-v1，保持原实例功能与对外行为一致。它不是第三种 Core 协议，不启动 Rust 重构或恢复性能优化。进度仅记入 plan.md。本文是设计，不是新实现已通过等价性测试的证明。
 

@@ -22,7 +22,7 @@ test('frozen Forge reference equals compiled candidate across decision restores 
     `import {compileEntry} from '@bear-forge/compiler';
      const artifact=await compileEntry(process.argv[1],'program');
      process.stdout.write(Buffer.from(artifact.content).toString('base64'));`,
-    new URL('../src/module.ts', import.meta.url).pathname,
+    new URL('./generic/module.ts', import.meta.url).pathname,
   ], { maxBuffer: 64 * 1024 * 1024 });
   const artifact = { content: new Uint8Array(Buffer.from(built.stdout, 'base64')) } as CompiledProgram<Setup, Ports, State>;
   const loaded = unwrap(await createControlledLoader({

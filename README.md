@@ -4,6 +4,21 @@
 
 完整介绍与审核入口：[项目介绍](docs/project-overview.md)。
 
+本机零新增训练卡组评估使用现有 Forge 游戏、规则策略和冻结模型：
+
+```sh
+npm run evaluate -- --config examples/forge-duel/experiments/deck-evaluation.json --output data/forge-deck-evaluation
+# 中断后读取原目录冻结的配置、批次和模型身份继续
+npm run evaluate -- --resume --output data/forge-deck-evaluation
+npm run serve -- --output data/forge-deck-evaluation --port 4184
+```
+
+示例需已有 `data/forge-ppo/model.pt`（可通过下方 Forge 自研训练命令生成）。纯脚本评估可将 policies 改为 `["rule"]` 并清空 models，无需 Python 模型进程。配置显式指定合法卡组、单卡替换或四条件协同、对手卡组/策略、可选环境权重及总任务预算；比较复用配对种子和交换座位，共享基准不重复执行。示例首批 3,072 局、最多 12,288 个独立对局任务，每任务最多 2 次尝试；重试全计成本，新增训练样本为 0。配置改变使用新目录。
+
+发现阶段仅筛选假设；冻结候选和确认样本量后，才生成独立确认对局。确认采用按种子块的有界经验 Bernstein 区间，并按冻结候选数控制多重比较；常量样本仍有不确定性。无候选不跑确认，预算内可输出未决。页面展示对战矩阵、替换/协同效应、适用策略、机会统计、预算与停止原因，并通过原有证据接口查看玩家可见对局。不同操作策略的效果分别报告；权重仅聚合指定对手环境，不默认合并操作策略。固定策略结果不代表充分适应后的卡组上限，适应训练和搜索仍在后续范围。评估结果由调度器发布，勿对该目录运行旧 analyze 命令。
+
+本机已完成该示例的 3,072 局发现及 9,214 局独立确认，全部正常结束，新增训练为 0。11 项确认关系中 2 项达到确定判断、9 项未决；共耗约 53.6 分钟评估阶段时间，细节与条件限制见 [计划中的实际结果](docs/plan.md)。终态 resume 已验证不重复任务。
+
 本机斗地主脚本实验复用已有策略与共享实验 runner：
 
 ```sh

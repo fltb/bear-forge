@@ -42,7 +42,8 @@
     "doudizhu:experiment": "node --experimental-strip-types examples/doudizhu/src/experiment/cli.ts",
     "card": "node --experimental-strip-types packages/cli/src/main.ts card:run",
     "training:setup": "uv sync --frozen --project packages/training --python 3.14",
-    "training": "node --experimental-strip-types packages/cli/src/training.ts"
+    "training": "node --experimental-strip-types packages/cli/src/training.ts",
+    "evaluate": "node --experimental-strip-types packages/cli/src/main.ts evaluate"
   },
   "engines": {
     "node": ">=22.18.0"

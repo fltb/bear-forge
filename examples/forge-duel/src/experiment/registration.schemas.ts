@@ -9,7 +9,7 @@ export const RegistrationSchema = z.strictObject({
   seed: z.number().int().min(0).max(4294967295),
   models:z.record(z.string().regex(/^model-[a-zA-Z0-9_.-]+$/),z.string().min(1)).refine(m=>Object.keys(m).length<=4,{message:'At most four model processes'}).optional(),
   policies: z.array(PolicyNameSchema).min(1).max(4),
-  opponents: z.array(PolicyNameSchema).min(1).max(4),
+  opponents: z.array(PolicyNameSchema).min(1).max(8),
   checkpointEvery: z.number().int().min(0).max(10000).default(0),
   concurrency: z.number().int().min(1).max(4).default(1),
   memoryBudgetMB: z.number().int().min(32).max(32768).default(4096),

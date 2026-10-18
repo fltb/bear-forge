@@ -1,5 +1,5 @@
 import type { TaskResult } from './experiment.types.ts';
-import { mkdir, open, rename, readFile, readdir, unlink } from 'node:fs/promises';
+import { mkdir, open, rename, readFile, readdir, unlink, link } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { serialize, deserialize } from 'node:v8';
 import { randomUUID } from 'node:crypto';
@@ -117,6 +117,24 @@ export class ExperimentFiles<R extends { id: string } = TaskResult, S extends { 
     await this.write(key, value);
     await this.write('summary-' + taskId, this.summarize(value));
     return value;
+  }
+  /** Publish the same immutable commit into an evaluation index on the same filesystem. */
+  async linkCommit(taskId: string, source: ExperimentFiles<R, S>) {
+    await mkdir(this.directory, { recursive: true });
+    if (!(await source.read('summary-' + taskId))) {
+      const task = await source.read<R>('task-' + taskId);
+      if (!task) throw Error('Missing immutable source commit');
+      await source.write('summary-' + taskId, source.summarize(task));
+    }
+    for (const key of ['task-' + taskId, 'summary-' + taskId]) {
+      try { await link(source.path(key), this.path(key)); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        if (!sameData(await this.read(key), await source.read(key))) throw Error('Published commit identity mismatch');
+      }
+    }
+    const directory = await open(this.directory, 'r');
+    try { await directory.sync(); } finally { await directory.close(); }
   }
   async summaries(): Promise<S[]> {
     let names: string[];

@@ -20,7 +20,8 @@ export function createEvidenceServer(directory: string) {
           results = await files.summaries();
         data = {
           config: registration?.config ?? null,
-          total: registration?.tasks.length ?? 0,
+          total: (await files.read<any>('analysis'))?.plannedGames ?? registration?.tasks.length ?? 0,
+          evaluation: !!(await files.read('evaluation-state')),
           completed: results.length,
           counts: Object.fromEntries(['ended', 'fault', 'truncated'].map(k => [k, results.filter(r => r.status === k).length]))
         };

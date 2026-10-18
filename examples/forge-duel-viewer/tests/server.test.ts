@@ -116,3 +116,20 @@ test('task and evidence pages are complete, bounded and retain only the selected
     await rm(dir,{recursive:true,force:true});
   }
 });
+test('evaluation API reports planned batch tasks and condition-specific evidence through existing endpoints',async()=>{
+  const {rm}=await import('node:fs/promises');
+  const dir=await mkdtemp(join(tmpdir(),'bear-evaluation-view-'));
+  const files=new ExperimentFiles(dir);
+  const report={experimentId:'evaluation',stage:'confirmation',plannedGames:512,maxGames:1024,trainingSamples:0,reason:'candidates-frozen',matrix:[{variant:'candidate',policy:'rule',opponent:'control',score:0.6}],relations:[]};
+  await files.write('registration',{config:{id:'evaluation',policies:['rule'],opponents:[{id:'control',policy:'rule'}]},tasks:[]});
+  await files.write('analysis',report);
+  await files.write('evaluation-state',{pending:{phase:'confirmation'}});
+  const server=createEvidenceServer(dir);
+  await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+  try{
+    const base='http://127.0.0.1:'+(server.address() as any).port;
+    const progress=await(await fetch(base+'/api/experiment')).json();
+    assert.equal(progress.total,512);assert.equal(progress.evaluation,true);assert.equal(progress.completed,0);
+    assert.deepEqual(await(await fetch(base+'/api/relations')).json(),report);
+  }finally{await new Promise<void>(r=>server.close(()=>r()));await rm(dir,{recursive:true,force:true});}
+});

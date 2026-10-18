@@ -10,7 +10,8 @@
     "./experiment/summary": "./src/experiment/summary.ts",
     "./experiment/policy": "./src/experiment/policy.ts",
     "./experiment/execution": "./src/experiment/execution.ts",
-    "./experiment/analysis": "./src/experiment/analysis.ts"
+    "./experiment/analysis": "./src/experiment/analysis.ts",
+    "./evaluation/execution": "./src/evaluation/execution.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

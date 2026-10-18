@@ -7,6 +7,7 @@ import { ExperimentFiles, runExperiment, RegistrationSchema } from '@bear-forge/
 import type { TaskResult } from '@bear-forge/forge-duel/experiment/execution';
 import { analyze } from '@bear-forge/forge-duel/experiment/analysis';
 import { createEvidenceServer } from '@bear-forge/forge-duel-viewer';
+import { runEvaluation } from '@bear-forge/forge-duel/evaluation/execution';
 import { runCardGame, replayCardGame } from './card.ts';
 export function argumentsOf(args: string[]) {
   const flags: Record<string, string | boolean> = {};
@@ -24,6 +25,7 @@ export async function main(args = process.argv.slice(2)) {
     'build:games': [],
     'card:run': ['game', 'native', 'seed', 'records'],
     'card:replay': ['game', 'native', 'records'],
+    evaluate: ['output','config','resume'],
     experiment: ['output', 'config', 'resume', 'concurrency', 'memory-mb', 'compute-steps'],
     analyze: ['output', 'experiment'],
     demo: ['output', 'concurrency', 'memory-mb', 'compute-steps'],
@@ -60,6 +62,15 @@ export async function main(args = process.argv.slice(2)) {
     }
     return;
   }
+  if (command === 'evaluate') {
+    if(flags.resume!==undefined&&flags.resume!==true)throw Error('--resume takes no value');
+    if(flags.resume&&flags.config!==undefined)throw Error('Resume uses frozen evaluation config');
+    if(!flags.resume&&typeof flags.config!=='string')throw Error('--config is required');
+    const input=typeof flags.config==='string'?JSON.parse(await readFile(flags.config,'utf8')):undefined;
+    const state=await runEvaluation(directory,input,event=>console.log(JSON.stringify(event)));
+    console.log(JSON.stringify(state.result,null,2));
+    return;
+  }
   if (command === 'experiment') {
     let config;
     if (flags.resume && Object.keys(budgets).length) throw Error('Resume uses the frozen registered budgets');
@@ -83,6 +94,7 @@ export async function main(args = process.argv.slice(2)) {
       registration: any = await files.read('registration');
     if (!registration) throw Error('No registration');
     if (flags.experiment !== undefined && flags.experiment !== registration.config.id) throw Error('Experiment id does not match the registered output directory');
+    if(await files.read('evaluation-state'))throw Error('Use evaluate --resume to publish the frozen evaluation analysis');
     const result = analyze(registration.config, await files.summaries());
     await files.write('analysis', result);
     console.log(JSON.stringify({
@@ -128,7 +140,7 @@ export async function main(args = process.argv.slice(2)) {
     server.listen(port, '127.0.0.1', () => console.log('http://127.0.0.1:' + port));
     return;
   }
-  throw Error('Expected build:games, experiment, analyze, demo or serve');
+  throw Error('Expected build:games, evaluate, experiment, analyze, demo or serve');
 }
 if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
   main().catch(error => {

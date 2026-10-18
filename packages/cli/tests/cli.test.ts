@@ -41,3 +41,21 @@ test('documented analyze experiment id selects only its registered directory', a
     assert.deepEqual(await files.read('analysis'),selected);
   } finally { await rm(directory,{recursive:true,force:true}); }
 });
+test('evaluation resume freezes input and ordinary analyze cannot overwrite its decisions',async()=>{
+  const {main}=await import('../src/main.ts');
+  const {mkdtemp,rm}=await import('node:fs/promises');
+  const {join}=await import('node:path');
+  const {tmpdir}=await import('node:os');
+  const {ExperimentFiles}=await import('@bear-forge/forge-duel/experiment/execution');
+  const directory=await mkdtemp(join(tmpdir(),'bear-evaluation-cli-'));
+  try{
+    await assert.rejects(main(['evaluate','--resume','yes']),/takes no value/);
+    await assert.rejects(main(['evaluate','--resume','--config','unused']),/frozen/);
+    await assert.rejects(main(['evaluate']),/config is required/);
+    const files=new ExperimentFiles(directory);
+    await files.write('registration',{config:{id:'eval'},tasks:[]});
+    await files.write('evaluation-state',{pending:null});
+    await assert.rejects(main(['analyze','--output',directory]),/evaluate --resume/);
+    assert.equal(await files.read('analysis'),null);
+  }finally{await rm(directory,{recursive:true,force:true});}
+});

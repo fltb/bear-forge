@@ -1,6 +1,6 @@
 # 仓库工作规则
 
-用户最新指令优先。完整目标及实施方案见 docs/implementation-spec.md，进度见 docs/plan.md。当前实现已扩展至编译、两种执行器、恢复分支、游戏、策略、文件实验、分析和查看界面；现成 DouZero 与自研 Transformer/PPO 训练均通过已有 Policy 和同一 Card Core 接线。完成状态以 docs/plan.md 和实际检查为准，运行时优化及 Rust 迁移继续冻结。
+用户最新指令优先。完整目标及实施方案见 docs/implementation-spec.md，进度见 docs/plan.md。当前实现已扩展至编译、两种执行器、恢复分支、游戏、策略、文件实验、分析和查看界面；现成 DouZero 与自研 Transformer/PPO 训练均通过已有 Policy 和同一 Card Core 接线。Forge 零新增训练构筑评估已实现显式比较/替换/协同、预算批次、候选冻结、独立确认和原有证据界面；适应训练与搜索仍属后续。完成状态以 docs/plan.md 和实际检查为准，运行时优化及 Rust 迁移继续冻结。
 
 ## 开始工作
 

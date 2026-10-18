@@ -1,0 +1,172 @@
+{
+  "id": "forge-deck-evaluation",
+  "game": "forge-duel-v1",
+  "engine": "native",
+  "seed": 6000000,
+  "decks": [
+    {
+      "id": "base",
+      "cards": [
+        "scout",
+        "scout",
+        "guard",
+        "guard",
+        "beast",
+        "beast",
+        "witness",
+        "witness",
+        "spark",
+        "spark",
+        "supply",
+        "supply"
+      ]
+    },
+    {
+      "id": "blast",
+      "cards": [
+        "scout",
+        "scout",
+        "guard",
+        "guard",
+        "beast",
+        "beast",
+        "witness",
+        "witness",
+        "blast",
+        "spark",
+        "supply",
+        "supply"
+      ]
+    },
+    {
+      "id": "repair",
+      "cards": [
+        "scout",
+        "scout",
+        "repair",
+        "guard",
+        "beast",
+        "beast",
+        "witness",
+        "witness",
+        "spark",
+        "spark",
+        "supply",
+        "supply"
+      ]
+    },
+    {
+      "id": "heavy",
+      "cards": [
+        "scout",
+        "scout",
+        "guard",
+        "guard",
+        "beast",
+        "beast",
+        "blast",
+        "witness",
+        "spark",
+        "spark",
+        "supply",
+        "supply"
+      ]
+    },
+    {
+      "id": "aggro",
+      "cards": [
+        "scout",
+        "scout",
+        "guard",
+        "guard",
+        "beast",
+        "beast",
+        "spark",
+        "spark",
+        "blast",
+        "blast",
+        "supply",
+        "supply"
+      ]
+    },
+    {
+      "id": "control",
+      "cards": [
+        "guard",
+        "guard",
+        "beast",
+        "beast",
+        "witness",
+        "witness",
+        "blast",
+        "blast",
+        "repair",
+        "repair",
+        "supply",
+        "supply"
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "id": "blast",
+      "kind": "replacement",
+      "baseline": "base",
+      "candidate": "blast",
+      "description": "Replace one spark with blast"
+    },
+    {
+      "id": "repair",
+      "kind": "replacement",
+      "baseline": "base",
+      "candidate": "repair",
+      "description": "Replace one guard with repair"
+    },
+    {
+      "id": "heavy",
+      "kind": "replacement",
+      "baseline": "base",
+      "candidate": "heavy",
+      "description": "Replace one witness with blast"
+    }
+  ],
+  "opponents": [
+    {
+      "id": "balanced",
+      "deck": "base",
+      "policy": "rule",
+      "weight": 1
+    },
+    {
+      "id": "aggro",
+      "deck": "aggro",
+      "policy": "rule",
+      "weight": 1
+    },
+    {
+      "id": "control",
+      "deck": "control",
+      "policy": "rule",
+      "weight": 1
+    }
+  ],
+  "policies": [
+    "rule",
+    "model-own"
+  ],
+  "models": {
+    "model-own": "data/forge-ppo/model.pt"
+  },
+  "margin": 0.03,
+  "alpha": 0.05,
+  "discoveryBlocks": [
+    64,
+    128,
+    256
+  ],
+  "confirmationMaxBlocks": 2048,
+  "maxGames": 12288,
+  "concurrency": 1,
+  "maxSteps": 1000,
+  "maxAttempts": 2
+}

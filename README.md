@@ -156,7 +156,7 @@ npm run serve -- --output ./data/demo
 
 ## 专用卡牌路径
 
-同一 cardDefinition 的原生/受控模式都经过卡牌 Core，没有无 Core 的正式卡牌模式。两游戏模块、card:run/card:replay、build:games 和 demo/experiment 已接此路径。旧 async 游戏入口移入 tests/generic，作为通用后端的兼容性夹具；旧参考仅生成差分期望，正式 BaseGame 基准使用生产契约。
+同一 cardDefinition 的原生/受控模式都经过卡牌 Core，没有无 Core 的正式卡牌模式。斗地主、Forge Duel 和 STS 的 card:run/card:replay、build:games 均接此路径；demo/experiment 继续使用既有游戏。旧 async 游戏入口移入 tests/generic，作为通用后端的兼容性夹具；旧参考仅生成差分期望，正式 BaseGame 基准使用生产契约。
 
 当前基准为同一 Card Core 上的完整可交互 GameHost：原生游戏自身的多余路径单独核算，受控再核算新增能力的成本。默认原生不承担未启用的训练、记录、COW 或存档管理；游戏历史、观察、合法动作及实际事件交付保留。[完整游戏优化方案](docs/card-core-spec.md#gamehost-optimization) 与尚未完成项保留，当前按用户要求冻结性能优化，实际完成状态见 plan.md。原生审计使用已有 recordCore:true；默认原生不发布 capture，--records 等显式消费者保留完整记录与重放。
 
@@ -167,9 +167,12 @@ GameContract 作者适配函数按用户确定的纯只读契约借用稳定发�
 ```sh
 npm run card -- --game forge-duel --seed 87
 npm run card -- --game doudizhu --seed 31 --native
+npm run card -- --game sts --seed 130 --native
 npm run card -- --game forge-duel --records /tmp/forge-card-records.json
 npm run benchmark:card -w @bear-forge/forge-duel -- card-controlled
 npm run benchmark:card -w @bear-forge/doudizhu -- instance-controlled
 ```
+
+STS 从正常铁甲 A20 开局，CLI 使用首个合法动作策略。规则按稳定内核、类型化规则模块和组合实体装配；完整碎心动作带与独立 C++ 差分只用于测试，生产入口不读取它们。设计与扩展契约见 [第二层接口](docs/card-core-spec.md#第二层向上公开的完整接口目录2026-10-20设计收敛)，当前验收结果见 plan.md。
 
 完整游戏基准使用 game-native/game-controlled（benchmark:card 默认 game-controlled），两模式都按收到的合法选项选动作并实际接收事件，计时前与独立旧游戏逐项比较完整交互。card-native、card-controlled、card-controlled-recorded、instance-native、instance-controlled、basegame-native、basegame-controlled 保留为局部诊断；裸 Core/Instance 不包含完整交互，不能据此计算合理包装预算或完整原生下界。游戏规则与装载、声明语义、正确性证明及边界见 [专用后端方案](docs/card-core-spec.md)、[证明](docs/card-core-proof.md)。实际进度与尚未完成的验证只见 docs/plan.md。

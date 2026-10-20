@@ -14,6 +14,7 @@
     "packages/runtime-card",
     "packages/training",
     "examples/doudizhu",
+    "examples/sts",
     "packages/game-host",
     "packages/policies",
     "examples/forge-duel",

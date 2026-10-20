@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { serialize, deserialize } from 'node:v8';
-import { CardProgram, CardMachine, plainCardStorage } from '@bear-forge/card-engine';
+import { CardProgram, CardMachine, plainCardStorage, ruleReplyGuardFor } from '@bear-forge/card-engine';
 import type { CardDefinition, CardRoot, CardTrace, CardStorage } from '@bear-forge/card-engine';
 import type { PortShape } from '@bear-forge/contracts/core';
 import type { Instance, InstanceStop, Outcome } from '@bear-forge/contracts/instance';
@@ -55,8 +55,9 @@ export function createCardLoader(options: CardOptions = {}) {
   const recording = controlled || recordCore;
   return {
     async load<S, Setup, P extends { [K in keyof P]: PortShape }, R>(definition: CardDefinition<S, Setup, P, R>): Promise<Outcome<LoadedCore<Setup, P, R>>> {
+      let ruleReplyGuard:ReturnType<typeof ruleReplyGuardFor>=null;
       let program: CardProgram<S, Setup, P, R>;
-      try { if (typeof definition.id !== 'string' || !definition.id || typeof definition.initialize !== 'function') throw Error('Invalid card definition'); assertProgramSchemasShape(definition.schemas); program = new CardProgram(definition); definition = program.definition; }
+      try { if (typeof definition.id !== 'string' || !definition.id || typeof definition.initialize !== 'function') throw Error('Invalid card definition'); assertProgramSchemasShape(definition.schemas); program = new CardProgram(definition); ruleReplyGuard=ruleReplyGuardFor(definition); definition = program.definition; }
       catch (error) { return fail('invalid_argument', exceptionMessage(error)); }
       // Controller owns parser input/result isolation. Card schemas are host
       // functions, so an additional provider-side adapter would copy them twice.
@@ -121,12 +122,20 @@ export function createCardLoader(options: CardOptions = {}) {
         let stop: RawStop | undefined = restored ? restored.state.kind === 'call' ? { kind: 'call', call: restored.state.call }
           : restored.state.kind === 'done' ? { kind: 'done', result: restored.state.result }
           : { kind: 'fault', error: restored.state.error } : ownStop(machine.advance());
+        const instanceSchemas=ruleReplyGuard?{...schemas,ports:Object.fromEntries(Object.entries(schemas.ports).map(([port,declaration])=>{
+          const schema=declaration as {input:any;output:{parse:(value:unknown)=>unknown}};
+          return[port,{...schema,output:{parse(value:unknown){
+            const parsed=schema.output.parse(value),wait=machine.root.waiting;
+            if(wait){const frame=machine.root.frames[wait.frame]!;ruleReplyGuard(program.names[frame.block]!,frame,port,parsed);}
+            return parsed;
+          }}}];
+        }))}as typeof schemas:schemas;
         const controller = new Controller<Setup, P, R>({
           current: () => stop!,
           advance: async output => { stop = ownStop(machine.advance(output)); },
           dispose: () => { storage!.close?.(); stop = undefined; machines?.delete(controller); },
           ...(controlled ? { snapshot: () => Buffer.from(serialize(machine.storage.export(machine.root))).toString('base64') } : {})
-        }, schemas, setup, restored ? { state: restored.state, records: restored.records, ...(restored.shared ? { shareState: true as const } : {}) } : undefined, recording);
+        }, instanceSchemas, setup, restored ? { state: restored.state, records: restored.records, ...(restored.shared ? { shareState: true as const } : {}) } : undefined, recording);
         machines?.set(controller, machine);
         if (core) coreRecords!.set(controller, core);
         if (controlled) controller.forkHandler = async () => {

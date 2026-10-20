@@ -1,0 +1,9 @@
+export type Health={hp:number;maxHp:number};
+export type ResourceSetup=Health&{block:number;energy:number;gold:number};
+export type ResourceAmount={entity:number;amount:number};
+export type HpLossContext={battle:number;source:number|null;attack:boolean};
+export type HpLoss=ResourceAmount&{selfDamage:boolean;origin?:0|1|undefined;context?:HpLossContext|undefined};
+export type HealthChange={entity:number;amount:number;before:number;after:number;maxHp:number};
+export type HpLost=HealthChange&{selfDamage:boolean;origin?:0|1|undefined;context?:HpLossContext|undefined};
+export type HpLossReceipt={entity:number;amount:number;lost:number};
+export type ResourceChange={entity:number;amount:number;before:number;after:number};

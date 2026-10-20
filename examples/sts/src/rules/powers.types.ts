@@ -1,0 +1,26 @@
+import type {rules} from '@bear-forge/card-engine';
+export type PowerChange={amount:number;source:number|null;debuff:boolean;skipFirstDecay?:boolean|undefined};
+export type PowerMutable={level:number;active:boolean;justApplied:boolean};
+export type PowerState=PowerMutable&{registry:number;actor:number;phase:0|1|2};
+export type PowerSetup=PowerChange&{registry:number;actor:number};
+export type PowerLifecycle=rules.EntityLifecycle<PowerSetup>;
+export type PowerRemoval=Omit<PowerLifecycle,'setup'>&{reason:unknown};
+export type PowerMerge={state:PowerState;change:PowerChange};
+export type PowerReduction={state:PowerState;amount:number};
+export type PowerMerged={entity:number;before:PowerState;after:PowerState;change:PowerChange};
+export type PowerPresentation={key:number;flag:boolean;slot?:0|1|undefined;side?:0|1|undefined};
+export type PowerConfig={
+  presentation?:PowerPresentation|undefined;
+  admit?:rules.Query<{actor:number;change:PowerChange},boolean>|undefined;
+  initial:rules.Query<PowerChange,PowerMutable>;
+  merge:rules.Query<PowerMerge,PowerMutable>;
+  reduce:rules.Query<PowerReduction,PowerMutable>;
+  remove?:rules.Query<PowerState,PowerMutable>|undefined;
+  polarity:rules.Query<PowerState,-1|0|1>;
+  attach:rules.Effect<PowerLifecycle,void>;
+  detach?:rules.Effect<PowerRemoval,void>|undefined;
+  merged?:rules.Effect<PowerMerged,void>|undefined;
+};
+export type PowerDefinition=rules.EntityDefinition<PowerConfig,PowerSetup>;
+export type PowerEntry={entity:number;definition:PowerDefinition};
+export type PowerApplication=PowerSetup&{definition:PowerDefinition;scope:number};

@@ -1,0 +1,13 @@
+import type {Schema} from './rules-module.types.ts';
+import type {Query} from './rules-query.types.ts';
+import type {Input} from './rules.types.ts';
+declare const adapterBrand:unique symbol;
+export type ChoiceRequest<T=unknown,P=unknown>={kind:'one'|'many'|'order';player:P;candidates:readonly T[];min:number;max:number;order:'irrelevant'|'chosen';allowSkip:boolean};
+export type ChoiceReply={kind:'selected';indices:readonly number[]}|{kind:'skipped'};
+export type ChoiceResult<T>={kind:'selected';value:T}|{kind:'skipped'};
+export type ChoiceAdapter<T,P,Wire,Reply>={readonly [adapterBrand]:[T,P,Wire,Reply]};
+export type ChoiceAdapterSpec<T,P,Wire,Reply>={port:string;request:Query<ChoiceRequest<T,P>,Wire>;reply:Schema<Reply>;decode:(request:Readonly<ChoiceRequest<T,P>>,reply:Reply)=>ChoiceReply};
+export type BaseChoiceSpec<T,P,Wire,Reply>={adapter:ChoiceAdapter<T,P,Wire,Reply>;player:Input<P>;candidates:Input<readonly T[]>;singleton:'request'|'automatic'};
+export type OneChoiceSpec<T,P,W,R>=BaseChoiceSpec<T,P,W,R>&{allowSkip:boolean;empty:'skip'|'request'|'error'};
+export type ManyChoiceSpec<T,P,W,R>=BaseChoiceSpec<T,P,W,R>&{min:Input<number>;max:Input<number>;order:'irrelevant'|'chosen';empty:'empty'|'request'|'error'};
+export type OrderChoiceSpec<T,P,W,R>=Omit<BaseChoiceSpec<T,P,W,R>,'candidates'>&{items:Input<readonly T[]>};

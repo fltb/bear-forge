@@ -1,0 +1,13 @@
+import {z} from 'zod';
+import {entityId} from './resources.schemas.ts';
+export const int8=z.int32().min(-128).max(127),int16=z.int32().min(-32768).max(32767);
+export const cardMutableSchema=z.object({specialData:int16,cost:int8,costForTurn:int8,upgraded:z.boolean(),freeToPlayOnce:z.boolean(),retain:z.boolean()}).strict();
+export const cardIdentitySchema=z.object({mode:z.union([z.literal(0),z.literal(1)]),master:entityId.nullable(),uniqueId:int16}).strict();
+export const cardStateSchema=cardIdentitySchema.extend(cardMutableSchema.shape);
+export const cardEvaluationSchema=z.object({entity:entityId,state:cardStateSchema}).strict();
+export const cardSetupSchema=cardIdentitySchema.extend({specialData:int16,upgraded:z.boolean()});
+export const cardChangeSchema=z.object({entity:entityId,before:cardStateSchema,after:cardStateSchema}).strict();
+export const cardUseSchema=z.object({card:entityId,owner:entityId,target:entityId.nullable(),battle:entityId,play:entityId,state:cardStateSchema,energyOnUse:z.int32().nonnegative(),autoplay:z.boolean(),freeToPlay:z.boolean(),ignoreEnergyTotal:z.boolean(),purgeOnUse:z.boolean(),triggerOnUse:z.boolean(),regretCardCount:z.int32()}).strict();
+export const variantSchema=z.object({cost:int8,damage:z.int32(),innate:z.boolean(),ethereal:z.boolean(),exhaust:z.boolean(),retain:z.boolean(),target:z.boolean()}).strict();
+export const metadataSchema=z.object({name:z.string(),type:z.int32(),color:z.int32(),rarity:z.int32(),strike:z.boolean(),variants:z.tuple([variantSchema,variantSchema])}).strict();
+export const combatCardSchema=z.object({id:z.string(),uniqueId:int16,specialData:int16,cost:int8,costForTurn:int8,upgraded:z.boolean(),freeToPlayOnce:z.boolean(),retain:z.boolean()}).strict();

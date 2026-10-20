@@ -1,5 +1,7 @@
 # 三层与横向能力
 
+当前第二层设计入口：[类型化原子函数与组合规则](card-core-spec.md#typed-rule-layer)。稳定内核／规则模块／组合实体是 Program 内的组织方式，与本页 Core／Instance／BaseGame 的运行职责不同。作者定义引用在装配时链接，动态登记和续接仍属于唯一 Context；类型化作者、模块提交、查询、派发、检查点和实体生命周期已有生产实现，STS 铁甲内容通过这些接口装配；验收范围及实际结果见 plan.md。
+
 | 功能 | Core | Instance | BaseGame |
 | --- | --- | --- | --- |
 | 创建与执行 | 装载程序、创建实例 | 推进、读取停止状态、关闭 | 持有实例，解释游戏状态 |
@@ -137,6 +139,8 @@ C01 交付公共声明、完整斗地主及原生协议消费者。生产执行�
 执行实例均在主 runtime 内直接调用编译产物，代码按产物缓存，模块变量/闭包/执行帧按实例持有。受控路径仅在 Program 装载时创建 V8 Realm；创建 Instance、fork 和 restore 不创建 Realm。没有 Worker 或执行子进程。只有编译预算检查，不提供硬超时。测试中的新进程用于证明关闭程序后仍能从持久快照恢复，不是执行器的实例承载机制。
 
 ## 并列卡牌后端
+
+2026-10-20 的 STS 前置设计进一步区分同一 Program 内的执行指令、规则支持函数及游戏规则包。执行器仅解释通用控制流和端口；队列、触发登记、修正计算及其时序由规则代码实现，动态数据全部归入既有 Context。卡牌、敌人、遗物不是执行器分支。该划分不增加运行层或公共协议，详见 [可扩展规则模型](card-core-spec.md#extensible-rules) 与 [证明](card-core-proof.md#extensible-rules-proof)；类型化规则底座及固定源铁甲 A20 内容已实现；有限验收不代表其他职业或任意插件均已验证。
 
 用户 2026-10-17 授权专用卡牌路径。通用源码→编译产物→ProgramExecution 与卡牌定义→CardProgram/CardMachine 两条路径并列，共同实现 Core/Instance/BaseGame 协议。后者在 packages/card-engine 声明步骤和同步推进，在 packages/runtime-card 实现 COW 数据图、装载、快照和记录重放；不依赖 compiler/runtime-controlled/runtime-native。
 

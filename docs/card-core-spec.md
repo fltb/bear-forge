@@ -2,6 +2,128 @@
 
 本方案按 2026-10-17 用户指令实施，替代把 async 组合库等同于专用执行器的结论。旧通用编译/执行能力完整保留；卡牌后端不经过通用编译器。对外 Core、Instance、BaseGame、capture、persistence 协议保持不变。历史组合库和通用执行测试继续有效，但不能证明本后端的实现。
 
+<a id="extensible-rules"></a>
+
+## 可扩展规则模型与 STS 实施前提（2026-10-20）
+
+最新可审阅的作者接口、装配、原子目录和机制细则见本文[第二层完整设计](#typed-rule-layer)。该设计尚未实施；与前文概念性接口不一致处以最新设计为准。
+
+本节是先建模、论证后实现的设计。规则支持能力已实现于 card-engine 的 typed rules，并降低到现有 CardMachine；实际验收进度只见 plan.md。证明见 card-core-proof.md 第 15–23 节。这里的“STS core”指使用同一 Card Core 的 STS 游戏规则包，不能另建 STS 专用 VM。完整复刻与原项目差分的实施方案见 [implementation-spec.md 第 21 节](implementation-spec.md#sts-replication)，实际进度仅在 plan.md。
+
+### 代码职责和唯一状态
+
+| 归属 | 内容 | 不持有的内容 |
+| --- | --- | --- |
+| 现有 CardProgram / CardMachine | 操作、条件、循环、调用/返回、显式请求，解释静态定义并推进帧 | 牌名、伤害、回合、敌人、遗物及其专用分支 |
+| 同一 Program 内的规则支持函数 | 队列操作、实体引用、登记/移除处理器、按明确顺序派发、修正值折叠 | 独立运行实例、宿主中的可变登记表、第二份世界 |
+| 游戏规则包 | 伤害与费用语义、卡牌/敌人/遗物行为、调度次序、生命周期、完整冒险流程 | 绕开 Context 的可变闭包和外部随机源 |
+| 既有 Instance / BaseGame | 通用驱动与记录；请求、合法动作、玩家观察和事件投影 | 另一套结算循环、根据牌名补算效果 |
+
+支持函数首先作为同 Program 内的普通函数/效果组合实现；只有语义已经与游戏无关的部分才归入公共 card-engine。游戏规则放在未来的 examples/sts 中。不通过新包或接口数量证明分层，不为了迁就某张牌新增公共 opcode。
+
+共享静态定义 D 包含效果表、端口、不可变规则数据及数值运算实现。实例动态配置记作 C=(H,K,w,z,b)。H 是唯一可变数据图；K 是现有执行帧及局部环境；w 是待决调用；z 是运行/等待/终局/故障；b 是预算。以下均为 H 的逻辑分区，而非额外 Context：
+
+- 实体、区域、状态、动态登记、尚待执行的动作及其参数。
+- PRNG 的所有独立流、计数、发布游标、运行进度与终局数据。
+- 跨战斗的卡组/遗物/地图/商店/奖励及续接；战斗暂态和长期态之间的关系。
+
+实体以稳定业务 ID 引用；数据形状由规则包定义，可新增字段和组件，不要求 VM 固定 Card/Enemy/Relic 类。实际领域复制（例如复制一张牌）显式创建新身份；把同一引用转交给另一个接口不创建新实体或世界。
+
+### 效果、捕获及调度
+
+排队或登记的可执行值采用数据描述 `〈effectId, environment〉`。environment 中只能保存已准入数据、实体 ID 或本 Context 内的图引用；需要暂停的流程用既有 invoke/request/return 表达。静态效果代码解析 environment，不把 JS/C++ 函数对象写入状态。
+
+捕获必须明确区分“当前值快照”和“执行时读取同一对象”。对原 C++ 按值捕获的对象，保存其相应值副本；对按引用捕获的对象，保存可解析的身份。对象离场不等于所有排队动作消失：动作是否继续、取消或使用离场时值由规则定义。必要的最后已知信息属于动作数据。对来源引用、目标引用、复制产生的新身份及生命周期分别约定，不能统一用浅复制替代。
+
+区分两种顺序：K 表示当前调用返回到哪里；规则队列表示以后执行什么。立即 invoke 在当前效果返回前完成；enqueueFront/enqueueBack 修改规则队列，只在规则调度器下次取项时生效。不得因为“都是执行效果”而把入队改成递归调用。队列及当前已取出的动作、游标同属 H/K，暂停不会丢失已经出队但尚未完成的动作。
+
+调度器是普通规则效果：选下一项、invoke 对应效果、处理其返回、继续循环。需要多队列、阶段优先级、响应栈或同时触发时，由该游戏的规则调度器选择；VM 不固定某一种优先权体系。队列空不自动表示整场游戏结束；战斗结束也不自动表示完整 run 结束。
+
+### 三类扩展点及明确时序
+
+| 类别 | 用途 | 必须定义的语义 |
+| --- | --- | --- |
+| 纯查询/持续修正 | 费用、可用属性、上限、目标条件 | 依赖、应用次序、相等时顺序、是否重新计算；查询不写状态/抽 RNG/请求输入 |
+| 动作替换/拦截 | 取消、改目标、改数量、改变执行结果 | 哪些替换仍可适用、是否重复应用、选择权归属、重新检查条件的时机 |
+| 触发效果 | 某次动作或状态变化后追加结算 | 何时捕获触发者/参数、登记和移除何时生效、排队顺序、执行前是否重验 |
+
+这些是规则库的组织方式，不是封闭的事件名列表。规则包可增加查询、事件、数据结构及调度阶段；新机制可由完整程序组合表达。一个动作不强制套同一个“前置→本体→后置”流水线，游戏规则可以定义更细的阶段、检查点和交互。
+
+派发时必须明确采用哪一种行为：捕获有序处理器列表后逐个执行，或每次从当前登记表重新选择。若采用前者，列表和游标进入 H/K；后续注销是否取消已捕获项由独立的资格谓词决定。若采用后者，已处理集合及下一次选择规则进入 H/K，必须说明新登记的处理器是否参与本轮。禁止依赖宿主容器迭代器碰巧产生的行为。
+
+顺序由规则指定；无选择权的同优先级使用稳定顺序键（例如登记序号）解决。同一时点需要玩家排序时，发出正常选择请求，再继续处理。查询遇到需要玩家决定的歧义时先退出纯查询阶段，由效果流程请求选择，不能在同步查询中隐藏等待。循环依赖的持续修正必须提供规则定义的分层、求解方法或明确故障；不能随意迭代到“看起来稳定”。
+
+对同一动作不能重复应用的替换，记录已应用的登记实例身份；不是按 effectId 去重，因为两个来源可以使用同一效果。这个集合跟随动作进入 Context。该约束只用于确实禁止重复应用的规则；允许重复的机制应显式表达循环及其终止/资源行为。
+
+### 接到既有执行器与外部
+
+上述函数和效果装配为一份 CardDefinition。同步、有限计算放在 operation，跨交互流程放在 invoke/branch/repeat/request；复杂控制流的导入器可生成基本块与显式续接，但不要求作者手写 PC。程序加载一次完成定义链接；每次行动不再做 IR 互转。
+
+Instance 沿现有 Execution 接缝运行；BaseGame 只读稳定发布值。合法动作枚举与校验共享规则语义：exact 必须列出完整集合，construct 必须能表示并校验所有合法动作；不能为了方便策略而删掉可选动作。真实外部输入仍验证，拒绝不得改变规则状态或消耗 RNG。私有全状态、RNG 和未来遭遇不得直接进入玩家观察。
+
+保存只在现有等待/正常终局边界。执行帧、排队动作、动态登记、修正/触发处理中间结果、等待选择、全部 RNG 和 run 进度一并保存；不要求每条指令可抢占。原生与受控使用同一规则定义，前者使用普通存储，后者增加既有 COW/记录/预算；不各自维护游戏循环。
+
+### STS 对应和仍需解决的内容语义
+
+参考源码为 sts_lightspeed 固定提交 `7476a81954020087da31d41d16fddf475746ec2d`。它是迁移参考，不能直接作为完整原作的规则定义。
+
+| 来源结构/机制 | 在模型中的表示 | 必须保持或补足 |
+| --- | --- | --- |
+| ActionQueue 中的 std::function | effectId 与捕获数据组成的动作项 | 队首/队尾、立即调用差异、clearOnCombatVictory |
+| GameContext.regainControlAction | 具名效果与捕获参数，或活跃调用帧 | 商店/奖励/事件/战斗结束后回到原续接位置 |
+| 多张牌选择 | 请求数据＋完整选择集合或构造式动作 | EXHAUST_MANY/GAMBLE 不能沿用搜索枚举器只给空集的缺口 |
+| 卡牌临时副本与永久升级 | 独立身份和明确的长期牌引用 | 按值捕获、跨战斗回写、移除/复制的区别 |
+| 多个随机流及数值计算 | Context 内独立状态＋静态确定运算 | 流选择、调用次数、64 位溢出、浮点舍入 |
+| A20 冒险 | 同一入口中的地图/房间/战斗效果 | 双 Boss、钥匙与 Act 4、心脏目标、死亡/未达目标/截断区分 |
+
+扩展性检验采用以下机制形状：改变一类牌的费用与用后去向、消耗牌引发抽牌/格挡、卡牌使用次数触发伤害、每回合伤害上限、跨战斗永久增益、需要中途选牌的嵌套效果。每项都要只改规则与数据，具体 STS 时序按独立规则来源核对。这些形状说明架构如何容纳机制，不宣称已经复刻对应原作实现。
+
+上游禁用 Colosseum/MatchAndKeep/PrismaticShard，存在未完成行为；其 `turn > 500` 被视作输局、搜索中部分多选只枚举空集，也不能自动作为本项目规则。需要区分有意采用的规则、上游实现缺陷和资源保护。完整原作的内容范围与差异必须在 STS 规则规格中逐项确定，不能把未实现内容伪装成“不支持的新机制”。
+
+### 三职业与用户新增机制的建模检验（2026-10-20）
+
+本节针对《杀戮尖塔》第一代。职业资料用于识别机制形状，不把卡面描述或社区资料当作全部执行时序的证明。规则实现方式为本项目的设计推导；尚未实现这些职业。
+
+用户后续明确：本节另外三职业与迎战/风暴领域均仅保留为模型表达能力论证，不实施或加入本阶段验收。实际复刻仅为铁甲战士完整 A20 碎心流程，以 implementation-spec.md 第 21 节及 plan.md 最新任务为准；以下机制细则不构成新增实施授权。
+
+| 职业 | 已核对的代表机制 | 对模型的要求 |
+| --- | --- | --- |
+| 猎手 | 毒、生成小刀、弃牌联动；Reflex 弃牌触发抽牌，Nightmare 选择后下回合生成副本 | 区分移牌原因、触发来源、选择捕获值和延迟任务；生成副本具有独立身份 |
+| 故障机器人 | 闪电/冰霜/黑暗/等离子球及激发、集中；Echo Form 复用出牌效果，Genetic Algorithm 永久成长 | 球是带局部数据的有序实体；被动和激发是不同效果；记录重复执行来源与次数，连接战斗副本和长期牌 |
+| 观者 | 姿态、预见、保留；Omniscience 选牌后执行两次，Vault 插入额外回合，Blasphemy 延迟后果 | 离开/进入姿态的明确顺序；局部揭示与选牌；嵌套选择续接；回合调度与延迟效果 |
+
+资料：[猎手](https://www.slaythespire.gg/cards/silent)、[Reflex](https://www.slaythespire.gg/cards/silent/Reflex)、[Nightmare](https://www.slaythespire.gg/cards/silent/Nightmare)、[机器人](https://www.slaythespire.gg/cards/defect)、[Echo Form](https://www.slaythespire.gg/cards/defect/Echo_Form)、[Genetic Algorithm](https://www.slaythespire.gg/cards/defect/Genetic_Algorithm)、[观者](https://www.slaythespire.gg/cards/watcher)、[Omniscience](https://www.slaythespire.gg/cards/watcher/Omniscience)、[Vault](https://www.slaythespire.gg/cards/watcher/Vault)、[Blasphemy](https://www.slaythespire.gg/cards/watcher/Blasphemy)。执行队列与能力回调参考维护者原始文档 [Action Queue](https://github.com/Alchyr/BasicMod/wiki/Action-Queue)、[Powers](https://github.com/Alchyr/BasicMod/wiki/Powers-%28Buffs%29)。卡面不能单独证明重复出牌的全部触发、预见与普通弃牌的区别或延迟死亡的实际伤害实现；这些仍需规则级核对。
+
+**迎战：把当前意图对应的一次行动机会提前。** 用户给出的确定语义是敌人在本次玩家回合提前执行意图，到原定时点跳过。为论证可行性，采用下列明确的候选细则：只移动意图主体，不额外执行一整轮敌人的回合开始/结束；原时点仍执行应有生命周期和下一意图生成，均只一次。它不等于整回合跳过；如果业务要连生命周期一起移动，也可作为另一种规则定义。
+
+规则状态增加行动机会 `〈slotId, actorId, intent, phase〉`，phase 为 pending/running/resolved；resolved 带完成或落空结果。slotId 表示具体机会，不用全局 skipEnemyTurn 布尔值，也不只用 round 编号。开始执行前先将 pending 改为 running，再调用原意图效果；中途等待保留 running 与调用帧，结束改为 resolved。原定时点只启动尚为 pending 的机会，已结算的只做到期收尾。连续两次迎战不能再次占用同一机会；新增/召唤实体不继承别人的跳过标记。
+
+当前意图主体保持身份，伤害等动态值默认在提前执行时按当时状态计算；需要锁定值的部分按原意图捕获语义保留。新意图的生成、RNG 抽取、行动历史登记和展示更新各有明确时点，不能调用混有全部回合副作用的旧 doTurn 后再补一个 skip。已结算机会不因显示新意图而重新变成 pending；敌人改意图、死亡、复活或额外回合必须明确关联哪个机会。额外回合与正常回合的机会身份由规则调度器决定，不能假定每次玩家回合结束都生成一个新的敌人机会。
+
+**风暴领域：动作限制与状态抑制分开定义。** 用户已进一步确定：影响敌人，除力量外的正面状态暂时失效，负面状态保持。其余尚未明确的细则采用可调整的实施默认：混合意图保留攻击部分，防御、强化、减益、召唤等非攻击部分落空；持续时间照常推进，领域结束后尚存的正面状态恢复生效，不恢复已过期状态。
+
+意图必须是有语义归属的效果程序。对 `攻击＋强化`，规则可逐段执行并过滤强化；不能只看展示图标，也不能机械删除所有“不是扣血”的低层指令，攻击本身还需要选目标、计算和发布。子动作继承明确的意图/来源数据；依赖被取消动作结果的后续动作得到明确取消结果，不能拿 undefined 继续。纯非攻击意图落空仍消费这次机会，下一意图正常推进。如果最终要求“包含攻击的整项意图全部允许”，只替换规则中的分类谓词。
+
+状态保留原实例、层数、来源和寿命，新增纯有效性查询 `effective(status, context)`。领域抑制时，不参加属性修正、能力触发、伤害替换、目标限制等规则贡献；力量被领域谓词豁免，不等于力量本身不会正常消失。状态原始数据只供管理和明确需要原始存在性的规则使用，战斗结算不得绕过有效性查询直接拿 raw amount 产生效果。该约束是规则包作者约定，当前 VM 不自动审计任意 TS 回调。
+
+“失效”不是删除状态，也不是撤销过去的结果。已造成的伤害、已召唤的实体、已经转成力量的增益不会自动回滚。领域内新获得的非力量正面状态可以登记但暂不生效；其施加过程也使用有效能力，例如被抑制的免疫能力不能仍然拦截。状态引起但尚未提交的效果是否要求来源仍生效须明确：本候选对这类效果在实际贡献时重验，落空后不在领域结束时补发。中途暂停的多段效果同样重验剩余贡献。时效衰减/清理由独立生命周期处理；不能把它们随能力回调一起关闭而导致状态永不过期。
+
+领域登记归玩家/环境，不能被“抑制敌人正面状态”规则抑制自身；多个领域按存活登记集合求是否被抑制，结束一个领域不会错误解除另一个。敌人的毒、虚弱、易伤等负面状态正常生效；格挡数值和已改变的基础属性不自动算作一个可抑制状态。规则数据须明确状态的正负分类，不能按层数是否大于零推断；改变范围或持续时间策略只修改规则，不改变 Core。
+
+两个机制同时存在时，迎战仍消费当前机会；意图在提前结算的时刻受领域限制。纯强化会提前落空，原定时点不会再做；混合意图按候选细则只留下攻击；领域结束不重新打开已结算机会。攻击中反击杀死行动者、领域中途结束、多个迎战和领域叠加，都使用当前机会与来源语义处理。对应的手工不变量证明见 card-core-proof.md 第 23 节。
+
+本次补强的是规则层语义：行动机会、意图组成/来源、状态原值/有效性及生命周期。它们都可作为既有数据与效果组合实现，无需 VM 新指令；但直接把旧敌人整段代码粘进一个 operation，不会自动获得这些扩展能力。
+
+### 实施门槛与成本边界
+
+设计门槛：控制流、动态登记、调度/暂停、身份/捕获、生命周期、原生/受控与外部投影都有明确语义和证明条件；已知反例已回填。STS 规则模块的实施门槛：所涉规则的顺序、状态不变量和来源已明确；仍不明确的规则不先写占位实现并宣称完整。无须再向用户索取重复实施许可，证据不足时继续完成建模/规则核对。
+
+规则程序的可表达性不等于已经得到原作的所有规则。先实现经确认的通用机制与 STS 规则模块，再用独立期望核对和实际完整 run 验证；不能把模型夹具的一次“到心脏”当作真实游戏完成。适配训练和卡组评估属于后续接线，不能为运行旧训练器缩减合法动作。
+
+代码分区不引入逐层复制。理论工作量按实际执行的规则步骤、处理器候选、队列操作与输出大小计；必要的按值捕获另外计费。可以按主题/拥有者索引处理器，避免每个动作遍历所有内容定义；索引若影响下一步选择，则属于 Context 或可证明可重建的派生数据。没有引用到新规则的旧执行不应付全内容扫描成本。
+
+这是设计约束，不能推出当前 COW 已实现所有理想复杂度：宽对象首次写入、数组操作、索引及回收仍按真实实现计费。完整合法子集可能本身有指数输出规模；例如 n 张可任选牌有 2^n 个子集，列出全部 exact 选项的时间下界为 Ω(2^n)。不能用遗漏动作降低该成本。本轮不恢复运行时优化，也不给未经实测的吞吐承诺。
+
 <a id="gamehost-optimization"></a>
 
 ## 当前优化目标：完整原生游戏与受控增量分别验收
@@ -256,3 +378,659 @@ schema 一次逻辑校验仍包含输入隔离、拒绝变换及别名一致性�
 结构测试必须证明两款正式游戏与 CLI/实验/演示不执行旧 program.run、不调用通用编译器，不以 tests/reference 契约驱动生产或基准；正常推进不会 run 后再 inspect。校验调用数、各所有权边界的复制次数及大图遍历应进入相应模块的正式测试，不写只匹配实现字符串或时钟阈值的脆弱测试。运行所涉模块 check、整仓 check/build，确认公共协议无差异；通用执行测试保留，不能删掉旧语义断言凑通过数量。
 
 实际检查和指标仅回填 plan.md；日志、CPU/堆诊断和临时消融放 /tmp，不新建独立验收报告。交付时逐项说明入口、语义、结构及性能，未达项保持未完成。当前按完整 GameHost 新目标继续实施；提交、合并或推送仍须用户明确指令。
+
+<a id="typed-rule-layer"></a>
+
+## 第二层完整设计：类型化原子函数与组合规则（2026-10-20，待审阅）
+
+公开名称和调用约定已在[完整接口目录](#rule-public-api)收敛；以下早期示意中的 effect/definePower 等名称以该目录为准。
+
+本节落实最新要求：先完成可审阅设计，再证明表达能力，最后实施。本节是拟定 API 与语义，不是已实现导出。规则第二层与实体第三层是 Program 内的组织方式，不是新增 Core/Instance/BaseGame 公共层。现有生产代码、旧存档与两款正式游戏本轮不修改。后续证明以本节为对象；此前模型证明不自动证明本节的链接器、类型接口和具体实现正确。
+
+### 1. 边界、交付及目录归属
+
+- 第一层保留 CardProgram/CardMachine 和 runtime-card：共享代码、独立现场、调用/分支/循环/等待、COW/保存/恢复/记录。内核不识别牌名、伤害、领域或回合。
+- 第二层提供类型化组合工具及可装配的规则模块。规则模块定义动作、查询、时点、实体组件、生命周期和调度；不是只有一个事件总线。
+- 第三层提供卡牌、遗物、状态、敌人、药水、房间等具体定义，调用第二层的原子函数和其他效果定义，不直接操作整个 World。
+- BaseGame、Session、策略和训练在外侧使用现有端口。选择和发布由规则程序适配为现有 decision/event，外侧不补算规则。
+- 通用组合与链接归 packages/card-engine/src 的具名 rules 文件；STS 数值/伤害/回合/区域/冒险模块归 examples/sts/src/rules；实体归 examples/sts/src/content。不另建规则执行器或新公共包。不在此次设计中迁移 Forge/Doudizhu。
+
+必须同时交付：可组合作者接口、装配检查、明确的小步语义、状态所有权、Ironclad 迁移对应和后续验收。仅把现有函数换个目录不算完成第二层。
+
+### 2. 作者接口：函数和定义引用，不是字符串协议
+
+作者代码直接引用导出的定义对象，例如 `attackDamage(...)`、`applyPower({ definition: vulnerable, ... })`、`on(cardExhausted, ...)`。事件/效果/查询/组件均使用带泛型的独立定义句柄；同名标签不代表同一身份。参数是 TS 对象、数值、布尔值等字面量，允许封闭判别联合（如 `{ kind: 'cancelled' }`），禁止以任意字符串查找效果、事件、组件或局部变量。
+
+| 类型 | 拟定职责 |
+| --- | --- |
+| `Effect<I, O>` | 输入 I、结果 O 的静态可暂停程序定义；调用产生 `Command<O>` |
+| `Query<I, O>` | 纯查询定义，通过只读规则视图计算；不能提交状态、抽 RNG 或等待 |
+| `Event<T>` | 类型化时点定义及载荷 T；内部规则事件与公开 UI 事件分别投影 |
+| `Component<T>` | 实体组件及其数据 schema；读写使用定义引用而非字符串字段路径 |
+| `Local<T>` / `Value<T>` | 装配期分配的局部槽、运行期表达式；作者不手写槽名和 PC |
+| `EntityRef<T>` | 当前世界内稳定身份；静态定义引用与动态实体引用不是同一种值 |
+| `RegistrationRef` / `OpportunityRef` | 本实例的登记和行动机会身份，可持久化 |
+| `ActionResult<T>` | 明确的 applied/cancelled/noop 结果；故障单独由内核传播 |
+
+可组合 API 的最小集合：
+
+```ts
+// 以下是 API 设计签名示意，不是当前源码声明。
+effect<I, O>(build: (b: Builder<I, O>) => Statement): Effect<I, O>
+sequence(...steps: Statement[]): Statement
+when(test: Value<boolean>, yes: Statement, no?: Statement): Statement
+whileDo(test: Value<boolean>, body: Statement): Statement
+forEach<T>(items: Value<readonly T[]>, body: (item: Value<T>) => Statement): Statement
+call<I, O>(definition: Effect<I, O>, input: Input<I>): Command<O>
+
+// b 在装配期间存在，不进入游戏状态。
+b.input: Value<I>
+b.local<T>(): Local<T>
+b.assign<T>(slot: Local<T>, commandOrValue: Command<T> | Value<T>): Statement
+b.read<T>(expression: (view: ReadView<I>) => T): Value<T>
+b.return(value: Value<O>): Statement
+```
+
+`Input<T>` 接受类型相容的字面量和表达式，装配器逐项校验；对象字面量中的静态定义句柄由链接器转换，不当作普通运行态数据复制。`b.read` 仅捕获不可变定义和词法 Local 句柄，运行时取得当前实例的只读视图。条件/循环使用这些表达式，而不是在装配时用 JS if 判断尚不存在的游戏状态。
+
+构建函数、forEach 的 body 构建函数只在装配时运行。它们产生静态结构，不保存 generator、Promise、原生栈或宿主 continuation。调用可以递归：先建立定义句柄，再链接 body；禁止结构树自循环，允许具名调用环。循环与递归不承诺终止，沿用既有步骤预算。
+
+“原子”是稳定的规则语义单位，不保证整段一次不可暂停。伤害原子可以包含选择、修正、替换等子流程；真正写入资源的一步是有限同步提交。有限纯计算可以用 TS；新机制不要求通过 JSON 重新发明全部算术语言。
+
+### 3. 装配到现有内核
+
+装配顺序：收集显式模块/实体定义及依赖 → 验证定义引用和能力契约 → 按声明顺序链接 → 分配内部索引和局部槽 → 降低为现有 CardDefinition。
+
+- 静态句柄只存在 Program。局部槽转换为内部槽编号；动态登记/队列只保存定义索引、实体身份和数据环境。
+- 当前 Card Core 的 effect id、local key 和 port 仍为字符串；仅链接适配器生成这些内部键。作者不得拼接 `card:`、`action:` 或写 `locals.selected`。不为去掉内部字符串修改冻结的公共协议。
+- 带相同 label 的不同定义不能互相替代；同一实例重复安装同一模块默认拒绝，除非使用模块显式支持的实例化参数。依赖缺失、定义跨装配泄漏、未绑定定义、布局冲突在装配时拒绝。
+- 程序布局顺序必须可重现，不使用随机 UUID 或进程对象地址。快照只与同一实现/布局身份匹配；沿用现有规则身份和实现指纹机制，并将装配布局纳入其输入，不另发明公共版本协议。恢复前校验，不能只凭可重用的显示名称解码定义索引。
+- 链接后冻结静态结构。Context 禁止携带定义对象、函数和闭包；动态定义选择通过受类型限制的定义引用编码，不允许任意数字指向另一种签名。
+- 在 TS 静态边界校验参数/返回/槽类型，在装配边界验证所属 Program 和结构，在外部输入边界做运行时 schema 校验。TS 类型不构成恶意代码隔离证明。
+
+### 4. 第二层规则模块与原子目录
+
+| 模块 | 原子与查询 | 关键约定 |
+| --- | --- | --- |
+| 实体/组件 | createEntity、removeEntity、readComponent；模块私有 writeComponent | 新实例分配新 ID；墓碑/最后已知信息按需要保留；不用对象复制隐式改变身份 |
+| 区域与卡牌 | cardsIn、moveCard、drawCards、discardCard、exhaustCard、shuffleZone、createCard、copyCard、upgradeCard | 区域单一归属；移动原因是类型化值；普通移入弃牌堆不等于手牌弃牌；副本、永久牌与战斗牌明确关联 |
+| 资源与结算 | attackDamage、effectDamage、loseHp、heal、gainBlock、gainEnergy、payEnergy | 返回实际结果，区分尝试量/应用量/损失量；失去 HP 不自动冒充攻击 |
+| 状态与持续能力 | applyPower、removePower、changeStacks、effective、queryAttribute | 叠层/替换/独立实例由状态定义选择；正负分类与数量符号分离 |
+| 查询/修正 | query、modify、replace、restrict | 各定义有专用参数和结果类型；相依顺序显式；纯查询不得请求玩家 |
+| 事件与触发 | emit、on、install、uninstall、enqueue | 规则事件有来源、原因、实例身份及快照数据；私有事件不自动公开 |
+| 交互 | chooseOne、chooseMany、chooseOrder | 候选身份/顺序/基数/空选合法性明确；共享合法性规则；完整候选域，不裁剪给策略 |
+| 调度与生命周期 | schedule、invokeNow、cancelScheduled、expireScope、beginPhase、finishPhase | 立即调用与队首/队尾调度不同；独立阶段游标；作用域含卡牌使用、回合、战斗、run |
+| 意图与机会 | declareIntent、pendingOpportunity、executeOpportunity、replaceIntent、cancelOpportunity | 意图是程序；行动机会是一次执行许可；额外回合创建新机会 |
+| 随机与数值 | sample、shuffle、roundSourceValue | RNG 流是类型化定义引用，其状态归 Context；STS 保留源浮点/整数顺序和抽取次数 |
+| 冒险 | enterRoom、enterCombat、finishCombat、offerReward、resumeRoom | 同一个 run/Context；续接用现有调用帧；战斗销毁不清掉长期登记 |
+
+原子目录开放，但 VM 指令不随机制增长。新球槽、姿态、占卜等可以是新的第二层模块。第三层只导入公开动作/查询/定义工具，不能导入模块私有写入函数或得到整个可变 World。包的导入边界和检查可以约束正常作者代码；任意可信 TS、强转或宿主逃逸不属于自动安全证明。
+
+### 5. 动作、查询和冲突处理
+
+动作效果签名必须声明前置条件、读写组件、可能请求的选择、规则时点、返回值、失败/取消行为及其来源传播。所有相关提交经过模块公开语义入口；禁止实体通过裸 HP 写入绕过伤害替换。
+
+攻击伤害的一般组成：建立动作及来源 → 按 STS 规则查询基础/加法/倍率 → 按源时点舍入 → 进入各替换/限制检查点 → 提交格挡与 HP → 产生实际结果 → 派发对应触发。此处不是统一硬套所有动作的流水线；不同原子可以有不同阶段。精确到 The Boot、Torii 等的顺序由 Ironclad 迁移逐条核对，设计不以抽象重排原作运算。
+
+纯修正使用类型化 Query 定义的阶段及 before/after 引用组成偏序；装配时检测环。同阶段按显式规则顺序，再用运行登记序号稳定破同分。不能把所有加乘假定为可交换，不能任意先折叠再舍入。查询依赖必须分层：静态依赖环拒绝，动态重入检测故障；需要玩家排序的歧义提升为可暂停动作，不能藏在 query 内。
+
+替换结果是 `keep(value) / change(value) / cancel(reason)`。本动作已应用集合按 RegistrationRef 记录，不按效果定义去重；两个来源可以使用同一替换。候选是否重算由该检查点定义，缺省每次替换后重新选取仍适用且未应用的登记。新动作有新 ID；继承父动作因果来源但不错误继承其去重集合。允许重复的机制使用显式循环，不绕过集合隐式重入。
+
+查询返回的数据值不会自动保持“活性”。立即提交前完成规定的查询；跨等待后需要当前值的地方重新查询，需要锁定值的地方显式捕获快照。已完成计算/提交不因后来状态失效而回滚。
+
+取消不是异常，也不是事务回滚。未提交部分返回取消结果，已提交部分保留；依赖取消结果的后续必须处理判别联合，不能使用 undefined。需要全有全无的动作在提交前完成准备与验证，不假定外部请求或整个伤害过程可无条件回滚。故障和预算耗尽沿用现有 fault，故障现场不可保存。
+
+### 6. 事件登记、捕获、派发与生命周期
+
+静态能力定义在 Program；安装到实体时产生 Context 内的登记：`{id, definitionIndex, source, owner, environment, sequence, lifetime}`。环境只包含数据/实体引用。静态代码共享，计数器、次数限制和剩余寿命不放闭包。
+
+每个 Event 定义一个 dispatch 策略，不由监听者私自改动：立即派发或入队、按哪一组有序阶段执行、登记快照的时点。缺省在事件提交时捕获有序候选登记及事件载荷；派发时保存列表和游标，新安装者不参加本次已捕获事件。嵌套事件拥有独立派发帧。
+
+每个能力明确资格策略：只要捕获时有效，或执行时仍需来源存在/生效。注销阻止未来捕获；是否取消已捕获项由该策略决定。状态贡献的缺省为执行时重验。数据捕获显式区分 `snapshot(value)` 与 `entityRef(entity)`；前者入队时复制所需数据，后者执行时读取当前实体。引用已离场时使用定义的取消、最后已知信息或允许离场策略，不偷偷重新查一个同名实体。
+
+作用域结束先按规则执行该阶段的结束能力，再清理归属登记/实体；具体阶段顺序由生命周期模块定义。持续状态的贡献与寿命维护分离：被抑制可以不贡献效果，但仍正常减少时效。跨战斗遗物能力归 run 作用域，在新战斗重新绑定临时目标，不重复安装永久登记。
+
+### 7. 完整 Context、选择与恢复
+
+Context 中保存世界、实体计数、模块状态、RNG、作用域、登记表、动作队列、当前动作、派发列表/游标、机会状态、帧/局部值、待决选择、公开发布游标。它们是同一数据图的逻辑部分，不是多个世界。
+
+选择描述是数据：候选实体 ID、次序、数量、可见性和请求身份；源码中的后续程序仍在 Program，续接位置在现有帧。候选不全是可见时只公开规则允许的投影。选择期间不接受旁路世界修改；回复重新核对身份与合法性，非法/过期回复不提交、不抽 RNG。Session 取消/超时通过既有控制输入进入规则定义的后续，不能由 UI 偷改选择。
+
+空候选、单候选、可空选、顺序是否重要均由选择原子参数决定，不统一自动选择单项。STS 参考在自动分支消耗 RNG 的情况仍须显式保留。组合选牌用完整 construct 表达或完整 exact 集合；指数规模属于问题本身，不能以只列空集替代。
+
+save 只保存 Context 和程序匹配身份；restore 只重新关联对应 Program，不执行 initialize、获得遗物或安装能力。fork 复用 Program，分离所有动态登记/游标/机会/局部值；未来分配 ID 允许在不同独立分支相同，但引用不得跨分支混用。COW 的性能仍以现有存储保证为前提，设计不宣称零成本。
+
+### 8. Ironclad 作者代码示例
+
+以下片段展示拟定调用形式。标识符都是导入的函数/定义引用；`b.read` 形参提供输入和类型化局部槽读取，不提供可变世界。实体 metadata 的 ID 字符串仅用于外部内容编号、导入导出，不控制规则派发。
+
+```ts
+const bashPlay = effect<CardPlay, void>(b => sequence(
+  attackDamage({
+    source: b.read(v => v.input.card),
+    target: b.read(v => v.input.target),
+    base: b.read(v => v.input.upgraded ? 10 : 8),
+  }),
+  applyPower({
+    source: b.read(v => v.input.card),
+    target: b.read(v => v.input.target),
+    definition: vulnerable,
+    stacks: b.read(v => v.input.upgraded ? 3 : 2),
+  }),
+));
+
+const warcryPlay = effect<CardPlay, void>(b => {
+  const selected = b.local<readonly EntityRef<Card>[]>();
+  return sequence(
+    drawCards({ player: b.read(v => v.input.owner),
+                count: b.read(v => v.input.upgraded ? 2 : 1) }),
+    b.assign(selected, chooseMany({
+      candidates: cardsIn({ owner: b.read(v => v.input.owner), zone: hand }),
+      count: 1, allowEmptyWhenNoCandidates: true,
+      singleton: warcryReferenceSelection,
+    })),
+    forEach(selected, card => moveCard({ card, destination: drawPile, position: top })),
+  );
+});
+
+const feelNoPain = definePower({
+  classification: positive,
+  stacking: addStacks,
+  lifetime: combatLifetime,
+  abilities: [on(cardExhausted, {
+    eligible: sourceEffective,
+    condition: ownedBySourceOwner,
+    effect: effect<PowerEvent<CardExhausted>, void>(b =>
+      gainBlock({ target: b.read(v => v.input.owner),
+                  source: b.read(v => v.input.source),
+                  amount: effectiveStacks(b.read(v => v.input.source)),
+                  calculation: effectBlock })),
+  })],
+});
+```
+
+`warcryReferenceSelection` 是该实体显式选择的单候选处理程序，描述源实现的自动分支和 RNG 行为；chooseMany 不认识战吼。常见单候选策略由规则库提供，特殊原作行为归实体定义。`hand/drawPile/top/positive/combatLifetime/cardExhausted/vulnerable` 都是类型化常量或定义引用，不是待拼接字符串。
+
+其他实体的组合归属：Bash=攻击+易伤；Headbutt=攻击+弃牌堆选择+移牌；DemonForm=回合开始触发+力量；BurningBlood=战斗胜利触发+治疗；Corruption=技能费用修正+用后去向替换；StrangeSpoon=消耗检查点替换+显式随机；Calipers=回合格挡清理替换；Cultist=有意图定义的敌人+Ritual 状态。任何需要具体卡名的条件写在内容能力定义里，公共伤害/抽牌/回合代码不枚举实体名。
+
+### 9. 行动机会与意图：迎战的构造
+
+行动机会保存 `{id, actor, phase, intent, state}`，其中状态为 pending/running/resolved/cancelled。意图是带参数的效果程序；展示值由其规则投影，不是执行来源。敌人开始/结束阶段、状态时效和下一意图生成与意图主体分开。
+
+`executeOpportunity(opportunity)` 先用一次有限提交将 pending 改为 running，再调用绑定意图；结束后改为 resolved。其他状态调用返回明确的不可执行结果。迎战定义就是查找指定敌人的当前 pending 机会并立即调用该原子；原定时点的调度只启动 pending，已消费的机会不会重复执行。额外回合生成新机会；改变意图不把 resolved 改回 pending。
+
+设计默认只提前意图主体，原时点仍做生命周期收尾与下一意图生成，不额外触发毒/清格挡等整个敌人回合逻辑。动态伤害默认执行时计算，锁定部分显式捕获；死亡/复活、召唤和意图替换都操作具体机会身份。中途选择保存 running 与帧，不再次经过启动边。
+
+### 10. 风暴领域：正面状态抑制与意图动作限制
+
+用户明确范围：只影响敌人；除力量外的正面状态失效，负面状态正常。状态分类来自定义，不按层数正负推断；力量只免受本领域抑制，仍按自身生命周期变化。
+
+意图程序通过 `intentPart(attack, ...)`、`intentPart(defend, ...)` 等类型化语义片段表达。类别由规则定义引用表示，可扩展，不是 VM 封闭枚举。意图来源沿调用/排队/延迟动作传递。设计默认混合意图逐片段过滤：攻击保留，防御/增益/减益/召唤等非攻击部分落空；攻击内部目标选择、计算和提交不因属于辅助步骤被误删。独立反击属于新语义动作，记录 cause 但不错误冒充敌人意图；来源分类规则必须明确，不能只因祖先有 intent 就封杀整个因果链。
+
+领域由普通环境实体定义两个能力：restrict(intentPartExecution, 非攻击敌人片段)；modify(statusEffectiveness, 敌人且正面且 definition != strength)。这两者都是类型化查询/限制定义引用。领域本身不属于敌人正面状态，不能自我压制。
+
+有效性查询按无环依赖计算：原始存在/寿命 → 领域等外部抑制 → 状态规则贡献。状态引发的查询、触发、替换和尚未提交的效果在贡献时重验来源；已提交结果不回滚，也不事后重新解释捕获的历史事件。领域内仍维护状态时效；到期就移除。多个领域按当前活跃登记共同计算，撤掉一个不会错误解除其他领域。领域结束不补发期间落空的触发。
+
+迎战与领域组合：提前启动机会 → 对实际执行的意图片段做领域限制 → 即使全部落空也完成机会 → 原定时点不重做。领域退出不重新开启已消费机会。这是设计表达能力案例，不是新增 Ironclad 原作内容。
+
+### 11. 另外三职业与冒险的表达覆盖
+
+| 机制 | 构造 | 不能省略的状态/语义 |
+| --- | --- | --- |
+| 毒/弃牌触发/小刀 | 生命周期触发+失去 HP；带原因移牌+事件；创建卡牌实体 | 负面状态有效性；弃牌与占卜分开；新牌新身份 |
+| Nightmare 等延迟复制 | 选择+快照捕获+指定下一回合调度+复制实体 | 延迟任务及捕获数据进入 Context，不保存闭包 |
+| 球槽/集中/黑暗球/激发 | 有序区域+带局部累积值实体+查询修正+两个效果入口 | 被动和激发独立；等离子是否受集中由定义决定；重新生成时显式保留或重置数据 |
+| 姿态/保留/占卜 | 离开效果+替换姿态+进入效果；清理替换；局部揭示+多选移牌 | 切换顺序、私有观察、多选域与原移动原因 |
+| 重复出牌/额外回合 | 带来源的调用+重复次数；调度新阶段/机会 | 不能重新支付所有费用或错误重触发；次数与来源必须由规则规定 |
+| 地图/商店/奖励/跨战斗 | 同一效果调用链+选择+作用域进入退出 | 永久牌引用、run 级遗物/计数和 RNG 不随战斗清理 |
+
+这些是表达构造，不证明具体商业游戏每个角落的语义正确；生产范围仍为 Ironclad/无色及所需冒险，其他职业及自定义机制不因此自动加入生产交付。
+
+### 12. 实施对应、结构验收与证明门槛
+
+先证明，再按下列依赖实施，不能先继续铺满具体内容：
+
+1. 类型化定义/槽/表达式/控制流与链接器，降为现有指令；无第二执行循环。
+2. 实体/组件/区域/随机及作用域，建立只读查询和模块私有提交边界。
+3. 类型化动作结果、事件登记/派发、修正/替换、有效性和可恢复选择。
+4. STS 伤害、卡牌生命周期、状态、回合/意图和冒险模块；逐原子核对源数值/顺序。
+5. 将现有 Ironclad 已实现实体迁入组合定义，保持原成功前缀和外部接线，再扩大内容。
+
+现有 combat-math 中的遗物判断移入实体能力；combat-cards 中的抽牌/消耗特例移入监听；combat.ts 中的回合特例移入生命周期定义；card.ts 中按 HEADBUTT/WARCRY 分支的选择回写移入各自程序；旧 Card Core 保留。原测试适配在测试侧建立状态对应，不要求生产镜像 C++ 数据布局。
+
+后续正式验收包含：类型错配/未绑定引用/依赖环负例；相同标签不同定义不串线；嵌套选择及递归/循环续接；派发中安装/注销、同优先级、同定义多来源替换；抑制期间时效与多领域；完整合法选项/拒绝不变；父子分支双向隔离、派发/选择中跨进程恢复；相同 CardDefinition 原生/受控差分；原 Ironclad 已覆盖参考场景不退化。自定义机制仅作表达证明，若后续为通用规则语义写对应抽象夹具，不把它们算作原作内容完成。
+
+新增普通实体必须只增加第三层定义；新增机制允许增加第二层模块，但不能向内核加名称判断。检查源码依赖边界，并实际新增一个不修改旧中央流程的组合实体，不能只测试静态关键词。最终证明目标为：类型化链接保持引用关系、控制流降低保持观察轨迹、规则登记/调度可构造、状态抑制与机会唯一性、恢复与分支非干扰。任意 TS atom 的纯度、终止、参考内容正确性和存储正确性分别列为前提或独立验收，不声称已由模型证明。
+
+<a id="rule-public-api"></a>
+
+## 第二层向上公开的完整接口目录（2026-10-20，设计收敛）
+
+本目录统一前节示意名称；源码的精确参数以本节后的“实施接口对齐”和“已实施的 STS 领域接口”为准。此前 `effect` 统一命名为 `defineEffect`；`defineCard/definePower/defineRelic/defineEnemy/definePotion/defineRoom` 不列为内置公开定义函数，统一由 `defineEntity(kind, config)` 完成；第三层需要时可以自行写这些便利 utils。此前示例中的简名仅作历史设计说明，实施按本目录，不同时导出多套别名。
+
+### A. 类型、调用约定及恰好七个 define 函数
+
+`Input<T>` 是 T 的字面量/类型化 Value 的组合；`Value<T>` 是只读运行期表达式，`Command<T>` 是运行期可暂停调用节点，`Statement` 是可执行节点；Command 可作为 Statement 丢弃返回值。传字面量不会立即执行动作。定义函数在装配阶段执行，普通原子函数构造节点，真正执行发生于现有内核。`Local<T>` 是 Value，`EntityRef<T>` 是世界内身份；定义句柄不能当实体身份。表中的名称如 hand、strength、cardExhausted 都是导入引用。
+
+| 定义函数 | 输入 → 输出 | 用法 |
+| --- | --- | --- |
+| `defineEffect<I,O>(build)` | 延迟构建函数 → Effect<I,O> | `const hit = defineEffect<Hit,void>(b => attackDamage({ source: b.read(v=>v.input.source), target: b.read(v=>v.input.target), base: 8 }))` |
+| `defineQuery<I,O>(spec)` | 输入/结果 schema、纯 base、依赖、修正顺序 → Query<I,O> | `defineQuery({ input: costInput, output: integer, base: readBaseCost, dependencies: [], order: costOrder })` |
+| `defineEvent<T>(spec)` | 载荷 schema、派发时机和顺序 → Event<T> | `defineEvent({ payload: exhaustedPayload, dispatch: queuedAfterCommit, order: triggerOrder })` |
+| `defineComponent<T>(spec)` | 数据 schema、初值工厂 → Component<T> | `defineComponent({ schema: counterSchema, initial: () => ({ count: 0 }) })` |
+| `defineCheckpoint<I,O>(spec)` | 检查点载荷、候选/排序/重验规则 → Checkpoint<I,O> | `defineCheckpoint({ input: damageInput, output: damageInput, order: replacementOrder, reconsider: afterEachChange })` |
+| `defineEntity(kind, config)` | 规则模块导出的实体种类及字面量配置 → EntityDefinition<K> | `defineEntity(cardKind, { id: 'BASH', cost: 2, type: attackCard, play: bashPlay })` |
+| `defineRules(config)` | 显式依赖、定义、导出及生命周期程序 → RulesDefinition | `defineRules({ requires: [zones, resources], definitions: [counter, hit], exports: { hit } })` |
+
+schema 是直接引用既有验证器。kind 是规则模块提供的类型化数据契约，卡牌/状态/遗物/敌人/药水/房间使用不同契约；统一 defineEntity 不意味着所有 config 都是无约束字典。defineRules 不默认扫描目录、隐式安装能力或建立全局注册表。构建器在所有静态定义声明之后展开，支持递归/互相引用；未完成定义在链接时拒绝。
+
+### B. 控制流与构建器（五个函数、四个方法）
+
+| 接口 | 结果 | 用法及语义 |
+| --- | --- | --- |
+| `sequence(...steps)` | Statement | `sequence(drawCards({player,count:2}), gainEnergy({player,amount:1}))`，依次执行 |
+| `when(test, yes, no?)` | Statement | `when(isAlive(target), call(hit,args))`，执行期分支 |
+| `whileDo(test, body)` | Statement | `whileDo(hasPending, call(settleNext,{}))`，循环条件执行期重算 |
+| `forEach(items, buildBody)` | Statement | `forEach(targets, target => attackDamage({source,target,base:3}))`，进入时捕获序列，游标可恢复 |
+| `call(effect, input)` | Command<O> | `call(bashPlay,{card,owner,target,upgraded:false})`，立即调用并等待返回；不是入队 |
+| `b.local<T>()` | Local<T> | `const picked = b.local<readonly EntityRef<Card>[]>()`，不写字符串槽名 |
+| `b.assign(slot, valueOrCommand)` | Statement | `b.assign(picked, chooseMany(spec))`，命令结束后写槽；槽可重新赋值 |
+| `b.read(fn)` | Value<T> | `b.read(v => v.get(picked).length)`，只读输入与已赋值槽/表达式；fn 不得修改外部变量 |
+| `b.return(value?)` | Statement | `b.return({kind:'applied',value:actual})`，结束当前效果，非全局游戏退出 |
+
+`b.input` 是属性，不计函数。`v.input` 是当前调用输入，`v.get(value)` 是 b.read 的只读求值方法，读取未初始化槽报错；不存在 v.world 可变入口。字面量加减、布尔判断使用普通 TS 纯表达式，不再引入 add/multiply/and 等同义计算 DSL。没有公开 jump、PC、frame 或任意 host operation。
+
+### C. 查询与实体私有数据
+
+| 接口 | 结果 | 用法及语义 |
+| --- | --- | --- |
+| `query(definition, input)` | Value<O> | `query(cardCost,{card,owner})`，执行 Query 的纯修正链 |
+| `readComponent(entity, component)` | Value<Readonly<T>或不存在> | `readComponent(self, counter)`，读取副本视图/不可写借用，不暴露活动可写数据 |
+| `updateLocalComponent(entity, component, update)` | Command<void> | `updateLocalComponent(self,counter,x=>({...x,count:x.count+1}))`，仅修改作者私有组件的有限纯变换 |
+| `entitiesIn(scope, kind)` | Value<readonly EntityRef<K>[]> | `entitiesIn(currentCombat,enemyKind)`，稳定顺序 |
+| `isAlive(entity)` | Value<boolean> | `isAlive(target)`，对象仍可参与战斗的规则查询 |
+| `effective(powerInstance)` | Value<boolean> | `effective(source)`，存在/寿命/抑制综合判断 |
+| `effectiveStacks(powerInstance)` | Value<number> | `effectiveStacks(source)`，有效层数查询，不能拿 raw 层数绕过失效 |
+| `cardsIn({owner,zone})` | Value<readonly EntityRef<Card>[]> | `cardsIn({owner,zone:hand})`，区域查询，私有牌序不自动对玩家公开 |
+
+`updateLocalComponent` 补齐计数型 hooks 的能力，但不能写核心 HP、格挡、牌区、状态生命周期等受保护组件。私有组件由所属定义安装，写入检查当前来源/授权实体和组件所属模块；跨实体私有数据修改须调用其公开效果。第三层查询到受保护数据不代表获得写权限。相同实体上的两个能力可显式共用同一私有组件；独立登记计数使用各自实例数据，不能误共享。
+
+### D. hooks、修正、替换与登记
+
+| 接口 | 结果 | 用法及语义 |
+| --- | --- | --- |
+| `on(event, spec)` | AbilityDefinition | `on(cardExhausted,{condition:ownedBySourceOwner,eligible:sourceEffective,effect:drawOne})` |
+| `modify(queryDefinition, spec)` | AbilityDefinition | `modify(cardCost,{order:beforePayment,when:isOwnedSkill,transform:zeroCost})`，纯变换 |
+| `replace(checkpoint, spec)` | AbilityDefinition | `replace(exhaustDestination,{order:spoonOrder,when:ownedCard,effect:spoonReplacement})`，效果返回 keep/change/cancel，允许等待 |
+| `restrict(checkpoint, spec)` | AbilityDefinition | `restrict(intentPartExecution,{order:restrictionOrder,when:enemyNonAttack,reason:domainSuppressed})`，只取消，不修改载荷 |
+| `install({source,owner,ability,environment,lifetime})` | Command<RegistrationRef> | 动态安装具备来源和寿命的能力；静态实体 abilities 由创建流程统一安装 |
+| `uninstall(registration)` | Command<boolean> | 移除一个具体登记；不按效果名字删除其他来源 |
+| `emit(event, payload)` | Command<void> | `emit(customCounterReached,{source,count:3})`，仅允许发出模块导出的可发事件 |
+
+既有 damageCommitted/cardExhausted 等受保护事件只由相应动作原子产生，实体不得手工 emit 伪造已经发生的伤害/消耗。replace/restrict 只能挂接目标模块公开的 checkpoint。顺序参数引用该查询/检查点允许的阶段，不接受任意陌生 phase。实例的稳定登记序号只用于规则允许的同级破同分。
+
+替换返回普通类型化字面量，不增加返回值工厂函数：`{kind:'keep',value}`、`{kind:'change',value}`、`{kind:'cancel',reason}`。动作结果同样使用 `{kind:'applied',value}`、`{kind:'cancelled',reason}`、`{kind:'noop',reason}`。reason 可为模块声明的判别联合，不是任意查找键。
+
+### E. 调度、捕获与寿命
+
+| 接口 | 结果 | 用法及语义 |
+| --- | --- | --- |
+| `enqueue(effect, input, options)` | Command<ScheduledRef> | `enqueue(retaliate,args,{queue:combatQueue,position:front,source,lifetime})`，在调度器下次取项时执行 |
+| `schedule(effect, input, options)` | Command<ScheduledRef> | `schedule(copyCards,args,{at:nextOwnerTurnStart,source,lifetime})`，绑定明确的阶段/机会标识 |
+| `cancelScheduled(task)` | Command<boolean> | 取消特定尚未执行的任务；running 项不能伪装成撤回已提交效果 |
+| `snapshot(value)` | Capture<T> | `enqueue(copyCards,{card:snapshot(cardData)},opts)`，在 enqueue/schedule/install/调用参数求值时捕获数据值 |
+| `scopeOf(entity, lifetimeKind)` | Value<ScopeRef> | `scopeOf(owner,combatLifetime)`，取得当前具体作用域身份 |
+
+普通 EntityRef 传参保留身份，执行时由明确查询读取；snapshot 显式复制所需值，定义句柄由链接器编码，不复制函数。周期条件/次数写在事件能力或效果循环里，不增加 everyTurn/oncePerBattle 等一批独立内置 hook；第三层 utils 可以封装。
+
+### F. 玩家选择与随机
+
+| 接口 | 结果 | 用法及语义 |
+| --- | --- | --- |
+| `chooseOne(spec)` | Command<Choice<T>> | `chooseOne({player,candidates:targets,allowSkip:false,empty:cancelAction,singleton:requestChoice})` |
+| `chooseMany(spec)` | Command<readonly T[]> | `chooseMany({player,candidates:cards,min:0,max:3,order:irrelevant,empty:emptySelection,singleton:requestChoice})` |
+| `chooseOrder(spec)` | Command<readonly T[]> | `chooseOrder({player,items:triggers})`，必须是输入集合的完整合法排列 |
+| `sample(stream, distribution)` | Command<T> | `sample(cardRandom,uniformInteger(0,3))`，uniformInteger 是分布数据构造 utility，不属于规则入口 |
+| `shuffle(stream, values)` | Command<readonly T[]> | `shuffle(shuffleRandom,cardIds)`，返回乱序序列，不移动牌区 |
+
+Choice<T> 使用 `{kind:'selected',value}` 或 `{kind:'skipped'}`，无候选策略显式指定。普通 values/候选必须是 data 或实体引用，回复使用候选身份而非函数对象。分布是所属 RNG 模块导出的类型化数据定义，源舍入/采样算法由模块负责；只读查询不能调用 sample。
+
+### G. 卡牌和区域原子
+
+| 接口 | 用法 | 返回 |
+| --- | --- | --- |
+| `createCard(spec)` | `createCard({definition:strike,owner,destination:hand,upgraded:false})` | 新卡身份/实际创建结果 |
+| `copyCard(spec)` | `copyCard({card,owner,destination:hand,policy:combatCopy})` | 新身份；哪些属性保留由 policy 明确 |
+| `upgradeCard(spec)` | `upgradeCard({card,scope:permanentCard})` | 实际升级结果；临时/永久明确 |
+| `moveCard(spec)` | `moveCard({card,destination:drawPile,position:top})` | 移动结果；不伪造弃牌/消耗事件 |
+| `drawCards(spec)` | `drawCards({player,count:2})` | 实际抽到的牌及动作结果 |
+| `discardCard(spec)` | `discardCard({card,source,reason:effectDiscard})` | 弃牌结果，产生对应事件 |
+| `exhaustCard(spec)` | `exhaustCard({card,source})` | 消耗/被替换/取消的明确结果 |
+| `shuffleZone(spec)` | `shuffleZone({owner,zone:drawPile,stream:shuffleRandom})` | 手牌区外指定区域的洗牌结果 |
+| `playCard(spec)` | `playCard({card,owner,target,mode:normalPlay})` | 一次使用的结果，统一校验/费用/触发/去向 |
+| `retainCard(spec)` | `retainCard({card,until:currentTurnCleanup})` | 安装本次保留规则的结果 |
+
+playCard 的普通、自动、重复模式由卡牌生命周期模块定义并类型化；不是任意布尔开关集合。重复出牌是否支付费用、移动实体、触发使用事件由 mode 契约明确。升级/复制/保留会经过对应扩展点，不能通过改元数据旁路。删除永久牌使用冒险侧 removeDeckCard，不用无语义 destroy 任意删除。
+
+### H. 资源、状态和实体生命周期原子
+
+| 接口 | 用法 | 返回/语义 |
+| --- | --- | --- |
+| `attackDamage(spec)` | `attackDamage({source,target,base:8})` | 实际伤害/格挡/生命损失等结果 |
+| `effectDamage(spec)` | `effectDamage({source,target,amount:3})` | 非攻击伤害，按其语义经过相应检查点 |
+| `loseHp(spec)` | `loseHp({source,target,amount:2})` | 实际生命损失，不冒充攻击 |
+| `heal(spec)` | `heal({source,target,amount:6})` | 实际恢复量 |
+| `gainBlock(spec)` | `gainBlock({source,target,amount:3,calculation:effectBlock})` | 实际格挡；卡牌格挡与效果格挡明确 |
+| `gainEnergy(spec)` | `gainEnergy({player,amount:1})` | 实际增加量 |
+| `payEnergy(spec)` | `payEnergy({player,amount:2})` | 支付成功/失败，不允许负余额冒充成功 |
+| `changeMaxHp(spec)` | `changeMaxHp({target,delta:5,adjustCurrent:sourceRule})` | 最大/当前 HP 变化结果 |
+| `gainGold(spec)` | `gainGold({player,amount:20})` | 实际金币增加，经过遗物限制 |
+| `payGold(spec)` | `payGold({player,amount:75})` | 支付结果；商店事务在上层组合验证 |
+| `applyPower(spec)` | `applyPower({source,target,definition:vulnerable,stacks:2})` | 施加/叠层/免疫等实际结果 |
+| `changeStacks(spec)` | `changeStacks({power,delta:-1,reason:expiry})` | 通过状态生命周期修改，不写 raw 字段 |
+| `removePower(spec)` | `removePower({power,source})` | 移除及登记注销结果 |
+| `spawnEntity(spec)` | `spawnEntity({definition:cultist,owner,scope})` | 新实体身份，执行该种类规定的初始化/能力安装 |
+| `despawnEntity(spec)` | `despawnEntity({entity,reason:escaped})` | 走该实体种类的离场规则；不能把 despawn 当伤害/死亡 |
+
+创建/离场受种类公开生命周期契约约束，不允许绕过卡牌区域唯一性；卡牌使用专用 createCard，状态使用 applyPower。spawnEntity 用于允许通用生成的敌人/环境等种类。自己定义的第三层实体不能以此伪造 run/战斗根。
+
+### I. 敌人意图、行动机会和冒险
+
+| 接口 | 用法 | 返回/语义 |
+| --- | --- | --- |
+| `intentPart(category, body)` | `intentPart(attack,attackDamage(args))` | 带语义来源的 Statement；辅助计算不错误另分类 |
+| `pendingOpportunity(actor)` | `pendingOpportunity(enemy)` | 当前 pending 机会或不存在 |
+| `executeOpportunity(opportunity)` | `executeOpportunity(slot)` | 以一次占用启动意图；等待保留 running |
+| `replaceIntent(spec)` | `replaceIntent({opportunity,intent:newIntent})` | 仅规则允许的尚未启动机会可替换 |
+| `cancelOpportunity(opportunity)` | `cancelOpportunity(slot)` | 取消 pending，不回滚 running 已执行部分 |
+| `insertTurn(spec)` | `insertTurn({actor,after:currentTurn,policy:extraPlayerTurn})` | 新阶段/机会身份，不复用旧 skip 标记 |
+| `enterRoom(spec)` | `enterRoom({run,definition:roomDefinition})` | 房间结果，可跨选择/战斗暂停 |
+| `enterCombat(spec)` | `enterCombat({run,encounter})` | 战斗结果，统一进入/退出和回写 |
+| `offerReward(spec)` | `offerReward({player,reward})` | 领取/放弃结果，保持全部合法选项 |
+| `obtainRelic(spec)` | `obtainRelic({player,definition:burningBlood})` | 获得效果、唯一性/替换及 run 能力安装 |
+| `removeRelic(spec)` | `removeRelic({player,relic})` | 移除效果、注销与来源处理 |
+| `obtainPotion(spec)` | `obtainPotion({player,definition:potion})` | 槽位约束下的获得结果 |
+| `usePotion(spec)` | `usePotion({player,potion,target})` | 验证、消耗与效果程序 |
+| `discardPotion(spec)` | `discardPotion({player,potion})` | 丢弃，不执行使用效果 |
+| `addDeckCard(spec)` | `addDeckCard({player,definition:cardDefinition,upgraded:false})` | 新永久牌身份及获得触发 |
+| `removeDeckCard(spec)` | `removeDeckCard({player,card})` | 删除永久牌及相关规则 |
+| `transformDeckCard(spec)` | `transformDeckCard({player,card,pool,stream})` | 源规定的转化、身份/升级与获得处理 |
+
+这些是 STS 规则包的向上接口，不全是跨游戏通用库。房间购买、休息、地图选路等由房间定义组合选择、支付和这些动作，不再逐内容新增 defineXXX。敌人意图定义使用 defineEffect 加 intentPart，敌人状态机/意图候选作为 defineEntity 的类型化字面量配置；不额外引入 defineIntent。
+
+### J. hooks utils 示例与不公开项
+
+```ts
+function onOwnerExhaust(effect: Effect<PowerEvent<CardExhausted>, void>) {
+  return on(cardExhausted, {
+    condition: ownedBySourceOwner,
+    eligible: sourceEffective,
+    effect,
+  });
+}
+
+const exhaustedCount = defineComponent({
+  schema: counterSchema,
+  initial: () => ({ count: 0 }),
+});
+// 计数通过 updateLocalComponent 更新当前实例数据，不捕获 let count。
+// hook 工具在装配期返回 AbilityDefinition，不在运行期偷偷全局订阅。
+const feelNoPain = defineEntity(powerKind, {
+  id: 'FEEL_NO_PAIN', classification: positive,
+  stacking: addStacks, lifetime: combatLifetime,
+  abilities: [onOwnerExhaust(blockFromSourceStacks)],
+});
+```
+
+不向第三层公开：World 的任意写引用、writeComponent(受保护组件)、HP/区域裸提交、执行 checkpoint 的内部 dispatch、原生 IO.call、PC/帧、save/fork、初始化和装配内部索引。作用域 begin/end、finishCombat、恢复房间续接、机会初始分配由规则模块的调度程序负责；原先目录出现的 beginPhase/finishPhase/expireScope/declareIntent/finishCombat/resumeRoom 是这些内部实现职责，不当作第三层随意调用的 API。
+
+`invokeNow` 合并为 call；`queryAttribute` 合并为 query；`createEntity/removeEntity` 对第三层收敛为受种类契约限制的 spawnEntity/despawnEntity；`roundSourceValue` 属于 STS 数值内部实现。assemble/link 是组装入口内部职责，不是实体原子。实体构建 config 用类型化字面量表达，不新增一组 setCost/setName/setRarity builder。
+
+该清单列完本版向上承诺的函数；后续额外函数必须补入清单并说明为何无法用现有函数组合，不能在示例里暗中创造公开 API。以上仍为设计，未承诺实现/类型检查已通过；数学证明须包含新增的私有组件写入权限和 protected event/checkpoint 边界。
+
+<a id="rule-module-extension"></a>
+
+## 第二层模块的合法扩展契约（2026-10-20，设计）
+
+本节补齐规则模块作者的实现入口。第三层向上接口与本节的模块实现权限分开，均装配进现有 Card Core，不增加执行器或第二份 Context。相应实现位于 card-engine 的 rules 模块，手工证明及其前提见 card-core-proof.md；实际检查进度见 plan.md。
+
+### 1. 模块声明和能力所有权
+
+`defineRules` 增加延迟 `build(m)` 形式，与前文配置形式使用同一个定义函数。requires 声明静态依赖；build 内使用前述七个 define 函数声明组件、查询、事件、检查点及实体，返回显式 exports 和生命周期规则。构建器 m 只存在装配期，不能传给第三层或保存进 Context。build 的普通函数不能捕获跨实例可变计数。
+
+组件分为模块拥有的受保护组件和第三层实体私有组件。链接器建立静态的 owner/component 表。一个组件最多一个写入所有者；依赖某模块不自动获得其写权限。其他模块只能调用对方导出的 Effect 或 Query；允许的只读组件视图须显式导出。私有组件依旧使用 updateLocalComponent 并验证来源/归属，不可借此写模块受保护组件。
+
+所有权在 Program 中以定义身份验证，不使用调用方传入的字符串 moduleName。执行某个原子携带链接器生成的静态访问描述，权限不由当前游戏输入选择。同一运行态不存在两份 HP 或温度副本。模块可以定义自己的规则组件，但不得复制他人组件作为另一套权威数据。
+
+### 2. 模块构建器的五个实现接口
+
+| 接口 | 用途与返回 | 约束 |
+| --- | --- | --- |
+| `m.own(definition)` | 认领本模块新建的 Component/Event/Checkpoint，返回类型化所有者句柄 | 链接前校验本地定义与唯一所有者；不能认领依赖模块的定义；事件句柄带发布权，checkpoint 句柄带执行权 |
+| `m.atom(spec)` | 定义有限、同步、确定的提交原子，返回普通 Effect<I,O> | 规格含 input/output、reads、writes、emits、run；不允许等待、IO、嵌套动作或隐式 RNG |
+| `m.resolve(checkpointHandle, input)` | 产生 Command<ReplacementResult<O>>，执行本模块检查点的限制/替换流程 | 允许暂停，降低成既有 invoke/repeat/request；第三层只能挂接公开检查点，不能冒充检查点拥有者执行它 |
+| `m.kind(spec)` | 声明新实体种类的 config/schema、组件布局、初始化/离场程序 | 返回 defineEntity 使用的类型化 kind；实例化/离场仍走公共生命周期，不能创建另一套实体表 |
+| `m.lifecycle(scopeDefinition, spec)` | 声明本模块在生命周期中的初始化、阶段参与和清理规则 | 明确 before/after 与 once-per-scope；跨模块顺序冲突在装配时检测，不靠导入顺序 |
+
+m.own(Event) 提供受保护事件发布权，发布写在 atom 的事件提案中；不再额外增加任意 dispatch/emitNow 入口。公开自定义事件可以授权第三层 emit，系统事实事件不授权。m.kind 的元数据、组件初值和入口效果都是定义引用/数据，生成实体仍由唯一实体服务协调，不给普通模块裸写实体 ID 分配器。
+
+这些方法不增加新的 defineXXX，也不向第三层暴露。普通 effect 的组合调用不需要提交权限，只有真正改变受保护组件的 m.atom 需要。
+
+### 3. 提交原子的契约
+
+原子 `run(read, input)` 不直接修改活动世界，而返回有限提交提案：`{writes, events, result}`。writes 为所拥有组件的设值/删除项，events 为本原子允许发布的事实事件。组件/事件定义引用仅在当前 Program 的同步提交步骤内解析，持久化队列保存链接索引和数据。
+
+执行顺序：
+
+1. 验证输入和参与实体，建立本步只读视图；run 只能通过声明的 reads 读取允许的数据，写入候选值必须是新值或合法只读数据，不得改读出的对象。
+2. 执行有限纯计算，产生提案。不调用 effect/query 派发器，不等待，不发请求，不读时钟/网络/宿主随机；需要这些规则能力先在外层组合程序完成。基础 PRNG 模块可以在自己的原子中按确定算法读写所拥有的流状态。
+3. 检验写集合权限、实体/作用域资格、值 schema、不变量及事件载荷，所有候选都验证后才应用。读写同一组件多次必须显式合并，重复写目标默认拒绝。
+4. 在一个无外部观察的同步提交步骤内应用写项，保存结果和事件 outbox；提交后不再执行作者计算或验证。不能出现作者事件已经发出而状态仍未写入。
+5. outbox 按 Event 的声明转入队列或可暂停派发程序。afterCommit-beforeReturn 的事件先完成派发再返回原子结果；queued 的事件按所属调度器处理。派发列表、游标及待返回结果都在 Context。
+
+“提交原子”只保证规则层无中途交互/观察。拒绝提案不产生写入与事实事件；底层存储应用正确性是实现义务，不由 TS 类型保证。运行时/OOM 等故障不承诺通用回滚，沿用 fault 锁定且不得保存故障现场。跨多个 atom 的 effect 默认不是事务，已提交前缀不会因后续取消而撤销。
+
+每次提交只暂存实际触及的组件值和事件，不能复制整个世界。模块声明计算规模随输入增长的上界；大规模遍历用规则循环拆成受预算步骤。预算无法抢占任意 TS 同步回调，因此 atom 的有限性和宿主纯度属于可信模块作者义务，必须代码审查及测试；当前内核不提供恶意插件安全沙箱。
+
+### 4. 检查点、查询与生命周期接线
+
+公开 effect = 查询/选择/检查点/其他模块效果/本模块提交原子的组合。m.resolve 返回 keep/change/cancel 判别结果；后续必须处理 cancel。检查点是否允许修改目标、数量等由其结果 schema 限定；调用依赖效果不会绕过对方检查点。
+
+检查点输入是在到达检查点时的值。若过程暂停并允许嵌套规则改变相关状态，提交前仍需按动作语义重验当前前置条件；查询值若需锁定则显式 snapshot。提案生成与实际提交间没有作者可暂停步骤。
+
+Query 的 base/transform 仅接受只读视图及已声明依赖，其依赖图要求无环；读授权与纯度检查义务同 atom。状态贡献的 effective 入口不能被模块裸读 raw 状态替代。模块维护自己的原始寿命可以读 raw，但实际规则贡献必须走有效性语义。
+
+m.lifecycle 的 once-per-scope 位置由 Context 保存；restore 不重跑初始化。初始化也必须通过受控数据创建/提交路径，不能把宿主对象直接挂入世界。scope 结束先执行显式结束效果，再注销和清理；跨作用域的任务取消、来源离场策略都必须声明。各模块只声明生命周期参与，不各自运行一个回合循环。
+
+### 5. 温度模块的完整扩展路径
+
+温度是新增语义，定义有效范围 -100..100。以下示意中 heatAmountSchema 限定输入 delta 为安全整数并有界，组件/事件/result schema 均使用同一约束。新实体温度组件由生命周期在可用前初始化，缺失组件是明确错误，不临时默认为 0 掩盖未安装模块。
+
+```ts
+const temperatureRules = defineRules({
+  requires: [entities, combatLifecycle],
+  build(m) {
+    const heat = m.own(defineComponent({
+      schema: heatSchema,
+      initial: () => ({ value: 0 }),
+    }));
+    const changed = m.own(defineEvent({
+      payload: heatChangedSchema,
+      dispatch: queuedAfterCommit,
+      order: triggerOrder,
+    }));
+    const beforeChange = m.own(defineCheckpoint({
+      input: heatChangeSchema,
+      output: heatChangeSchema,
+      order: replacementOrder,
+      reconsider: afterEachChange,
+    }));
+
+    const commitHeat = m.atom({
+      input: heatChangeSchema,
+      output: heatResultSchema,
+      reads: [heat], writes: [heat], emits: [changed],
+      run(read, { target, delta }) {
+        const previous = read.component(target, heat).value;
+        const next = Math.max(-100, Math.min(100, previous + delta));
+        return {
+          writes: [{ entity: target, component: heat, value: { value: next } }],
+          events: next === previous ? [] : [{
+            event: changed, payload: { target, previous, next },
+          }],
+          result: { kind: 'applied', value: { previous, next } },
+        };
+      },
+    });
+
+    const changeTemperature = defineEffect<HeatChange, HeatResult>(b => {
+      const checked = b.local<ReplacementResult<HeatChange>>();
+      const result = b.local<HeatResult>();
+      return sequence(
+        b.assign(checked, m.resolve(beforeChange, b.input)),
+        when(b.read(v => v.get(checked).kind === 'cancel'),
+          b.return({ kind: 'cancelled', reason: temperatureRestricted }),
+          sequence(
+            b.assign(result, call(commitHeat, acceptedValue(checked))),
+            b.return(result),
+          ),
+        ),
+      );
+    });
+
+    const temperature = defineQuery({
+      input: entityInputSchema, output: heatAmountSchema,
+      base: readCurrentHeat(heat), dependencies: [], order: temperatureOrder,
+    });
+    m.lifecycle(combatLifetime, {
+      initialize: initializeParticipantComponent(heat),
+      dispose: removeParticipantComponent(heat),
+      order: afterParticipantsCreated,
+    });
+    return {
+      exports: {
+        changeTemperature,
+        temperature,
+        temperatureChanged: changed.public,
+        temperatureChanging: beforeChange.public,
+      },
+    };
+  },
+});
+```
+
+示例中的 acceptedValue 是替换结果已判别后的取值表达式 helper，readCurrentHeat 是纯查询构造 helper；initialize/removeParticipantComponent 是实体/生命周期模块的受权组件操作组合；都不是新增顶层 define 函数。此处是语义示意，未来 TS 实现必须提供判别后的类型收窄/受检查取值，不以 unsafe cast 掩盖类型缺口。ownerHandle.public 只给订阅/替换挂接权限，不给写入/发布/执行检查点权限。
+
+第三层新卡调用 changeTemperature；遗物可以 on(temperatureChanged, ...)；另一能力可以 replace(temperatureChanging, ...)，例如把升温改成冷却；温度影响费用通过 modify(cardCost, ...) 查询温度实现。它们不能绕过 changeTemperature 直接写 heat，也不能伪造 temperatureChanged。新模块只加入装配依赖，不修改内核指令、旧伤害函数或旧遗物定义。
+
+### 6. 合法扩展的装配和验证门槛
+
+| 边界 | 必须保证 | 验证方式 |
+| --- | --- | --- |
+| 模块依赖与写权 | 每个受保护组件唯一 owner，未授权读/写/事件/检查点拒绝 | 类型负例＋链接负例＋运行提案故障注入 |
+| 纯计算与不变量 | 有限确定计算；输出 data；输入/写值/结果满足 schema 和模块不变量 | 原子定向测试及代码审查，不能只靠声明 |
+| 全局结构 | 区域归属、实体身份等由拥有模块维护，不跨模块直接拼写 | 生命周期/模块组合测试，不声称局部 schema 证明全部全局性质 |
+| 动作前缀 | 可取消、可等待，但已提交前缀不隐式回滚 | 嵌套替换/选择和取消反例 |
+| 发布一致性 | 提交前无事件；提交后事件可恢复且不重复 | 存档在派发等待处、跨进程恢复、记录对照 |
+| 状态与隔离 | 计数/流/登记/outbox/游标全在 Context | 父子双向写、父关闭、重建进程恢复 |
+| 保守扩展 | 仅装配未启用模块不改变旧路径行为/RNG/事件 | 旧路径差分；安装新能力后的行为变化属于显式规则贡献 |
+| 内核边界 | 新模块只降低为既有指令，无游戏专用 opcode | 链接产物检查、实际 import 边界和双模式测试 |
+
+接下来数学证明需补足：提案验证后的单步不变量保持、私有权限不扩散、提交与 outbox 的轨迹对应、检查点/循环/等待的降低模拟。纯度/原子有限性、存储实现和特定原作规则正确性仍明确为前提/独立验收，不从抽象接口直接推出。
+
+### 实施接口对齐（2026-10-20）
+
+实现位于 card-engine 的 rules 命名空间，避免与已有 async 组合库同名导出冲突；linkRules 是宿主装配入口。当前七个 define 和五个模块构建接口已有代码，通用底座/模块契约按正式检查完成 R04/R05；完整领域与 STS 集成验收仍未完成，R06 保持未勾选。
+
+- Query 使用 `{input,output,reads,kinds,dependencies,selections?,base,order?}`；kinds 显式允许纯查询通过 configuration 读取实体的静态配置。modify 使用 `{transform,reads,dependencies,selections?,condition,eligible,order}`，condition/eligible 是 Query 引用，纯查询不能等待。
+- Query/Event/Checkpoint 的 order 使用 `{phases:[{phase,before?,after?}],default}`；phase 是字面量对象身份，label 不参与匹配。目标声明有限偏序，定义/装配期间拒绝重复、外来引用及环。能力 order 接受该目标的 phase、`{phase,priority}`，或缺省阶段内的整数优先级；最终按阶段拓扑序、优先级、登记序稳定执行。scopeKind 可用相同 order 声明生命周期阶段，退出按进入次序的逆序。
+- Event 使用 `{payload,dispatch:'queued'|'immediate',publicEmit?:boolean,order?}`。默认只允许 owner atom 发布；publicEmit 明确授权第三层 emit 自定义事件。立即派发在 atom 返回前完成；排队派发由规则调度器调用 ruleModules.dispatchQueuedEvents，第三层 namespace 不暴露该调度器。
+- Checkpoint 使用 `{input,output,initial?,order?}`，m.resolve 返回 keep/change/cancel；replace/restrict 的适用条件使用 condition/when 中对应的类型化 Query，实际 replace 字段名为 condition，restrict 字段名为 when。替换执行后只重验来源资格，不重新应用最初的适用条件，防止消费自身次数后错误取消其正常结果。keep 必须保持原值，不能偷偷改载荷。
+- m.kind 使用 `{config,setup?,components,initialize?,dispose?}`。有非 undefined setup 类型的 kind 必须提供 schema，spawn 同时必须提供对应运行期 setup；初始化程序接收 `{entity,owner,scope,setup}`，dispose 不带 setup。每个 seed/HP/牌实例值由 setup 传入，同一静态定义不因此重建。defineEntity(kind,config,{components?}) 的第三个可选参数附加内容作者私有组件；这种组件由第三层 defineComponent 声明，不具备模块 owner 写权。updateLocalComponent 只允许活跃来源写自己的私有组件，不能写 HP 等受保护数据。
+- m.lifecycle(scopeKind,{initialize?,dispose?,order?}) 声明参与，scopeKind 是显式对象引用，label 仅供调试；开始/结束由规则调度器内部入口负责。子作用域先收尾，父级结束程序随后运行，再清理实体/登记；结束顺序为初始化顺序的逆序。
+- Context 新增的来源栈、实体/作用域相位、单调身份、事件快照/游标均与世界共用同一根。initialEntities 仅是通用底座夹具设施，STS 生产入口已用实体生命周期构造，不作为另一份世界或兼容分支。
+- rule id 附加确定装配布局的 SHA-256；外部原始 id 仍必须绑定冻结源代码和不可变配置。布局摘要不自动提取任意 JS/schema 闭包的全部捕获值，不承诺语义哈希。
+
+当前私有组件更新同时接受有限纯更新函数或 `Input<T>` 值表达式；后者可用 b.read 组合当前私有数据与选择结果，避免在同步更新回调中捕获运行期局部槽。来源资格校验与 schema 校验对两种形式一致。
+
+实体定义的效果入口需要从当前实体配置中选择，单纯静态 call 无法表达抽到任意一张牌后的共同使用流程。补充 `entityEffect(kind, entity, select)`：select 是装配期纯函数，取得 kind 配置中一个 Effect<I,O>；链接器计算有限入口表，运行期返回可保存的数据引用。`call` 同时接受静态 Effect 和 Value<Effect>，运行期校验 Program/索引/来源并保留来源栈。选择器不能运行期生成新效果，不能按字符串拼接跳转；公共接口目录的 call 项据此扩展，新增 entityEffect 并说明其不可由静态 call 替代的原因。
+
+`spawnEntity` 的 definition 同时接受静态定义或保存于 Value/Local 中的类型化定义引用，后一种必须声明 kind。定义列表可用字面量赋给 Local，再按抽样/选择结果索引；运行数据仅含 Program 身份和定义索引，代码仍在共享 Program。`definitionOf(kind,entity)` 取得同 kind 的现有定义引用，用于复制/再生成；必须另传 setup 决定新实例数据，不能复制整个配置对象或函数。错 Program、索引和 kind 在分配实体前失败。
+
+`enqueue/schedule/cancelScheduled/snapshot` 已有实现。队列为显式对象引用，前/后插入和来源、寿命、来源仍在场/captured 策略分别声明；schedule 的 at 为受保护 Event 及可选纯条件 Query。队列/延迟项和 pending/running 状态在 Context，取项先标 running，再 invoke；等待恢复不重取同一项。规则模块经 `ruleModules.drainOne(queue)` 执行一个任务并取得是否取到任务的 boolean，借此在任务之间重验领域状态；`drainQueue` 循环复用相同入口。第三层只组合入队/取消。`ruleModules.queueSize(queue)` 返回只读 Value<number>，观察 pending 序列长度，排除 scheduled 与已取出的 running 项，供规则调度/精确投影使用；它不返回函数或授权直接改队列。首次队列分配后必须从 Context 重新取得受管数组再插入，已移除会使 COW 首项丢失的宿主临时数组写法。
+
+`chooseOne/chooseMany/chooseOrder` 已有实现，明确 empty/singleton/skip、基数与顺序；`ruleModules.choicePort` 为模块作者构造既有端口的纯发布 Query 和回复解码器。链接器把共享的纯守卫交给 runtime-card，回复不合法时走既有 invalid_reply，保留当前调用、Context 与记录。待决描述仍存于规则帧，没有宿主选择状态或新公共协议字段。
+
+`m.atom` 的 reads/writes/emits 从字面量元组分别推导；异构写入与发出事件按定义/值配对检查，不能把 HP 对象写给能量组件。运行期仍验证 owner、声明集合、schema 和完整提案，类型检查不能代替这些校验。模块实现所需类型（Owned、AtomRead、ComponentWrite 等）由 ruleModules 导出；第三层 rules 不暴露 owner 构造器或裸写入口。
+
+纯策略配置使用 Query 引用。`EntityQuerySelection={kind,select}` 在装配期从有限实体配置中选择已定义 Query；使用方在 selections 中声明后，通过 `QueryRead.selected(selection,entity,input)` 或 `selectedDefinition(selection,definition,input)` 求值。链接器纳入全部候选依赖并拒绝环及未准入私有目标。`sameDefinition(a,b)` 按当前 Program 和定义索引比较身份，既接收已链接静态定义，也接收数据引用；不能按显示名比较。查询输入允许把已链接实体定义转换成数据引用，输出仍只能是 data。
+
+`QueryRead.entities(component)` 只枚举声明 reads 中组件的当前持有实体，按数值身份排序；不返回实体表、配置图或写入能力。组件读权验证与 component 一致，未声明读取在运行期拒绝；跨模块未导出组件不能借枚举取得权限。领域模块可以据此公开有限的关系查询，例如 battles.forActor，而非导出整个 Context。
+
+`QueryRead.definitionConfiguration(definition,kind)` 与 configuration(entity,kind) 共用显式 kinds 读权，按已链接的 Program/定义索引读取不可变配置；错误 kind、外来 Program 或未声明 kind 拒绝。它供纯 Query 内部读取尚未分配实例的定义元数据，输出仍必须是数据，不授予运行期注册或组件写权。
+
+dispose 的当前来源例外只允许正在离场的实体调用自身动态离场 hook；其他来源与排队任务不能借 removing 实体取得入口。来源栈和离场相位可恢复，最后删除仍会使动态引用失效。
+
+### 已实施的 STS 领域接口
+
+以下接口是第二层的领域模块；具体内容仍由第三层实体和 utils 组合，没有新增 define 函数或 VM opcode。列出接口不表示完整游戏已经迁移。
+
+| 模块 | 对外能力与调用方式 |
+| --- | --- |
+| cardInstances | kind 接收静态 CardConfig 和动态 CardSetup；current/metadata/variant/combatView/permanentView 查询实例；setCostForCombat/setCostForTurn/overrideTurnCost/updateCost/upgradeBaseCost/resetTurn/setFlags/setSpecialData/setMutable 维护可变字段，最后一个用于一次写回出牌快照，不接受身份字段；canUpgrade/upgradeCount 为纯查询，upgrade 为可替换效果；copyIntoCombat({master,uniqueId,owner,scope}) 创建新实例；changed/upgraded/beforeUpgrade 为挂接点。 |
+| 卡牌纯策略 | canUpgrade/upgrade/upgradeCount 的 Query 输入为 `{entity,state}`，可声明并读取卡牌私有组件；升级只返回 CardMutable，不能改身份。created/removed 是类型化 Effect。standardUpgrade/repeatedUpgrade/upgradeOnce/registerCardAbilities 是第三层构造 utils；自定义策略可直接编写 Query/Effect，不受这些模板限制。 |
+| powers | registryKind/kind 建立 registry 与状态实例；apply({registry,actor,definition,amount,source,debuff,scope}) 查找/合并/创建；find/entries 按定义身份查询；current/enabled/level/polarity 保留原始 inactive 数值并区分有效贡献；merge/decrement/deactivate/remove/clearJustApplied/set 为 owner 入口；beforeApply/attached/changed 是挂接点。admit/initial/merge/reduce/remove/polarity 全为类型化纯策略，attach/detach/merged 为效果入口。 |
+| attributes/damage | playerAttack/enemyAttack/block 及力量/敏捷/集中/神器、系数与 damageable 为纯贡献查询；attackAmount/blockAmount 完成源数值收窄；damage.attack 先计算，damage.hit 接收已经计算的伤害，两者共用格挡与 HP 流程。beforeDamage/beforeHpDamage 和 started/blocked/resolved 明确事实边界；HP Direct/Damage 来源字面量分开。 |
+| cardPiles | kind 的 setup 接 actor/battle、四个 zone、两个 RNG 及 actionScope 引用；initializeDeck({piles,masters,bottled,drawPerTurn}) 从永久实体组装战斗牌堆，只允许一次；draw({piles,count}) 可被 canDraw 修正并排队续接；moveToHand/discard/discardHand/exhaust、shuffleDiscard/shuffleDraw、resetTurnCosts/resetDiscardCount/setActionScope 组合区域/卡牌/RNG owner 入口。current 保存引用、初始化机会和计数；drawing/drawn/enteringHand/shuffling/exhausting/exhausted/discarded 为有序挂接点。已删除牌堆的无条件 settle，战斗使用下述调度入口。 |
+| battles | kind 从持久 actor、registry、敌人 actor、永久牌/瓶装和 RNG 引用建立战斗牌堆及任务 scope；current/forActor/active/context 公开受控关系和当前牌。queueCard/queueFromHand 排入值快照，canQueue/canUse/intrinsic/playAllowed 提供合法域；playNext/settle 按“行动先于牌项”推进。endTurn 排结束项并累计浪费能量，consumeEndTurn/clearCardQueue/advanceTurn/resetTurn 分别完成阶段操作。freeToPlay/cost/payment、initialExhaust/exhaustAfterUse、targets/targetable、expectedOutcome/canContinue 为可组合纯策略；hit/checkOutcome 结算伤害并管理任务寿命；setExhaust/setEnergyOnUse 只修改 owner 数据。beforePlay/disposing 为检查点，using/used/otherCardPlayed/afterUse/finished/endTurnCards 为挂接点。 |
+| cardChoices | createCardChoices(adapter,requires) 在 Program 装配期绑定现有端口投影；one({battle,screen,cards}) 返回卡实体或 null，pending 查询当前选择，chosen 为选择事实（实体、原候选索引、interactive）。自动单候选的 interactive=false，不应被历史层算成外部玩家决策。screen 仅供发布，不分派执行代码；候选去重/身份验证、等待状态、非法回复与清理由通用选择程序维护。具体头槌/战吼的候选区域、移动方向及单候选 RNG 在第三层 selection-cards 的可复用 utils 中组合。 |
+| permanentDecks | kind 的 setup 为 `{actor}`；current/forActor/forCard/view/bottled 查询有序永久实体、源计数与瓶装引用。obtain({deck,definition,upgraded,specialData,count,upgrade}) 经过 beforeObtain，upgrade 表示获得时明确再应用一次升级；返回互异的永久实体。obtaining/obtained 发布批事实，pending 解释中途已占计数但尚未追加的额度，支持嵌套批。remove({deck,card}) 发布 removing/removed 后删除，拒绝仍有战斗副本的 master；upgrade({deck,card})、upgradeRandom({deck,stream,count})、bottle/removeBottle 修改各自语义，源瓶装索引缺陷保持。owner 不含蛋/御守/小鱼/寄生虫名称。 |
+| relics | kind 持有 `{actor,definition}`，配置 install 为静态 Effect；owned(actor)/find({actor,definition}) 公开持有关系，obtain({actor,definition,scope}) 防止重复获得。view/data 给出只读发布；第三层私有计数通过 data modifier 贡献，销毁实体同时解除持有与登记，不复制到另一份 Adventure。 |
+| enemies | kind 的静态配置为 intent Query、choose Effect、act Effect 和可选 initialize Effect；动态 setup 为 `{actor,battle,aiRng,ascension,hpRng?,parameters?}`。current/forActor/live/eligible/intent 查询关系、生命与机会资格；live 不等于可选攻击目标，halfDead 可有行动机会。setMove({enemy,move}) 维护两项招式历史；roll/noopRoll 使用指定 AI 流；openOpportunity({enemy,turn}) 不会重开同轮机会；takeTurn(enemy) 在调用内容前占用机会，beforeIntent 可暂停或取消，不能改身份。intent.damage 是源的基础伤害，实际伤害在动作执行时计算。 |
+| turns | kind 的 setup 为 `{battle,enemies,drawPerTurn,energyPerTurn}`，enemies 是有序的敌人控制实体引用。current/forBattle/actor 公开控制器关系；endTurn(controller)/settle(controller) 组合已有 battle 调度；drawCount/rechargeAmount/discardRemaining 为纯贡献点，beforeBlockReset 可取消或修改扣除量但不能重定向 actor。playerEndRelics/playerEndPreCards/playerEndPowers、enemyStart/enemyEnd/playerRoundEnd/enemyRoundEnd、playerStartRelics/playerStartPowers/playerPostDrawRelics/playerPostDrawPowers/afterRecharge 提供显式阶段事实，载荷均为 `{controller,battle,actor}`；阶段内用 stages.content 与显式 priority 排序。保留区、阶段、游标和等待都在 Context。 |
+
+draw 的 current-frame 抽牌与队首 shuffle/补抽、队尾监听任务分开。created/drawing/exhausting hook 均可等待；永久牌不安装战斗监听，战斗副本在各自 scope 安装自己的登记。具体 NoDraw/Confused/Evolve/DarkEmbrace/FeelNoPain、Void/Sentinel、TheAbacus/Sundial 已用这些接口组合，并由 C++ 的真实 CardManager/BattleContext 操作作隔离差分；Sundial 计数在其私有组件。
+
+CardUse 的 `{battle,play,card,owner,target,state,energyOnUse,autoplay,freeToPlay,ignoreEnergyTotal,purgeOnUse,triggerOnUse,regretCardCount}` 明确区分物理实体与本次出牌快照；内容计算本次牌值使用 state，需要修改实体/私有数据时使用 card。CardConfig.canUse 是可选纯 Query 策略，endTurn 是可选的无触发回合末入口。初始消耗关键字在使用前计算，追加消耗条件在 used 后单独计算，不能把同一个条件提前/重复应用。默认任务在专用空子 scope，清理等在父 scope；胜利关闭旧子 scope 并建立新的空子 scope，取消当时的任务而允许 after-use 后继入队。清理不通过手动弃牌事件归还卡；无牌可继续的失败判定只在队列闲置时求值，持续伤害/特殊敌人可通过 canContinue 贡献。
+
+资源 owner 新增 `rechargeEnergy({entity,amount})`，直接补充为给定值，不发布 gainEnergy 事实；保留能量等内容通过 rechargeAmount 策略接入。常规获得能量仍用 gainEnergy。
+
+cardInstances 新增 definitionMetadata、canTransform、hasCombatCopies，以及 `upgradeDetailed({entity,force}) → {entity,applied}`。force=false 保留普通资格检查；force=true 表达源永久牌/获得时强制升级，仍经过 beforeUpgrade 并返回实际目标。原 upgrade(entity) 复用 force=false 并返回 applied。资源 loseMaxHp 原位减少上限并裁减当前 HP，不伪造普通受伤或治疗事实。random.shuffle 可显式 counted=false 使用源 nextLong，不增加流的 counter，缺省仍使用 randomLong。
+
+battles.close(battle) 仅在终局且行动已结清时发布 exiting，再关闭战斗 scope。BurningBlood 通过退出事实原位治疗持久 actor。牌堆与回合 scope 的收尾先经区域 owner 清空四个牌区和保留区，再交由通用生命周期删除实体；区域仍拒绝非空删除，master 不随战斗副本销毁。战斗结束后的永久升级/移除操作继续引用同一牌实体。
+
+ironclad-start 是第三层正常开局程序：使用资源/永久牌/遗物/RNG owner 创建实际身份，组合 encounter-plans、neow-offers 和纯地图算法；不调用旧 Adventure 构造器。返回 actor/deck/streams 等数据引用用于后续冒险接线。旧生产入口已文件级删除，新 cardDefinition 只做类型化装配。三条正常开局的 A20 碎心、48 条冒烟及完整恢复曾通过；最终当前版本的验收进度仅见 plan.md。
+
+铁甲／无色及所需诅咒／状态通过独立第三层实体接入。Ritual、DemonForm 等状态登记到通用阶段；expireCounter、ownsTurn、composePrograms、enemyProgram 等是装配期复用函数，不是新的顶层 define。声明的静态定义引用作为字面量进入 Effect/Local，运行时需要选择定义时返回已降低的 Program 引用；不能从 read 闭包直接返回宿主上的未降低定义对象。范围不含其他三职业和两个假设机制的生产内容。内容／整局／恢复分别验收，准确进度见 plan.md。
+
+
+### 整体重写批次的实际接口补充
+
+仍为七个定义函数：defineRules、defineComponent、defineQuery、defineEffect、defineEvent、defineCheckpoint、defineEntity。实体内容只用组合、查询及 owner 导出的 Effect；模块作者才使用 m.own/atom/resolve/kind/lifecycle。没有增加字节码或 VM。
+
+| 模块 | 实际新增入口与语义 |
+| --- | --- |
+| cardInstances | matchesDefinition({entity,definition}) 使用类型化定义身份；setCombatIdentity({entity,uniqueId,master}) 修改战斗身份；可选 returned({battle,card,master}) 在战斗退出逐牌回传。 |
+| cardPiles | create({piles,definition,upgraded,specialData,destination,shuffle,mutable})，destination 为 0 抽牌、1 手牌、2 弃牌、3 消耗；allocateIdentity/register/unregister/attachZone 维护身份与登记/辅助区域；current 为实际唯一状态。 |
+| battles | start/announceOpeningQueued 区分开战与标准抽牌已入队；queueCard 的 afterFirst 插入首项后；endTurnEarly 清理取消的自动机会后提交结束机会；setPlayState/setEnemies 经 owner 修改；presentForActor 包含尚未关闭的终局战斗。victoryTargets/victoryDeferred/rewardEligible/recoveredGold 提供纯贡献。 |
+| enemies | prepare(enemy) 恰好一次发布 prepared；replaceMove 不移动历史，setMove 移动历史；setup 增加 slot，其他参数仍为数据。部署工具在第三层组合资源创建、控制器、prepare 和机会 claim。 |
+| turns | retainedEnergy 与 rechargeAmount 分开；setEnemies 更新实际顺序；idle 在所有当前行动/机会结清后发布，监听者入队时继续 settle。各回合事实与顺序不依赖具体卡/遗物名。 |
+| cardChoices | one({battle,screen,cards,indices?,skipIndex?}) 支持独立跳过编码；indices 必须双射，skipIndex 必须与候选编码不相交；many({battle,screen,cards,minimum,maximum,indices?})；selected 记录原候选位置与编码。自动选择不记外部历史。 |
+| relics/powers | relics.interact 调用该实体可选静态入口，data 为纯贡献；power presentation 为不可变展示元数据。apply 的 applied 仅在成功施加后发布。remove/deactivate/set 与私有计数仍由来源定义维护。 |
+| adventures | current 为持久引用、路线、池、窗口数据；beginSelection/acceptSelection/setRewards/removeReward/setScene/arrive/beginAct/takeEncounter 等 owner Effect；prepareRequest 在实际对外等待前发布 requesting；combatFinished 在战斗 scope 关闭后发布，资源继续使用同一个 actor。 |
+| encounters/rooms/shops/potions | kind 的静态策略与动态 setup 分离；EncounterSetup 的 HP/杂项随机与 scope 是引用，返回定义＋actor＋参数；rooms 的 admit/enter 是 Query/Effect。shops 与 potions 各自拥有库存，不复制资源、牌和随机。 |
+
+第三层可自由编写返回 Effect/Query/Ability 的普通 utils。函数在装配期接收字面量、定义引用、schema 和静态策略；跨等待需要保留的量必须进入 Effect 参数、Local 或实体组件。helper 不能把另一个 builder 的 Value/Local 直接捕获到新 Effect 内，不能在 builder 内调用 m.atom；应通过明确参数传递并使用同一个 owner 入口。
+
+内部 rules-inspection 仅供只读差分，读取本 Program 的真实 Context，未公开为 Core/Instance/BaseGame 新能力。combat-private 及 storage 视图是第三层观察 hook，执行规则不依赖这些投影。内容和测试已整体接线；运行与正确性状态以 plan.md 和最终命令结果为准。
+
+waivedPayment(CardUse) 是免支付策略，与 freeToPlay 的牌自身免费标志分开。Corruption 贡献前者及消耗策略，同时通过正常牌区/牌实例操作处理首次生效时的费用；自动/复制机会的免费执行不能反向伪造牌自身的 freeToPlayOnce。跨等待这两者仍由原 CardUse 数据与纯 Query 表达，没有新 Core 字段。
+
+
+### 有序敌人槽位与构造时序
+
+`turns.kind` 的 setup 接收可选 `extent`，表示有序机会槽位的总长度；不填时取敌人个数。`enemies.kind` 的可选 `slot` 给出物理槽位，空槽不创建实体。`turns.setEnemies({controller,enemies,extent?})` 先验证同战斗、唯一身份、唯一槽位及槽位范围，再由 owner 同步提交；不能把物理槽位压成活动实体列表的下标。`seekEnemy({controller,cursor})` 只允许在敌人阶段向前推进，选择最早尚未经过的槽位；回合机会 claim 仍保证每个实际敌人至多执行一次。游标、长度和实体集合保存在 Context，暂停／恢复不重建它们。
+
+`enemies.kind` 的 setup 可声明 `deferInitialRoll`。构造工具把这种依赖顺序写成普通 Effect：先构造全部实体，再显式调用 `enemies.roll`，再按需要调用 `prepare`。这三个操作的语义分开，没有新解释器或按名字分派。史莱姆分裂与地精召唤只在第三层组合这些公共函数。
+
+卡牌／遗物目录的 label 是开放字符串，作为可读标识；实际调用、安装及动态选择使用已链接的类型化定义引用。第二层的 CardMetadata／CardVariant 类型归 card-instances.types，静态 cards 表只在第三层使用；冒险 owner 的目录不受固定 C++ 名称枚举限制。C++ 数字编号的转换属于具体适配器和参考夹具，夹具转换前检查该编号存在。

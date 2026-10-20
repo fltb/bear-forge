@@ -1,0 +1,22 @@
+import type {rules} from '@bear-forge/card-engine';
+export type CardVariant={cost:number;damage:number;innate:boolean;ethereal:boolean;exhaust:boolean;retain:boolean;target:boolean};
+export type CardMetadata={name:string;type:number;color:number;rarity:number;strike:boolean;variants:readonly [CardVariant,CardVariant]};
+export type CardMutable={specialData:number;cost:number;costForTurn:number;upgraded:boolean;freeToPlayOnce:boolean;retain:boolean};
+export type CardState=CardMutable&{mode:0|1;master:number|null;uniqueId:number};
+export type CardSetup={mode:0|1;master:number|null;uniqueId:number;specialData:number;upgraded:boolean};
+export type CardEvaluation={entity:number;state:CardState};
+export type CardUse={card:number;owner:number;target:number|null;battle:number;play:number;state:CardState;energyOnUse:number;autoplay:boolean;freeToPlay:boolean;ignoreEnergyTotal:boolean;purgeOnUse:boolean;triggerOnUse:boolean;regretCardCount:number};
+export type CardReturn={battle:number;card:number;master:number};
+export type CardConfig={
+  returned?:rules.Effect<CardReturn,void>|undefined;
+  id:string;metadata:CardMetadata;
+  use:rules.Effect<CardUse,void>;
+  canUse?:rules.Query<CardUse,boolean>|undefined;
+  endTurn?:rules.Effect<CardUse,void>|undefined;
+  canUpgrade:rules.Query<CardEvaluation,boolean>;
+  canTransform?:rules.Query<CardEvaluation,boolean>|undefined;
+  upgrade:rules.Query<CardEvaluation,CardMutable>;
+  upgradeCount?:rules.Query<CardEvaluation,number>|undefined;
+  created?:rules.Effect<rules.EntityLifecycle<CardSetup>,void>|undefined;
+  removed?:rules.Effect<Omit<rules.EntityLifecycle<CardSetup>,'setup'>&{reason:unknown},void>|undefined;
+};

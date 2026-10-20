@@ -13,6 +13,7 @@
     "@bear-forge/runtime-card": "*",
     "@bear-forge/game-host": "*",
     "@bear-forge/doudizhu": "*",
+    "@bear-forge/sts": "*",
     "esbuild": "0.28.2",
     "@bear-forge/training": "*",
     "@bear-forge/experiments": "*",

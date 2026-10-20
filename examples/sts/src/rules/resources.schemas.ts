@@ -1,0 +1,11 @@
+import {z} from 'zod';
+export const entityId=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+export const amount=z.int32().nonnegative();
+export const healthSchema=z.object({hp:amount,maxHp:amount.positive()}).strict().refine(x=>x.hp<=x.maxHp);
+export const resourceSetupSchema=z.object({hp:amount,maxHp:amount.positive(),block:amount,energy:amount,gold:z.int32().min(-32768).max(32767)}).strict().refine(x=>x.hp<=x.maxHp);
+export const resourceAmountSchema=z.object({entity:entityId,amount}).strict();
+const hpLossContextSchema=z.object({battle:entityId,source:entityId.nullable(),attack:z.boolean()}).strict();
+export const hpLossSchema=resourceAmountSchema.extend({selfDamage:z.boolean(),origin:z.union([z.literal(0),z.literal(1)]).optional(),context:hpLossContextSchema.optional()});
+export const resourceChangeSchema=z.object({entity:entityId,amount,before:z.int32(),after:z.int32()}).strict();
+export const healthChangeSchema=resourceChangeSchema.extend({maxHp:amount.positive()});
+export const hpLostSchema=healthChangeSchema.extend({selfDamage:z.boolean(),origin:z.union([z.literal(0),z.literal(1)]).optional(),context:hpLossContextSchema.optional()});

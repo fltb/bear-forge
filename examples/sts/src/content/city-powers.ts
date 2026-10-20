@@ -1,0 +1,21 @@
+import {z} from 'zod';
+import {rules} from '@bear-forge/card-engine';
+import {powers} from '../rules/powers.ts';
+import {battles} from '../rules/battles.ts';
+import {cardInstances} from '../rules/card-instances.ts';
+import {cardPiles} from '../rules/card-piles.ts';
+import {resources} from '../rules/resources.ts';
+import {pileCards} from './pile-cards.ts';
+import {counterPolicies,attachAbilities} from './power-utils.ts';
+import {actionQueue} from '../rules/combat-actions.ts';
+import {PS,MS} from '../combat-identifiers.ts';
+import type {CardUse} from '../rules/card-instances.types.ts';
+import type {HpLost} from '../rules/resources.types.ts';
+const {defineRules,defineQuery,defineEffect,defineEntity,on,query,enqueue}=rules;
+export const cityPowers=defineRules({requires:[powers,battles,pileCards],build(){
+  const hex=on(battles.exports.used,{condition:defineQuery({input:z.custom<rules.ReactionContext<CardUse>>(),output:z.boolean(),dependencies:[powers.exports.enabled,cardInstances.exports.metadata],base:(r,c)=>c.event.owner===c.owner&&r.query(powers.exports.enabled,c.source)&&r.query(cardInstances.exports.metadata,c.event.card).type!==0}),effect:defineEffect<rules.ReactionContext<CardUse>,void>(b=>enqueue(cardPiles.exports.create,{piles:b.read(v=>v.get(query(battles.exports.current,v.input.event.battle)).piles),definition:pileCards.exports.Dazed,upgraded:false,specialData:0,destination:0,shuffle:true,mutable:null},{queue:actionQueue,source:b.read(v=>v.input.source),lifetime:b.read(v=>v.get(query(battles.exports.current,v.input.event.battle)).actionScope),eligible:'captured'}))});
+  const Hex=defineEntity(powers.exports.kind,{presentation:{key:PS.HEX,flag:true},...counterPolicies({bits:16,harmful:true,zeroIsNoop:true,resetWhenInactive:true}),attach:attachAbilities(hex)});
+  const stab=on(resources.exports.hpLost,{condition:defineQuery({input:z.custom<rules.ReactionContext<HpLost>>(),output:z.boolean(),dependencies:[powers.exports.enabled,battles.exports.forRegistry,powers.exports.current,battles.exports.current],base:(r,c)=>{if(!r.query(powers.exports.enabled,c.source)||!c.event.context?.attack||c.event.context.source!==c.owner||c.event.amount<=0)return false;const board=r.query(battles.exports.forRegistry,r.query(powers.exports.current,c.source).registry);return board!==null&&r.query(battles.exports.current,board).actor===c.event.entity;}}),effect:defineEffect<rules.ReactionContext<HpLost>,void>(b=>enqueue(cardPiles.exports.create,{piles:b.read(v=>{const board=v.get(query(battles.exports.forRegistry,v.get(query(powers.exports.current,v.input.source)).registry));if(board===null)throw Error('Painful Stabs needs a battle');return v.get(query(battles.exports.current,board)).piles;}),definition:pileCards.exports.Wound,upgraded:false,specialData:0,destination:2,shuffle:false,mutable:null},{queue:actionQueue,source:b.read(v=>v.input.source),lifetime:b.read(v=>{const board=v.get(query(battles.exports.forRegistry,v.get(query(powers.exports.current,v.input.source)).registry));if(board===null)throw Error('Painful Stabs needs a battle');return v.get(query(battles.exports.current,board)).actionScope;}),eligible:'captured'}))});
+  const PainfulStabs=defineEntity(powers.exports.kind,{presentation:{key:MS.PAINFUL_STABS,flag:true},...counterPolicies({bits:32,flag:true}),attach:attachAbilities(stab)});
+  return{exports:{Hex,PainfulStabs}};
+}});

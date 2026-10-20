@@ -35,9 +35,10 @@ export async function main(args = process.argv.slice(2)) {
   const budgets = Object.fromEntries([['concurrency', 'concurrency'], ['memory-mb', 'memoryBudgetMB'], ['compute-steps', 'computeStepBudget']].filter(([flag]) => flags[flag!] !== undefined).map(([flag, field]) => [field, Number(flags[flag!])]));
   const directory = typeof flags.output === 'string' ? flags.output : './data/forge';
   if (command === 'card:run' || command === 'card:replay') {
-    if (flags.game !== 'forge-duel' && flags.game !== 'doudizhu') throw Error('--game must be forge-duel or doudizhu');
+    if (flags.game !== 'forge-duel' && flags.game !== 'doudizhu' && flags.game !== 'sts') throw Error('--game must be forge-duel, doudizhu or sts');
     if (flags.native !== undefined && flags.native !== true) throw Error('--native takes no value');
-    const seed = Number(flags.seed ?? 991); if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw Error('Invalid seed');
+    const seed = flags.game === 'sts' ? String(flags.seed ?? 991) : Number(flags.seed ?? 991);
+    if (typeof seed === 'number' && (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff)) throw Error('Invalid seed');
     if (flags.records !== undefined && typeof flags.records !== 'string') throw Error('--records requires a path');
     if (command === 'card:replay') {
       if (typeof flags.records !== 'string') throw Error('--records is required');
@@ -51,7 +52,7 @@ export async function main(args = process.argv.slice(2)) {
     await mkdir('./build', {
       recursive: true
     });
-    for (const name of ['doudizhu', 'forge-duel']) {
+    for (const name of ['doudizhu', 'forge-duel', 'sts']) {
       const outfile = resolve('build', name + '.card.mjs');
       await build({ entryPoints: [resolve('examples', name, 'src/module.ts')], outfile,
         bundle: true, platform: 'node', format: 'esm', target: 'node22', packages: 'external' });

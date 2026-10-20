@@ -1,0 +1,23 @@
+import {z} from 'zod';
+import {rules} from '@bear-forge/card-engine';
+import {resources} from './resources.ts';
+import {entityId} from './resources.schemas.ts';
+import {potionId} from '../identifiers.ts';
+const {defineRules,defineComponent,defineQuery,defineEffect,sequence,call,query,when}=rules;
+const setupSchema=z.object({actor:entityId,capacity:z.int32().min(0).max(5)}).strict();
+const stateSchema=setupSchema.extend({slots:z.array(z.int32()).length(5),count:z.int32().min(0).max(5)});
+export const potions=defineRules({requires:[resources],build(m){
+  const state=m.own(defineComponent({schema:stateSchema.nullable(),initial:()=>null}));
+  const current=defineQuery({input:entityId,output:stateSchema,reads:[state],base:(r,id)=>{const s=r.component(id,state);if(s===null)throw Error('Uninitialized potion inventory');return s;}});
+  const forActor=defineQuery({input:entityId,output:entityId.nullable(),reads:[state],base:(r,actor)=>{const ids=r.entities(state).filter(id=>r.component(id,state)?.actor===actor);if(ids.length>1)throw Error('Duplicate potion inventory');return ids[0]??null;}});
+  const validSetup=defineQuery({input:setupSchema,output:setupSchema,dependencies:[resources.exports.current,forActor],base:(r,i)=>{r.query(resources.exports.current,i.actor);if(r.query(forActor,i.actor)!==null)throw Error('Actor already has potion inventory');return i;}});
+  const begin=m.atom({input:setupSchema.extend({entity:entityId}),output:z.undefined(),reads:[],writes:[state],emits:[],run(_r,i){const {entity,...s}=i;return{writes:[{entity,component:state,value:{...s,slots:Array(5).fill(potionId.EMPTY_POTION_SLOT),count:0}}],events:[],result:undefined};}});
+  const kind=m.kind({config:z.undefined(),setup:setupSchema,components:[state],initialize:defineEffect<rules.EntityLifecycle<z.infer<typeof setupSchema>>,void>(b=>call(begin,b.read(v=>({...v.get(query(validSetup,v.input.setup)),entity:v.input.entity}))))});
+  const allowed=defineQuery({input:entityId,output:z.boolean(),base:()=>true});
+  const commit=m.atom({input:z.object({inventory:entityId,potion:z.int32().nonnegative()}),output:z.boolean(),reads:[state],writes:[state],emits:[],run(r,i){const s=r.component(i.inventory,state);if(s===null)throw Error('Missing potion inventory');const index=s.slots.findIndex((p,index)=>index<s.capacity&&p===potionId.EMPTY_POTION_SLOT);if(index<0||s.count===s.capacity)return{writes:[],events:[],result:false};const slots=[...s.slots];slots[index]=i.potion;return{writes:[{entity:i.inventory,component:state,value:{...s,slots,count:s.count+1}}],events:[],result:true};}});
+  const obtain=defineEffect<{inventory:number;potion:number},boolean>(b=>{const result=b.local<boolean>();return sequence(when(b.read(v=>!v.get(query(allowed,v.input.inventory))),b.return(false)),b.assign(result,call(commit,b.input)),b.return(result));});
+  const remove=m.atom({input:z.object({inventory:entityId,index:z.int32().nonnegative()}),output:z.int32(),reads:[state],writes:[state],emits:[],run(r,i){const s=r.component(i.inventory,state);if(s===null||i.index>=s.capacity||s.slots[i.index]===potionId.EMPTY_POTION_SLOT)throw Error('No potion in that slot');const potion=s.slots[i.index]!,slots=[...s.slots];slots[i.index]=potionId.EMPTY_POTION_SLOT;return{writes:[{entity:i.inventory,component:state,value:{...s,slots,count:s.count-1}}],events:[],result:potion};}});
+  const expand=m.atom({input:z.object({inventory:entityId,amount:z.int32().nonnegative()}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){const s=r.component(i.inventory,state);if(s===null||s.capacity+i.amount>5)throw Error('Invalid potion capacity');const slots=[...s.slots];for(let n=s.capacity;n<s.capacity+i.amount;n++)slots[n]=potionId.EMPTY_POTION_SLOT;return{writes:[{entity:i.inventory,component:state,value:{...s,slots,capacity:s.capacity+i.amount}}],events:[],result:undefined};}});
+  const fillAt=m.atom({input:z.object({inventory:entityId,index:z.int32().nonnegative(),potion:z.int32().nonnegative()}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){const s=r.component(i.inventory,state);if(s===null||i.index>=s.capacity||s.slots[i.index]!==potionId.EMPTY_POTION_SLOT)throw Error('Potion slot is not empty');const slots=[...s.slots];slots[i.index]=i.potion;return{writes:[{entity:i.inventory,component:state,value:{...s,slots,count:s.count+1}}],events:[],result:undefined};}});
+  return{exports:{kind,current,forActor,allowed,obtain,remove,expand,fillAt}};
+}});

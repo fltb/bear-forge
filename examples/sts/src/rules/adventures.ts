@@ -1,0 +1,77 @@
+import {z} from 'zod';
+import {rules} from '@bear-forge/card-engine';
+import {resources} from './resources.ts';
+import {permanentDecks} from './permanent-decks.ts';
+import {cardInstances} from './card-instances.ts';
+import {potions} from './potions.ts';
+import {random} from './random.ts';
+import {relics} from './relics.ts';
+import {entityId} from './resources.schemas.ts';
+import {adventureSetupSchema,adventureStateSchema,cardDefinitionSchema,relicDefinitionSchema,relicTiers,rewardsSchema,selectionSchema,selectedSchema} from './adventures.schemas.ts';
+import type {AdventureSetup,AdventureState,AdventureCatalog,AdventureRewards,AdventureSelection,RelicTier} from './adventures.types.ts';
+import type {PermanentCardDefinition} from './permanent-decks.types.ts';
+import type {RelicDefinition} from './relics.ts';
+/** Catalog labels are open; executable identity remains a typed definition reference. */
+type CardId=string;
+type RelicId=string;
+const {defineRules,defineComponent,defineEvent,defineQuery,defineEffect,defineEntity,sequence,call,query,spawnEntity}=rules;
+export const emptyAdventureRewards=():AdventureRewards=>({gold:[],cards:[],relics:[],potions:[],emeraldKey:false,sapphireKey:false});
+export const adventures=defineRules({requires:[resources,permanentDecks,potions,random,relics],build(m){
+  const settlement={},afterSettlement={},combatStages={settlement,afterSettlement};
+  const combatFinished=m.own(defineEvent({payload:z.object({run:entityId,battle:entityId,actor:entityId,outcome:z.union([z.literal(1),z.literal(2)])}),dispatch:'immediate',order:{phases:[{phase:settlement,before:[afterSettlement]},{phase:afterSettlement}],default:settlement}}));
+  const notifyCombatFinished=m.atom({input:z.object({run:entityId,battle:entityId,actor:entityId,outcome:z.union([z.literal(1),z.literal(2)])}),output:z.undefined(),reads:[],writes:[],emits:[combatFinished],run(_r,payload){return{writes:[],events:[{event:combatFinished,payload}],result:undefined};}});
+  const state=m.own(defineComponent({schema:adventureStateSchema.nullable(),initial:()=>null}));
+  const requesting=m.own(rules.defineEvent({payload:entityId,dispatch:'immediate'}));
+  const entered=m.own(rules.defineEvent({payload:z.object({run:entityId,actor:entityId,room:adventureStateSchema.shape.room}),dispatch:'immediate'}));
+  const notifyEntered=m.atom({input:z.object({run:entityId,room:adventureStateSchema.shape.room}),output:z.undefined(),reads:[state],writes:[],emits:[entered],run(r,i){const s=r.component(i.run,state);if(s===null)throw Error('Missing adventure');return{writes:[],events:[{event:entered,payload:{...i,actor:s.actor}}],result:undefined};}});
+  const prepareRequest=m.atom({input:entityId,output:z.undefined(),reads:[],writes:[],emits:[requesting],run(_r,run){return{writes:[],events:[{event:requesting,payload:run}],result:undefined};}});
+  const current=defineQuery({input:entityId,output:adventureStateSchema,reads:[state],base:(r,id)=>{const s=r.component(id,state);if(s===null)throw Error('Uninitialized adventure');return s;}});
+  const instances=defineQuery({input:z.undefined(),output:z.array(entityId),reads:[state],base:r=>r.entities(state).filter(id=>r.component(id,state)!==null)});
+  const forActor=defineQuery({input:entityId,output:entityId.nullable(),reads:[state],base:(r,actor)=>{const ids=r.entities(state).filter(id=>r.component(id,state)?.actor===actor);if(ids.length>1)throw Error('Actor has two adventures');return ids[0]??null;}});
+  const card=defineQuery({input:z.object({run:entityId,id:z.custom<CardId>()}),output:cardDefinitionSchema,dependencies:[current],base:(r,i)=>{const entry=r.query(current,i.run).catalog.cards.find(c=>c.id===i.id);if(!entry)throw Error('Card definition is not installed: '+i.id);return entry.definition;}});
+  const relic=defineQuery({input:z.object({run:entityId,id:z.custom<RelicId>()}),output:relicDefinitionSchema,dependencies:[current],base:(r,i)=>{const entry=r.query(current,i.run).catalog.relics.find(c=>c.id===i.id);if(!entry)throw Error('Relic definition is not installed: '+i.id);return entry.definition;}});
+  const hasRelic=defineQuery({input:z.object({run:entityId,id:z.custom<RelicId>()}),output:z.boolean(),dependencies:[current,relic,relics.exports.find],base:(r,i)=>r.query(relics.exports.find,{actor:r.query(current,i.run).actor,definition:r.query(relic,i)})!==null});
+  const validate=defineQuery({input:adventureSetupSchema,output:adventureSetupSchema,dependencies:[forActor,resources.exports.current,permanentDecks.exports.current,random.exports.current,cardInstances.exports.definitionMetadata],kinds:[cardInstances.exports.kind,relics.exports.kind],base:(r,i)=>{
+    const {start,catalog}=i;r.query(resources.exports.current,start.actor);if(r.query(forActor,start.actor)!==null||r.query(permanentDecks.exports.current,start.deck).actor!==start.actor)throw Error('Invalid adventure owner');for(const stream of Object.values(start.streams))r.query(random.exports.current,stream);
+    if(new Set(catalog.cards.map(c=>c.id)).size!==catalog.cards.length||new Set(catalog.relics.map(c=>c.id)).size!==catalog.relics.length)throw Error('Duplicate catalog identity');
+    for(const c of catalog.cards)if(r.definitionConfiguration(c.definition,cardInstances.exports.kind).id!==c.id)throw Error('Card catalog identity mismatch');for(const c of catalog.relics)if(r.definitionConfiguration(c.definition,relics.exports.kind).id!==c.id)throw Error('Relic catalog identity mismatch');return i;
+  }});
+  const begin=m.atom({input:z.object({entity:entityId,value:adventureStateSchema}),output:z.undefined(),reads:[],writes:[state],emits:[],run(_r,i){return{writes:[{entity:i.entity,component:state,value:i.value}],events:[],result:undefined};}});
+  const inventory=defineEntity(potions.exports.kind,undefined);
+  const initialize=defineEffect<rules.EntityLifecycle<AdventureSetup>,void>(b=>{const input=b.local<AdventureSetup>(),belt=b.local<number>();return sequence(b.assign(input,query(validate,b.read(v=>v.input.setup))),b.assign(belt,spawnEntity({definition:inventory,owner:b.read(v=>v.get(input).start.actor),scope:b.read(v=>v.input.scope),setup:{actor:b.read(v=>v.get(input).start.actor),capacity:2}})),call(begin,{entity:b.read(v=>v.input.entity),value:b.read(v=>{
+    const {start,catalog,initial}=v.get(input),lookupCard=(id:CardId)=>{const found=catalog.cards.find(c=>c.id===id);if(!found)throw Error('Missing initial card definition: '+id);return found.definition;},lookupRelic=(id:RelicId)=>{const found=catalog.relics.find(c=>c.id===id);if(!found)throw Error('Missing initial relic definition: '+id);return found.definition;};
+    return{...start,catalog,scope:v.input.scope,potions:v.get(belt),ascension:20,act:1,floor:0,x:-1,y:-1,screen:'EVENT_SCREEN',outcome:1 as const,room:'INVALID' as const,lastRoom:'INVALID' as const,event:initial.event,eventData:0,hasContinuation:false,keys:{red:false,green:false,blue:false},relicPools:Object.fromEntries(relicTiers.map(key=>[key,start.relicPools[key].map(lookupRelic)])) as AdventureState['relicPools'],colorlessPool:initial.colorlessPool.map(lookupCard),eventList:[...initial.eventList],shrineList:[...initial.shrineList],oneTimeEvents:[...initial.oneTimeEvents],monsterOffset:0,eliteOffset:0,cardRarityFactor:5,potionChance:0,monsterChance:Math.fround(.1),shopChance:Math.fround(.03),treasureChance:Math.fround(.02),shopRemoveCount:0,selection:{type:0,count:0,cards:[],selected:[],transformStream:start.streams.card},rewards:emptyAdventureRewards(),history:[],published:0,stolenGold:0,speedrunPace:false,skipBattles:false,noteForYourself:{definition:lookupCard(initial.note),upgraded:false,misc:0},bossRelics:[],chest:null};
+  })}));});
+  const kind=m.kind({config:z.undefined(),setup:adventureSetupSchema,components:[state],initialize});
+  function change<I extends {run:number},O>(input:rules.Schema<I>,output:rules.Schema<O>,apply:(s:Readonly<AdventureState>,i:I)=>{state:AdventureState;result:O}){return m.atom({input,output,reads:[state],writes:[state],emits:[],run(r,i){const s=r.component(i.run,state);if(s===null)throw Error('Missing adventure');const next=apply(s as AdventureState,i);return{writes:[{entity:i.run,component:state,value:next.state}],events:[],result:next.result};}});}
+  const setScene=change(z.object({run:entityId,screen:z.string(),continuation:z.boolean()}),z.undefined(),(s,i)=>({state:{...s,screen:i.screen,hasContinuation:i.continuation},result:undefined}));
+  const setRarity=change(z.object({run:entityId,factor:z.int32()}),z.undefined(),(s,i)=>({state:{...s,cardRarityFactor:i.factor},result:undefined}));
+  const countShopRemove=change(z.object({run:entityId}),z.undefined(),s=>({state:{...s,shopRemoveCount:s.shopRemoveCount+1},result:undefined}));
+  const setKeys=change(z.object({run:entityId,keys:adventureStateSchema.shape.keys}),z.undefined(),(s,i)=>({state:{...s,keys:i.keys},result:undefined}));
+  const setOutcome=change(z.object({run:entityId,outcome:adventureStateSchema.shape.outcome}),z.undefined(),(s,i)=>({state:{...s,outcome:i.outcome},result:undefined}));
+  const setStolenGold=change(z.object({run:entityId,amount:z.int32().nonnegative()}),z.undefined(),(s,i)=>({state:{...s,stolenGold:i.amount},result:undefined}));
+  const setPotionChance=change(z.object({run:entityId,chance:z.int32()}),z.undefined(),(s,i)=>({state:{...s,potionChance:i.chance},result:undefined}));
+  const arrive=change(z.object({run:entityId,x:z.int32(),y:z.int32(),room:adventureStateSchema.shape.room,event:z.int32()}),z.undefined(),(s,i)=>({state:{...s,lastRoom:s.room,x:i.x,y:i.y,floor:s.floor+1,room:i.room,event:i.event,hasContinuation:true},result:undefined}));
+  const setRoom=change(z.object({run:entityId,room:adventureStateSchema.shape.room,event:z.int32()}),z.undefined(),(s,i)=>({state:{...s,room:i.room,event:i.event},result:undefined}));
+  const setEventData=change(z.object({run:entityId,data:z.int32()}),z.undefined(),(s,i)=>({state:{...s,eventData:i.data},result:undefined}));
+  const setColorlessPool=change(z.object({run:entityId,cards:z.array(cardDefinitionSchema)}),z.undefined(),(s,i)=>({state:{...s,colorlessPool:[...i.cards]},result:undefined}));
+  const removeEvent=change(z.object({run:entityId,id:z.int32(),pools:z.array(z.enum(['eventList','shrineList','oneTimeEvents']))}),z.undefined(),(s,i)=>{let next={...s};for(const pool of i.pools){const index=next[pool].indexOf(i.id);if(index>=0)next={...next,[pool]:next[pool].filter((_,at)=>at!==index)};}return{state:next,result:undefined};});
+  const setRoomChances=change(z.object({run:entityId,monster:z.number(),shop:z.number(),treasure:z.number()}),z.undefined(),(s,i)=>({state:{...s,monsterChance:i.monster,shopChance:i.shop,treasureChance:i.treasure},result:undefined}));
+  const setBossRelics=change(z.object({run:entityId,relics:z.array(relicDefinitionSchema)}),z.undefined(),(s,i)=>({state:{...s,bossRelics:i.relics,screen:'BOSS_RELIC_REWARDS'},result:undefined}));
+  const setChest=change(z.object({run:entityId,chest:adventureStateSchema.shape.chest}),z.undefined(),(s,i)=>({state:{...s,chest:i.chest,screen:'TREASURE_ROOM'},result:undefined}));
+  const incrementFloor=change(z.object({run:entityId}),z.undefined(),s=>({state:{...s,floor:s.floor+1},result:undefined}));
+  const beginAct=change(z.object({run:entityId,act:z.int32(),map:adventureStateSchema.shape.map,monsterList:z.array(z.int32()),eliteList:z.array(z.int32()),boss:z.int32(),secondBoss:z.int32(),eventList:z.array(z.int32()),shrineList:z.array(z.int32()),colorlessPool:z.array(cardDefinitionSchema)}),z.undefined(),(s,i)=>({state:{...s,act:i.act,map:i.map,monsterList:i.monsterList,eliteList:i.eliteList,boss:i.boss,secondBoss:i.secondBoss,eventList:i.eventList,shrineList:i.shrineList,colorlessPool:i.colorlessPool,monsterOffset:0,eliteOffset:0,x:-1,y:-1,monsterChance:Math.fround(.1),shopChance:Math.fround(.03),treasureChance:Math.fround(.02),potionChance:0,screen:'MAP_SCREEN'},result:undefined}));
+  const takeEncounter=change(z.object({run:entityId,elite:z.boolean()}),z.int32(),(s,i)=>{const list=i.elite?s.eliteList:s.monsterList,index=i.elite?s.eliteOffset:s.monsterOffset,encounter=list[index];if(encounter===undefined)throw Error('Encounter plan requires refill');return{state:{...s,...(i.elite?{eliteOffset:index+1}:{monsterOffset:index+1})},result:encounter};});
+  const setRewards=change(z.object({run:entityId,rewards:rewardsSchema}),z.undefined(),(s,i)=>({state:{...s,rewards:i.rewards,screen:'REWARDS'},result:undefined}));
+  const removeReward=change(z.object({run:entityId,kind:z.enum(['cards','gold','potions','relics']),index:z.int32().nonnegative()}),z.undefined(),(s,i)=>{
+    if(i.index>=s.rewards[i.kind].length)throw Error('Invalid reward index');
+    return{state:{...s,rewards:{...s.rewards,[i.kind]:s.rewards[i.kind].filter((_,index)=>index!==i.index)}},result:undefined};
+  });
+  const beginSelection=change(z.object({run:entityId,selection:selectionSchema}),z.undefined(),(s,i)=>({state:{...s,selection:i.selection,screen:'CARD_SELECT'},result:undefined}));
+  const acceptSelection=change(z.object({run:entityId,index:z.int32().nonnegative()}),z.boolean(),(s,i)=>{const chosen=s.selection.cards[i.index];if(!chosen||s.selection.selected.length>=s.selection.count)throw Error('Illegal permanent card selection');const selection={...s.selection,cards:s.selection.cards.filter((_,index)=>index!==i.index),selected:[...s.selection.selected,chosen]};return{state:{...s,selection},result:selection.selected.length===selection.count};});
+  const setTransformStream=change(z.object({run:entityId,stream:entityId}),z.undefined(),(s,i)=>({state:{...s,selection:{...s.selection,transformStream:i.stream}},result:undefined}));
+  const takeRelic=change(z.object({run:entityId,tier:z.enum(relicTiers),front:z.boolean()}),relicDefinitionSchema,(s,i)=>{const pool=s.relicPools[i.tier];if(!pool.length)throw Error('Pinned source relic pool exhausted');const definition=i.front?pool[0]!:pool.at(-1)!;return{state:{...s,relicPools:{...s.relicPools,[i.tier]:i.front?pool.slice(1):pool.slice(0,-1)}},result:definition};});
+  const record=change(z.object({run:entityId,kind:z.union([z.literal('game'),z.literal('battle')]),bits:z.number().int().min(0).max(0xffffffff)}),z.undefined(),(s,i)=>({state:{...s,history:[...s.history,{kind:i.kind,bits:i.bits}]},result:undefined}));
+  const published=change(z.object({run:entityId,count:z.int32().nonnegative()}),z.undefined(),(s,i)=>{if(i.count<s.published||i.count>s.history.length)throw Error('Invalid event acknowledgement');return{state:{...s,published:i.count},result:undefined};});
+  return{exports:{notifyCombatFinished,combatFinished:combatFinished.public,combatStages,kind,current,instances,prepareRequest,requesting:requesting.public,entered:entered.public,notifyEntered,forActor,card,relic,hasRelic,setScene,setRarity,countShopRemove,setKeys,setOutcome,setStolenGold,setPotionChance,arrive,setRoom,setEventData,setColorlessPool,removeEvent,setRoomChances,setBossRelics,setChest,incrementFloor,beginAct,takeEncounter,setRewards,removeReward,beginSelection,acceptSelection,setTransformStream,takeRelic,record,published}};
+}});

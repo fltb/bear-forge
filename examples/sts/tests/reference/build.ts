@@ -57,7 +57,16 @@ async function build(raw=false): Promise<string> {
   const originalActions=await readFile(actionSource,'utf8');
   const missingIndex='actions.emplace_back(search::GameAction::RewardsActionType::GOLD);';
   if(originalActions.split(missingIndex).length!==2)throw Error('Pinned reward index correction no longer matches');
-  const correctedActions=originalActions.replace(missingIndex,'actions.emplace_back(search::GameAction::RewardsActionType::GOLD, i);');
+  const missingKeyOrder=`r.removeRelicReward(a.getIdx1());
+            if (a.getIdx1() == r.relicCount-1) {
+                r.sapphireKey = false;
+            }`;
+  if(originalActions.split(missingKeyOrder).length!==2)throw Error('Pinned sapphire key correction no longer matches');
+  // Compare the linked last index before removal, preserving chest mutual exclusion.
+  const correctedActions=originalActions.replace(missingIndex,'actions.emplace_back(search::GameAction::RewardsActionType::GOLD, i);').replace(missingKeyOrder,`if (a.getIdx1() == r.relicCount-1) {
+                r.sapphireKey = false;
+            }
+            r.removeRelicReward(a.getIdx1());`);
   const correctedActionPath=resolve(directory,'GameAction.cpp');
   if(await readFile(correctedActionPath,'utf8').catch(()=>null)!==correctedActions)await writeFile(correctedActionPath,correctedActions);
   const input=[...sources,adapter];

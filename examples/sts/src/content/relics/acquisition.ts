@@ -98,8 +98,9 @@ export function createAdventureAcquisition(ui:rules.RuleModule<AdventureChoiceEx
   const claimState=rules.defineComponent({schema:claimSetup.extend({done:z.boolean()}).nullable(),initial:()=>null});
   const currentClaim=defineQuery({input:z.number(),output:claimSetup.extend({done:z.boolean()}),reads:[claimState],base:(r,id)=>{const state=r.component(id,claimState);if(state===null)throw Error('Uninitialized reward receipt');return state;}});
   const settleClaimOwned=defineEffect<number,void>(b=>{const pending=b.local<z.infer<typeof claimSetup>&{done:boolean}>();return sequence(
-    b.assign(pending,query(currentClaim,b.input)),when(b.read(v=>v.get(pending).done),b.return(undefined)),call(adventures.exports.removeReward,{run:b.read(v=>v.get(pending).run),kind:'relics',index:b.read(v=>v.get(pending).index)}),
+    b.assign(pending,query(currentClaim,b.input)),when(b.read(v=>v.get(pending).done),b.return(undefined)),
     when(b.read(v=>v.get(pending).index===v.query(adventures.exports.rewards,v.get(pending).run).rewards.relics.length-1),call(adventures.exports.setRewards,{run:b.read(v=>v.get(pending).run),rewards:b.read(v=>({...v.query(adventures.exports.rewards,v.get(pending).run).rewards,sapphireKey:false}))})),
+    call(adventures.exports.removeReward,{run:b.read(v=>v.get(pending).run),kind:'relics',index:b.read(v=>v.get(pending).index)}),
     rules.updateLocalComponent(b.input,claimState,b.read(v=>({...v.get(pending),done:true}))),
   );});
   const settleClaim:rules.Effect<number,void>=defineEffect<number,void>(b=>call(entityEffect(claimKind,b.input,()=>settleClaimOwned),b.input));

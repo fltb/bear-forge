@@ -32,6 +32,53 @@ function assertSelectionMetadata(r:InteractiveRecord){
   }
 }
 
+test('chest sapphire key and its linked relic are mutually exclusive in either claim order',async()=>{
+  // Fixed B09 normal-start diagnostic prefix, not a player policy.
+  const prefix=[1,0,1,1,0,2147483648,3,2,2147483648,1,2,2,256,134217728,805306368,0,2,0,2,2147483648,65537,2,2147483648,65536,512,402653184,134217728,805306368,0,0,0,2147483648,4,3,2,2147483648,3,512,134217728,805306368,1,1,2,402653185,805306368,1,536870913,536870912,4,2147483648,0,0,0,2147483648,1,2,0,2147483648,3,0,2,2147483648,1,1,0,2147483648,2,0,2147483648,1,2,2147483648,2,536870912,268435456,512,134217728,805306368,0,65537,0,0,2147483648,0,65536,65536,0,2147483648,0,0,0,402653184,134217728,805306368,0,0,1,0];
+  for(const takeKey of [false,true]){
+    const session=await createInteractiveSession({character:'ironclad',seed:'8210101',sessionId:'chest-key-'+takeKey,review:false,onEvent:()=>{}});
+    try{
+      let state=await session.observe();
+      for(const bits of prefix){
+        if(state.kind!=='decision')throw Error('Diagnostic prefix ended early');const r=state.record;
+        const result=await session.act({op:'act',sessionId:r.sessionId,decision:r.decision,action:r.actions.findIndex(a=>a.bits===bits),reason:''});
+        assert.equal(result.accepted,true);if(!result.accepted)throw Error('Diagnostic action rejected');state=result.status;
+      }
+      if(state.kind!=='decision')throw Error('Expected chest reward');const r=state.record;
+      assert.equal(r.observation.game.rewards!.sapphireKey,true);
+      assert.equal(r.observation.game.rewards!.relics.length,1);
+      const result=await session.act({op:'act',sessionId:r.sessionId,decision:r.decision,action:r.actions.findIndex(a=>a.bits===(takeKey?2<<27:4<<27)),reason:''});
+      assert.equal(result.accepted,true);if(!result.accepted||result.status.kind!=='decision')throw Error('Expected remaining rewards');
+      const after=result.status.record,g=after.observation.game;
+      assert.equal(g.rewards!.sapphireKey,false);assert.deepEqual(g.rewards!.relics,[]);
+      assert.equal(g.keys.blue,takeKey);assert.equal(g.relics.some(x=>x.id==='DEAD_BRANCH'),!takeKey);
+      assert.ok(!after.actions.some(a=>a.bits===(2<<27)||a.bits===(4<<27)));
+    }finally{await session.close();}
+  }
+});
+
+test('Lagavulin wakes and loses sleep armor after HP damage inside a permanent domain',async()=>{
+  // Fixed B08 diagnostic prefix, not a player policy.
+  const prefix=[0,3,1,2,2,2147483648,2,0,65537,2147483648,65538,65536,65538,2147483648,65536,65536,0,134217728,805306368,3,1,1,2,2147483648,1,1,2147483648,4,2,0,134217728,805306368,4,1,1,2147483648,0,0,512,402653184,134217728,805306368,3,0,4,1,2,402653184,0,805306368,3,0,2147483648,2,2147483648,536870912,4];
+  const session=await createInteractiveSession({character:'volibear',seed:'7210101',sessionId:'domain-wake-regression',review:false,onEvent:()=>{}});
+  try{
+    let state=await session.observe();
+    for(const [index,bits]of prefix.entries()){
+      if(state.kind!=='decision')throw Error('Diagnostic prefix ended early');const r=state.record;
+      if(index===prefix.length-1){const b=r.observation.battle!;assert.equal(b.monsters[0]!.hp,112);assert.ok(b.domain!.active);assert.equal(b.domain!.untilTurn,null);assert.ok(b.effects!.some(e=>e.name==='ASLEEP'&&e.active));}
+      const result=await session.act({op:'act',sessionId:r.sessionId,decision:r.decision,action:r.actions.findIndex(a=>a.bits===bits),reason:''});
+      assert.equal(result.accepted,true);if(!result.accepted)throw Error('Diagnostic action rejected');state=result.status;
+    }
+    if(state.kind!=='decision')throw Error('Expected woken combat');const r=state.record,b=r.observation.battle!;
+    assert.equal(b.monsters[0]!.hp,93);assert.ok(b.domain!.active);
+    assert.ok(!b.effects!.some(e=>e.name==='ASLEEP'&&e.active));
+    assert.ok(!b.effects!.some(e=>e.name==='METALLICIZE'&&e.active));
+    const result=await session.act({op:'act',sessionId:r.sessionId,decision:r.decision,action:r.actions.findIndex(a=>a.bits===0x80000000),reason:''});
+    assert.equal(result.accepted,true);if(!result.accepted||result.status.kind!=='decision')throw Error('Expected next player turn');
+    assert.ok(result.status.record.observation.battle!.intents!.some(i=>i.name==='LAGAVULIN_ATTACK'));
+  }finally{await session.close();}
+});
+
 test('shop Orrery presentation discloses its current inert acquisition before purchase',async()=>{
   // Fixed B07 diagnostic prefix; this records a source limitation, not original STS parity.
   const prefix=[1,2,1,65539,2,2147483648,65536,0,512,134217728,402653184,805306368,3,0,4,4,1,2];

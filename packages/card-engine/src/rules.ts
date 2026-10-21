@@ -1,7 +1,7 @@
 import type { Builder, Command, Effect, Input, Local, Statement, Value } from './rules.types.ts';
 import { definitionCapture, definitions, handle, statements } from './rules-internal.ts';
 import type { Node } from './rules-internal.ts';
-export type { Builder, Command, Effect, Input, Local, ReadView, Statement, Value } from './rules.types.ts';
+export type { Borrowed, Builder, Command, Effect, Input, Local, ReadView, Statement, Value } from './rules.types.ts';
 
 function statement(node: Node): Statement {
   const value = handle<Statement>(); statements.set(value, node); return value;
@@ -43,7 +43,7 @@ export type { Checkpoint, CheckpointSpec, ReplacementContext, ReplacementResult,
 export { modify } from './rules-modifiers.ts';
 export type { ModifierContext, ModifierSpec } from './rules-modifiers.ts';
 
-export { defineEntity, spawnEntity, despawnEntity, entityEffect,definitionOf } from './rules-entities.ts';
+export { defineEntity, spawnEntity, despawnEntity, entityEffect,definitionOf,entityConfiguration } from './rules-entities.ts';
 export type { EntityDefinition, EntityKind, EntityKindSpec, EntityLifecycle, ScopeKind, LifecycleSpec, ScopeLifecycle,SpawnSpec } from './rules-entities.types.ts';
 export { scopeOf } from './rules-scopes.ts';
 

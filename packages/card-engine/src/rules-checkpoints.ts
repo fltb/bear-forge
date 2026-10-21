@@ -1,11 +1,12 @@
 import { card } from './card.ts';
-import { dataCopy, sameRuleData } from './rules-data.ts';
+import { ownRuleValue, sameRuleValue } from './rules-values.ts';
 import {prepareOrdering,resolveOrder,compareOrder} from './rules-order.ts';
 import type {RuleOrder} from './rules-order.types.ts';
 import { definitions, handle, statements } from './rules-internal.ts';
 import { authorities, declareStatic, staticDefinitions, stateOf } from './rules-module-internal.ts';
 import { evaluateQuery } from './rules-queries.ts';
 import type { Ability } from './rules-reactions.types.ts';
+import type { Registration } from './rules-reactions.types.ts';
 import type { Checkpoint, CheckpointSpec, ReplacementResult, ReplacementSpec } from './rules-checkpoints.types.ts';
 import type { Command, Effect, Input } from './rules.types.ts';
 import type { Owned } from './rules-module.types.ts';
@@ -22,8 +23,8 @@ export function replace<I,O,E={}>(target:Checkpoint<I,O>,spec:ReplacementSpec<O,
     condition:spec.condition??null,eligible:spec.eligible??'registered',...resolveOrder(targetMetadata.ordering,spec.order)});return ability;
 }
 export function restrict<I,O,E={}>(target:Checkpoint<I,O>,spec:{when:Query<any,boolean>;reason:unknown;order?:RuleOrder}):Ability<E>{
-  const reason=dataCopy(spec.reason,true),effect=handle<Effect<any,ReplacementResult<O>>>();
-  definitions.set(effect,{kind:'compiled',lower(){return[card.return(()=>({kind:'cancel',reason:dataCopy(reason)}))];}});
+  const reason=ownRuleValue(spec.reason),effect=handle<Effect<any,ReplacementResult<O>>>();
+  definitions.set(effect,{kind:'compiled',lower(){return[card.return(()=>({kind:'cancel',reason}))];}});
   return replace(target,{effect,condition:spec.when,...(spec.order===undefined?{}:{order:spec.order})});
 }
 /** Only the defining module can invoke a checkpoint; entities may install its replacement abilities. */
@@ -32,10 +33,10 @@ export function resolveCheckpoint<I,O>(owner:object,target:Owned<Checkpoint<I,O>
   definitions.set(effect,{kind:'compiled',lower(link){
     const authority=authorities.get(target),metadata=authority&&staticDefinitions.get(authority.definition);
     if(!authority||authority.owner!==owner||link.bindings.owners.get(authority.definition)!==owner||metadata?.kind!=='checkpoint')throw Error('Unauthorized rule checkpoint execution');
+    const targetIndex=link.bindings.indices.get(authority.definition)!;
     const context=(s:any,registration:any)=>({value:s.locals.value,source:registration.source,owner:registration.owner,environment:registration.environment,registration:registration.id});
     const qualified=(s:any,registration:any,checkCondition=true):boolean=>{
-      const ability=staticDefinitions.get(link.bindings.definitions[registration.definition]!);
-      if(ability?.kind!=='ability'||ability.abilityKind!=='replacement')return false;
+      const {metadata:ability}=link.bindings.reactions.get(registration.definition)!;
       if(ability.eligible!=='captured'){
         const state=stateOf(s.state);
         if(!Object.hasOwn(state.registrations,registration.id)||!Object.hasOwn(state.entities,registration.source))return false;
@@ -44,33 +45,34 @@ export function resolveCheckpoint<I,O>(owner:object,target:Owned<Checkpoint<I,O>
       return !checkCondition||!ability.condition||evaluateQuery(ability.condition,context(s,registration),s.state,link.bindings);
     };
     return[card.operation(s=>{
-      const parsed=metadata.input.parse(dataCopy(s.input));s.locals.value=dataCopy(metadata.output.parse(metadata.initial(dataCopy(parsed,true))));s.locals.applied=[];s.locals.changed=false;
+      const parsed=metadata.inputPlan.own(s.input);s.locals.value=metadata.outputPlan.own(metadata.initial(parsed));s.locals.applied=[];s.locals.changed=false;
     }),card.repeat(()=>true,[
       card.operation(s=>{
-        const candidates=Object.values(stateOf(s.state).registrations).filter(r=>{
-          const a=staticDefinitions.get(link.bindings.definitions[r.definition]!);
-          return a?.kind==='ability'&&a.abilityKind==='replacement'&&a.target===authority.definition&&!s.locals.applied.includes(r.id)&&qualified(s,r);
-        }).sort((a,b)=>{
-          const ma=staticDefinitions.get(link.bindings.definitions[a.definition]!)!,mb=staticDefinitions.get(link.bindings.definitions[b.definition]!)!;
-          if(ma.kind!=='ability'||mb.kind!=='ability')throw Error('Invalid replacement order');return compareOrder(ma,mb)||a.sequence-b.sequence;
-        });return candidates.length?dataCopy(candidates[0]):null;
+        const state=stateOf(s.state);let selected:Registration|null=null;
+        // Conditions retain registration-arrival order; ranking chooses the
+        // same first qualified replacement without sorting on every retry.
+        for(const id of state.indexes.registrationsByTargetArrival[targetIndex]??[]){
+          const registration=state.registrations[id]!;
+          if(s.locals.applied.includes(id)||!qualified(s,registration))continue;
+          if(selected===null){selected=registration;continue;}
+          const next=staticDefinitions.get(link.bindings.definitions[registration.definition]!)!,previous=staticDefinitions.get(link.bindings.definitions[selected.definition]!)!;
+          if(next.kind==='ability'&&previous.kind==='ability'&&(compareOrder(next,previous)||registration.sequence-selected.sequence)<0)selected=registration;
+        }
+        return selected===null?null:selected;
       },'candidate'),
       card.branch(s=>s.locals.candidate===null,[card.return(s=>({kind:s.locals.changed?'change':'keep',value:s.locals.value}))]),
       card.operation(s=>{s.locals.applied.push(s.locals.candidate.id);stateOf(s.state).sources.push(s.locals.candidate.source);}),
       card.invoke(s=>{
-        const a=staticDefinitions.get(link.bindings.definitions[s.locals.candidate.definition]!);
-        if(a?.kind!=='ability'||a.abilityKind!=='replacement')throw Error('Invalid replacement ability');
-        const name=link.names.get(a.effect);if(!name)throw Error('Unlinked replacement effect');return name;
+        return link.bindings.reactions.get(s.locals.candidate.definition)!.effect;
       },s=>context(s,s.locals.candidate),'replacement'),
       card.operation(s=>{if(stateOf(s.state).sources.pop()!==s.locals.candidate.source)throw Error('Invalid replacement source stack');}),
       card.branch(s=>qualified(s,s.locals.candidate,false),[
         card.operation(s=>{
           const result=s.locals.replacement;
-          if(!result||!['keep','change','cancel'].includes(result.kind))throw Error('Invalid replacement result');
-          if(result.kind==='cancel')s.locals.cancelled=dataCopy(result);
+          if(result.kind==='cancel')s.locals.cancelled=ownRuleValue(result);
           else{
-            const value=dataCopy(metadata.output.parse(dataCopy(result.value)));
-            if(result.kind==='keep'){if(!sameRuleData(value,s.locals.value))throw Error('Keep result cannot change checkpoint value');}
+            const value=metadata.outputPlan.own(result.value);
+            if(result.kind==='keep'){if(!sameRuleValue(value,s.locals.value))throw Error('Keep result cannot change checkpoint value');}
             else{s.locals.value=value;s.locals.changed=true;}
           }
         }),

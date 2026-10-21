@@ -29,7 +29,7 @@ test('private leaf publications use row-local caches without global weak-table w
 test('source identity tables end after complete imports and IO while managed aliases survive', () => {
   const set = WeakMap.prototype.set, tables: WeakMap<object, unknown>[] = [];
   WeakMap.prototype.set = function (key, value) {
-    if (typeof value === 'number') tables.push(this);
+    if (value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.ref === 'number') tables.push(this);
     return set.call(this, key, value);
   };
   let graph: CardGraph<any> | undefined, child: CardGraph<any> | undefined;
@@ -57,7 +57,7 @@ test('source identity tables end after complete imports and IO while managed ali
 
 test('temporary child allocations do not advance the parent identity range', () => {
   const graph = new CardGraph<any>({ item: { n: 1 } });
-  const identity = (value: CardGraph<any>): { next: number; originals: WeakMap<object, number> } => (value as any).identity;
+  const identity = (value: CardGraph<any>): { next: number; originals: WeakMap<object, {ref:number}> } => (value as any).identity;
   const before = identity(graph).next;
   for (let i = 0; i < 20; i++) {
     const child = graph.fork();

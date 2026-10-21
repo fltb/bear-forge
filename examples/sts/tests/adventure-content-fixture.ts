@@ -20,7 +20,7 @@ const fixture=defineRules({requires:[adventureProgram],build(){
     const run=b.local<number>(),room=b.local<number>(),catalog=b.local<{key:Room;definition:RoomDefinition}[]>();
     const state=(v:rules.ReadView<AdventureContentCase>)=>v.get(query(adventures.exports.current,v.get(run)));
     return sequence(
-      b.assign(run,call(adventureStart.exports.initialize,{setup:b.read(v=>({seed:v.input.seed})),catalog:{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions}})),
+      b.assign(run,call(adventureStart.exports.initialize,{setup:b.read(v=>({seed:v.input.seed})),definition:rules.defineEntity(adventures.exports.kind,{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),
       b.assign(catalog,adventureContent.rooms.exports.definitions),call(resources.exports.setHealth,{entity:b.read(v=>state(v).actor),hp:490,maxHp:500}),
       call(resources.exports.gainGold,{entity:b.read(v=>state(v).actor),amount:b.read(v=>1000-v.get(query(resources.exports.current,state(v).actor)).gold)}),
       forEach(['BARRICADE','REGRET'] as const,id=>call(permanentDecks.exports.obtain,{deck:b.read(v=>state(v).deck),definition:query(adventures.exports.card,{run,id}),upgraded:false,specialData:0,count:1,upgrade:false})),

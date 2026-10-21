@@ -11,7 +11,7 @@ export const random=defineRules({requires:[],build(m){
   const state=m.own(defineComponent({schema:randomStateSchema,initial:()=>randomState(0n)}));
   const seed=m.atom({input:z.object({stream:entityId,seed:unsigned64}),output:z.undefined(),reads:[],writes:[state],emits:[],run(_r,input){return{writes:[{entity:input.stream,component:state,value:randomState(input.seed)}],events:[],result:undefined};}});
   const stream=m.kind({config:z.undefined(),setup:unsigned64,components:[state],initialize:defineEffect<rules.EntityLifecycle<bigint>,void>(b=>call(seed,{stream:b.read(v=>v.input.entity),seed:b.read(v=>v.input.setup)}))});
-  function sample<I extends {stream:number},O>(input:rules.Schema<I>,output:rules.Schema<O>,draw:(state:RandomState,input:I)=>O):rules.Effect<I,O>{
+  function sample<I extends {stream:number},O>(input:rules.Schema<I>,output:rules.Schema<O>,draw:(state:RandomState,input:rules.Borrowed<I>)=>O):rules.Effect<I,O>{
     return m.atom({input,output,reads:[state],writes:[state],emits:[],run(r,input){
       const next={...r.component(input.stream,state)},result=draw(next,input);
       return{writes:[{entity:input.stream,component:state,value:next}],events:[],result};

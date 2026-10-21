@@ -1,17 +1,19 @@
 import {attachRuleReplyGuards} from './rules-reply-guards.ts';
 import {attachRuleQueries} from './rules-inspection.ts';
+import {attachCardAdmission} from './card-admission.ts';
+import {admitRuleState} from './rules-state.ts';
 import type {ChoiceReplyGuard} from './rules-reply-guards.ts';
 import { ruleLayoutIdentity } from './rules-layout.ts';
 import { dispatchImmediateEvents } from './rules-reactions.ts';
 import type { PortShape, ProgramSchemas } from '@bear-forge/contracts/core';
 import { validateQueries,bindQuerySelections } from './rules-queries.ts';
-import { bindModules, createModuleState, staticDefinitions, authorities, definitionOwners, declarationCapture } from './rules-module-internal.ts';
+import { bindModules, bindEntityLayouts, createModuleState, staticDefinitions, authorities, definitionOwners, declarationCapture } from './rules-module-internal.ts';
 import type { RuleModule } from './rules-module.types.ts';
 import { card } from './card.ts';
-import type { CardDefinition, CardEffect, CardScope, CardStep } from './card.types.ts';
-import type { Effect } from './rules.types.ts';
+import type { CardDefinition, CardEffect, CardExpression, CardScope, CardStep } from './card.types.ts';
+import type { Effect, Input } from './rules.types.ts';
 import { createBuilder } from './rules-builder.ts';
-import { definitionCapture, definitions, expressions, readExpression, statements } from './rules-internal.ts';
+import { definitionCapture, definitions, expressions, statements } from './rules-internal.ts';
 import type { AnyEffect, ExpressionContext } from './rules-internal.ts';
 
 /** Typed author trees are lowered once; CardMachine remains the only execution loop. */
@@ -51,7 +53,16 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
     for(const component of metadata.privateComponents){
       const data=staticDefinitions.get(component);if(data?.kind!=='component'||definitionOwners.has(component))throw Error('Entity private data requires an unowned content component');register(component);
     }
-    return register(definition);
+    const existing=linkedModules.bindings.indices.get(definition);if(existing!==undefined)return existing;
+    const index=register(definition),seen=new Set<object>();
+    const include=(value:unknown):void=>{
+      if(value===null||typeof value!=='object'||seen.has(value))return;seen.add(value);
+      const child=staticDefinitions.get(value);
+      if(child?.kind==='entity'){registerEntity(value);return;}
+      if(child||definitions.has(value))return;
+      for(const item of Object.values(value))include(item);
+    };
+    include(metadata.config);return index;
   };
   const effects: CardEffect<S>[] = [], layoutTrees:unknown[]=[],layoutLocals=new Map<object,string>();
   const replyGuards=new Map<string,ChoiceReplyGuard>();
@@ -94,7 +105,8 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
     const layoutNodes:unknown[]=[];layoutTrees.push(layoutNodes);
     const lexicalItems = new Map<object, (context: ExpressionContext) => unknown>();
     const lexicalActive = new Set<object>();
-    const context = (scope: CardScope<S>): ExpressionContext => ({
+    const contexts=new WeakMap<CardScope<S>,ExpressionContext>();
+    const createContext = (scope: CardScope<S>): ExpressionContext => ({
       owner, slots: locals, input: scope.input, locals: scope.locals, lexical: lexicalItems,
       world:scope.state, bindings:linkedModules.bindings,identity:()=>runtimeIdentity,evaluate:value=>evaluate(value,scope),
       entityEffect:(selector,entity)=>{
@@ -105,24 +117,65 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
         return{program:runtimeIdentity,effect:Number(name.slice(1)),source:entity,selector:selectorIndices.get(selector)!};
       },
     });
-    const evaluate = (value: any, scope: CardScope<S>, seen = new Map<object, any>()): any => {
-      if (value === null || typeof value !== 'object') {
-        if (typeof value === 'function' || typeof value === 'symbol') throw Error('Rule arguments must be data');
-        return value;
-      }
-      const item = lexicalItems.get(value); if (item) return item(context(scope));
-      if (expressions.has(value)) return readExpression(value, context(scope));
-      if (authorities.has(value)) throw Error('Owner authority cannot be runtime data');
-      if(staticDefinitions.has(value)){
-        const index=linkedModules.bindings.indices.get(value);if(index===undefined)throw Error('Unbound static rule definition');
-        return staticDefinitions.get(value)?.kind==='entity'?{program:runtimeIdentity,definition:index}:index;
-      }
-      if (statements.has(value) || definitions.has(value)) throw Error('Static rule handle used as runtime data');
-      if (seen.has(value)) return seen.get(value);
-      if (Object.getPrototypeOf(value) !== Object.prototype && !Array.isArray(value)) throw Error('Rule literal must be plain data');
-      const result: any = Array.isArray(value) ? new Array(value.length) : {}; seen.set(value,result);
-      for (const key of Object.keys(value)) Object.defineProperty(result, key, { value: evaluate(value[key], scope, seen), enumerable: true, configurable: true, writable: true });
+    const context=(scope:CardScope<S>):ExpressionContext=>{
+      let value=contexts.get(scope);if(!value){value=createContext(scope);contexts.set(scope,value);}return value;
+    };
+    type Reader=(scope:CardScope<S>)=>unknown;
+    type LiteralReader=(scope:CardScope<S>,memo:unknown[]|null)=>unknown;
+    const readers=new WeakMap<object,Reader>();
+    const bindValue=(root:unknown):Reader=>{
+      if(root!==null&&typeof root==='object'){const known=readers.get(root);if(known)return known;}
+      const literals=new Map<object,LiteralReader>();let shared=false,slot=0;
+      const bind=(value:unknown):LiteralReader=>{
+        if(value===null||typeof value!=='object'){
+          if(typeof value==='function'||typeof value==='symbol')throw Error('Rule arguments must be data');
+          return()=>value;
+        }
+        const item=lexicalItems.get(value);if(item)return scope=>item(context(scope));
+        const bound=expressions.get(value);
+        if(bound){
+          if(bound.owner!==null&&bound.owner!==owner)throw Error('Foreign rule expression');
+          for(const input of bound.inputs)bindValue(input);
+          return scope=>bound.read(context(scope));
+        }
+        if(authorities.has(value))throw Error('Owner authority cannot be runtime data');
+        const definition=staticDefinitions.get(value);
+        if(definition){
+          const index=linkedModules.bindings.indices.get(value);if(index===undefined)throw Error('Unbound static rule definition');
+          return definition.kind==='entity'?()=>({program:runtimeIdentity,definition:index}):()=>index;
+        }
+        if(statements.has(value)||definitions.has(value))throw Error('Static rule handle used as runtime data');
+        const previous=literals.get(value);if(previous){shared=true;return previous;}
+        const array=Array.isArray(value);
+        if(!array&&Object.getPrototypeOf(value)!==Object.prototype)throw Error('Rule literal must be plain data');
+        const index=slot++,length=array?value.length:0;
+        const fields:{key:string;read:LiteralReader}[]=[];
+        const read:LiteralReader=(scope,memo)=>{
+          if(memo&&memo[index]!==undefined)return memo[index];
+          const output=(array?new Array(length):{}) as Record<string,unknown>;
+          if(memo)memo[index]=output;
+          for(const field of fields){
+            const result=field.read(scope,memo),key=field.key;
+            if(key in output)Object.defineProperty(output,key,{value:result,enumerable:true,writable:true,configurable:true});
+            else output[key]=result;
+          }
+          return output;
+        };
+        literals.set(value,read);
+        for(const key of Object.keys(value)){
+          const descriptor=Object.getOwnPropertyDescriptor(value,key)!;
+          if(!Object.hasOwn(descriptor,'value'))throw Error('Rule literals cannot contain accessors');
+          fields.push({key,read:bind(descriptor.value)});
+        }
+        return read;
+      };
+      const read=bind(root),result:Reader=scope=>read(scope,shared?[]:null);
+      if(root!==null&&typeof root==='object')readers.set(root,result);
       return result;
+    };
+    const evaluate=(value:unknown,scope:CardScope<S>):any=>{
+      if(value===null||typeof value!=='object')return value;
+      return bindValue(value)(scope);
     };
     const validateValue = (value: any, active = new Set<object>()): void => {
       if (value === null || typeof value !== 'object') {
@@ -170,8 +223,11 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
     };
     const expression = (value: any) => {
       validateValue(value); const saved = capture(value);
-      return (scope: CardScope<S>) => evaluate(saved, scope);
+      return bindValue(saved);
     };
+    // Literal lowering preserves the typed scalar/list result. Opaque handles
+    // have separate physical representations and do not use this assertion.
+    const typedExpression=<T>(value:Input<T>):CardExpression<S,T>=>expression(value) as CardExpression<S,T>;
     let temporary = 0;
     const activeNodes = new Set<object>();
     const compile = (value: object, to: string | null = null): CardStep<S>[] => {
@@ -182,13 +238,13 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
       let out: CardStep<S>[];
       switch (node.kind) {
         case 'sequence': out = node.steps.flatMap(item => compile(item)); break;
-        case 'when': out = [card.branch<S>(expression(node.test), compile(node.yes), compile(node.no))]; break;
-        case 'while': out = [card.repeat<S>(expression(node.test), compile(node.body))]; break;
+        case 'when': out = [card.branch<S>(typedExpression<boolean>(node.test), compile(node.yes), compile(node.no))]; break;
+        case 'while': out = [card.repeat<S>(typedExpression<boolean>(node.test), compile(node.body))]; break;
         case 'call': {
           if(expressions.has(node.definition)||lexicalItems.has(node.definition)){
             const target=expression(node.definition),input=expression(node.input),slot='t'+temporary++;
             out=[card.operation<S>(s=>{
-              const ref=target(s),state=(s.state as any).$rules;
+              const ref=target(s) as {source:number},state=(s.state as any).$rules;
               resolveReference(ref,state?.entities,false,state?.sources.at(-1)??null);
               state.sources.push(ref.source);return ref;
             },slot),card.invoke<S>(s=>'r'+s.locals[slot].effect,input,to),card.operation<S>(s=>{
@@ -213,7 +269,7 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
         case 'each': {
           const items = 't' + temporary++, index = 't' + temporary++;
           layoutLocals.set(node.item,id+'/item:'+items+':'+index);
-          const list = expression(node.items);
+          const list = typedExpression<readonly unknown[]>(node.items);
           if (lexicalItems.has(node.item)) throw Error('Rule loop item reused');
           const readItem = (s: ExpressionContext) => {
             if (!Object.hasOwn(s.locals,items) || !Object.hasOwn(s.locals,index)) throw Error('Escaped rule loop item');
@@ -224,7 +280,7 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
           const body = compile(node.body);
           lexicalActive.delete(node.item);
           out = [card.operation<S>(s => {
-            const value = list(s); if (!Array.isArray(value)) throw Error('Rule forEach requires an array');
+            const value = list(s);
             s.locals[items] = [...value]; s.locals[index] = 0;
           }), card.repeat<S>(s => s.locals[index] < s.locals[items].length, [
             ...body, card.operation<S>(s => { s.locals[index]++; }),
@@ -249,12 +305,21 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
   if(lowered.size===names.size)break;
   }
   for(const [selector,table]of selectedEffects)layoutTrees.push(['entity-entry',selector,[...table.entries()]]);
+  for(const [definition,index] of linkedModules.bindings.indices){
+    const metadata=staticDefinitions.get(definition)!;
+    if(metadata.kind!=='ability'||metadata.abilityKind==='modifier')continue;
+    const effect=names.get(metadata.effect);if(effect===undefined)throw Error('Unlinked reaction effect');
+    linkedModules.bindings.reactions.set(index,{metadata,effect});
+  }
   bindQuerySelections(linkedModules.bindings,register);validateQueries(linkedModules.bindings);
+  bindEntityLayouts(linkedModules.bindings);
+  const initialEntities=Object.freeze([...(options.initialEntities??[])]);
+  if(new Set(initialEntities).size!==initialEntities.length||initialEntities.some(entity=>!Number.isSafeInteger(entity)||entity<0||entity>=Number.MAX_SAFE_INTEGER))throw Error('Invalid initial rule entity');
   const initialize = (setup: Setup): S => {
     const world = options.initialize(setup);
     if (options.modules?.length) {
       if (!world || typeof world !== 'object' || Array.isArray(world) || Object.hasOwn(world,'$rules')) throw Error('Rules require an object world without reserved module state');
-      Object.defineProperty(world,'$rules',{value:createModuleState(linkedModules.bindings,options.initialEntities ?? []),writable:true,enumerable:true,configurable:true});
+      Object.defineProperty(world,'$rules',{value:createModuleState(linkedModules.bindings,initialEntities),writable:true,enumerable:true,configurable:true});
     }
     return world;
   };
@@ -265,5 +330,6 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
   const result={ id: runtimeIdentity, schemas: options.schemas, initialize,
     entry: names.get(options.entry)!, effects };
   attachRuleQueries(result,linkedModules.bindings);
+  if(options.modules?.length)attachCardAdmission(result,state=>admitRuleState(state,linkedModules.bindings,runtimeNames.length,selectorOrder.length));
   return result;
 }

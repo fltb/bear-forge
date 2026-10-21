@@ -4,7 +4,7 @@ import { readdirSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import assert from 'node:assert/strict';
 
-export function assertSourceBoundaries(root:string,kind:'contracts'|'sdk'|'game',entries?:readonly string[]):void {
+export function assertSourceBoundaries(root:string,kind:'contracts'|'sdk'|'game'|'rules',entries?:readonly string[]):void {
 const files=(dir:string):string[]=>readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(resolve(dir,e.name)):e.name.endsWith('.ts')?[resolve(dir,e.name)]:[]);
 const errors:string[]=[];
 const forbidden=new Set(['Date','globalThis','process','window','document','fetch','WebSocket','require','eval','Function','setTimeout','setInterval','Worker','Atomics']);
@@ -43,6 +43,10 @@ while(pending.length){
             const allowed:Record<string,string[]>={core:['core','internal','instance'],instance:['instance','internal','core'],game:['game','instance','internal'],authoring:['authoring','core','game','internal'],persistence:['persistence','core','instance'],branching:['branching','instance'],capture:['capture','core','instance'],loading:['loading','core','instance','game','authoring','persistence','capture','session','internal'],session:['session','instance','game'],internal:['internal']};
             if(allowed[layer]&&!allowed[layer]!.includes(dependency))errors.push(`${label}: forbidden layer dependency ${dependency}`);
           }
+        } else if(kind==='rules'){
+          const schema=name==='zod'||name==='zod/v4/core';
+          const contract=['@bear-forge/contracts/core','@bear-forge/contracts/authoring'].includes(name)&&ts.isImportDeclaration(node)&&node.importClause?.phaseModifier===ts.SyntaxKind.TypeKeyword;
+          if(!schema&&!contract)errors.push(`${label}: rule services may import schema support and public IO/authoring types only`);
         } else if(isSDK){
           if(!['@bear-forge/contracts/core','@bear-forge/contracts/authoring'].includes(name)||!ts.isImportDeclaration(node)||node.importClause?.phaseModifier!==ts.SyntaxKind.TypeKeyword)errors.push(`${label}: SDK may import only public IO/authoring types`);
         } else if(name!=='zod'&&(isContract||!['@bear-forge/contracts','@bear-forge/contracts/core','@bear-forge/contracts/authoring','@bear-forge/contracts/game','@bear-forge/contracts/loading','@bear-forge/game-sdk','@bear-forge/card-engine'].includes(name)))errors.push(`${label}: external dependency ${name}`);

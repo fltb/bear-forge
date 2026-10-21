@@ -56,3 +56,19 @@ test('definition configuration reads require the declared kind and a current Pro
   const foreign=defineEffect<void,unknown>(b=>b.return(query(m.exports.read,{program:'foreign',definition:0} as unknown as typeof value)));
   assert.match(JSON.stringify(run(foreign,[m]).advance()),/Definition kind does not match/);
 });
+
+test('static catalog references link transitively; direct ReadView queries use the same executor',()=>{
+  const m=defineRules({requires:[],build(builder){
+    const kind=builder.kind({config:z.object({value:z.number()}),components:[]});
+    const item=defineEntity(kind,{value:11});
+    const catalogKind=builder.kind({config:z.object({item:z.custom<typeof item>()}),components:[]});
+    const catalog=defineEntity(catalogKind,{item});
+    assert.equal(rules.entityConfiguration(kind,item).value,11);
+    assert.throws(()=>rules.entityConfiguration(kind,catalog as unknown as typeof item),/kind mismatch/);
+    const selected=defineQuery({input:z.number(),output:z.custom<typeof item>(),kinds:[catalogKind],base:(r,id)=>r.configuration(id,catalogKind).item});
+    const value=defineQuery({input:z.custom<typeof item>(),output:z.number(),kinds:[kind],base:(r,definition)=>r.definitionConfiguration(definition,kind).value});
+    const entry=defineEffect<void,unknown>(b=>{const id=b.local<number>();return sequence(b.assign(id,spawnEntity({definition:catalog,owner:null,scope:0})),b.return(b.read(v=>v.query(value,v.query(selected,v.get(id))))));});
+    return{exports:{entry}};
+  }});
+  assert.deepEqual(run(m.exports.entry,[m]).advance(),{kind:'done',result:11});
+});

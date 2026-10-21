@@ -1,3 +1,4 @@
+import { typedValue } from './value.schemas.ts';
 import {z} from 'zod';
 import {rules} from '@bear-forge/card-engine';
 import {entityId} from './resources.schemas.ts';
@@ -44,18 +45,18 @@ export const powers=defineRules({requires:[],build(m){
   );});
   const presentationSchema=z.object({key:z.int32().nonnegative(),flag:z.boolean(),slot:z.union([z.literal(0),z.literal(1)]).optional(),side:z.union([z.literal(0),z.literal(1)]).optional()}).strict();
   const kind:rules.EntityKind<PowerConfig,PowerSetup>=m.kind({config:z.object({
-    presentation:presentationSchema.optional(),admit:z.custom<NonNullable<PowerConfig['admit']>>().optional(),
-    remove:z.custom<NonNullable<PowerConfig['remove']>>().optional(),
-    initial:z.custom<PowerConfig['initial']>(),merge:z.custom<PowerConfig['merge']>(),reduce:z.custom<PowerConfig['reduce']>(),polarity:z.custom<PowerConfig['polarity']>(),attach:z.custom<PowerConfig['attach']>(),
-    detach:z.custom<NonNullable<PowerConfig['detach']>>().optional(),merged:z.custom<NonNullable<PowerConfig['merged']>>().optional(),
+    presentation:presentationSchema.optional(),admit:typedValue<NonNullable<PowerConfig['admit']>>().optional(),
+    remove:typedValue<NonNullable<PowerConfig['remove']>>().optional(),
+    initial:typedValue<PowerConfig['initial']>(),merge:typedValue<PowerConfig['merge']>(),reduce:typedValue<PowerConfig['reduce']>(),polarity:typedValue<PowerConfig['polarity']>(),attach:typedValue<PowerConfig['attach']>(),
+    detach:typedValue<NonNullable<PowerConfig['detach']>>().optional(),merged:typedValue<NonNullable<PowerConfig['merged']>>().optional(),
   }).strict(),setup:powerSetupSchema,components:[raw],initialize,
     dispose:defineEffect<PowerRemoval,void>(b=>sequence(call(beginRemoval,b.read(v=>v.input.entity)),call(entityEffect(kind,b.read(v=>v.input.entity),c=>c.detach??emptyDetach),b.input),call(unregister,b.read(v=>v.input.entity)))),
   });
-  const initialSelection={kind,select:(c:Readonly<PowerConfig>)=>c.initial},mergeSelection={kind,select:(c:Readonly<PowerConfig>)=>c.merge},reduceSelection={kind,select:(c:Readonly<PowerConfig>)=>c.reduce},polaritySelection={kind,select:(c:Readonly<PowerConfig>)=>c.polarity};
+  const initialSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>c.initial},mergeSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>c.merge},reduceSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>c.reduce},polaritySelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>c.polarity};
   const alwaysAdmit=defineQuery({input:z.object({actor:entityId,change:powerChangeSchema}),output:z.boolean(),base:()=>true});
   const defaultRemoval=defineQuery({input:powerStateSchema,output:powerMutableSchema,base:(_r,c)=>({level:c.level,active:false,justApplied:c.justApplied})});
-  const removeSelection={kind,select:(c:Readonly<PowerConfig>)=>c.remove??defaultRemoval};
-  const admitSelection={kind,select:(c:Readonly<PowerConfig>)=>c.admit??alwaysAdmit};
+  const removeSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>c.remove??defaultRemoval};
+  const admitSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>c.admit??alwaysAdmit};
   const admitted=defineQuery({input:powerApplySchema,output:z.boolean(),selections:[admitSelection],base:(r,input)=>r.selectedDefinition(admitSelection,input.definition,{actor:input.actor,change:{amount:input.amount,source:input.source,debuff:input.debuff}})});
   const initialState=defineQuery({input:z.object({entity:entityId,setup:powerSetupSchema,definition:powerDefinitionSchema}),output:powerStateSchema,selections:[initialSelection],dependencies:[find],base:(r,input)=>{
     if(r.query(find,{registry:input.setup.registry,actor:input.setup.actor,definition:input.definition})!==null)throw Error('Duplicate active status definition');
@@ -81,16 +82,16 @@ export const powers=defineRules({requires:[],build(m){
   });
   const nextReduction=defineQuery({input:z.object({entity:entityId,amount:z.int32().nonnegative()}),output:powerMutableSchema,reads:[raw],selections:[reduceSelection],base:(r,input)=>r.selected(reduceSelection,input.entity,{state:r.component(input.entity,raw),amount:input.amount})});
   const decrement=defineEffect<{entity:number;amount:number},void>(b=>call(patch,{entity:b.read(v=>v.input.entity),next:query(nextReduction,b.input)}));
-  const deactivate=defineEffect<number,void>(b=>call(patch,{entity:b.input,next:b.read(v=>{const state=v.get(query(current,v.input));return{level:state.level,active:false,justApplied:state.justApplied};})}));
+  const deactivate=defineEffect<number,void>(b=>call(patch,{entity:b.input,next:b.read(v=>{const state=v.query(current,v.input);return{level:state.level,active:false,justApplied:state.justApplied};})}));
   const removalValue=defineQuery({input:entityId,output:powerMutableSchema,reads:[raw],selections:[removeSelection],base:(r,entity)=>r.selected(removeSelection,entity,r.component(entity,raw))});
   const remove=defineEffect<number,void>(b=>call(patch,{entity:b.input,next:query(removalValue,b.input)}));
-  const clearJustApplied=defineEffect<number,void>(b=>call(patch,{entity:b.input,next:b.read(v=>{const state=v.get(query(current,v.input));return{level:state.level,active:state.active,justApplied:false};})}));
+  const clearJustApplied=defineEffect<number,void>(b=>call(patch,{entity:b.input,next:b.read(v=>{const state=v.query(current,v.input);return{level:state.level,active:state.active,justApplied:false};})}));
   const set=defineEffect<{entity:number;next:PowerMutable},void>(b=>call(patch,b.input));
   const apply=defineEffect<PowerApplication,number|null>(b=>{
     const checked=b.local<rules.ReplacementResult<PowerApplication>>(),request=b.local<PowerApplication>(),existing=b.local<number|null>(),created=b.local<number>();
-    return sequence(when(b.read(v=>!v.get(query(admitted,v.input))),b.return(null)),b.assign(checked,m.resolve(beforeApply,b.input)),when(b.read(v=>v.get(checked).kind==='cancel'),b.return(null)),
-      b.assign(request,b.read(v=>{const result=v.get(checked);if(result.kind==='cancel')throw Error('Canceled status application');if(!v.get(query(accepting,result.value.registry)))throw Error('Status registry is closing');return result.value;})),
-      when(b.read(v=>!v.get(query(admitted,v.get(request)))),b.return(null)),b.assign(existing,query(find,{registry:b.read(v=>v.get(request).registry),actor:b.read(v=>v.get(request).actor),definition:b.read(v=>v.get(request).definition)})),
+    return sequence(when(b.read(v=>!v.query(admitted,v.input)),b.return(null)),b.assign(checked,m.resolve(beforeApply,b.input)),when(b.read(v=>v.get(checked).kind==='cancel'),b.return(null)),
+      b.assign(request,b.read(v=>{const result=v.get(checked);if(result.kind==='cancel')throw Error('Canceled status application');if(!v.query(accepting,result.value.registry))throw Error('Status registry is closing');return result.value;})),
+      when(b.read(v=>!v.query(admitted,v.get(request))),b.return(null)),b.assign(existing,query(find,{registry:b.read(v=>v.get(request).registry),actor:b.read(v=>v.get(request).actor),definition:b.read(v=>v.get(request).definition)})),
       when(b.read(v=>v.get(existing)!==null),sequence(call(merge,{entity:b.read(v=>v.get(existing)!),change:b.read(v=>{const r=v.get(request);return{amount:r.amount,source:r.source,debuff:r.debuff,skipFirstDecay:r.skipFirstDecay};})}),call(announceApplied,{entity:b.read(v=>v.get(existing)!),application:request}),b.return(existing))),
       b.assign(created,spawnEntity({kind,definition:b.read(v=>v.get(request).definition),owner:b.read(v=>v.get(request).actor),scope:b.read(v=>v.get(request).scope),setup:b.read(v=>{const r=v.get(request);return{registry:r.registry,actor:r.actor,amount:r.amount,source:r.source,debuff:r.debuff,skipFirstDecay:r.skipFirstDecay};})})),call(announceApplied,{entity:created,application:request}),b.return(created),
     );
@@ -98,7 +99,7 @@ export const powers=defineRules({requires:[],build(m){
   const stopRegistry=m.atom({input:entityId,output:z.undefined(),reads:[registry],writes:[registry],emits:[],run(r,entity){return{writes:[{entity,component:registry,value:{...r.component(entity,registry),accepting:false}}],events:[],result:undefined};}});
   const registryKind=m.kind({config:z.undefined(),components:[registry],dispose:defineEffect<rules.EntityLifecycle&{reason:unknown},void>(b=>sequence(
     call(stopRegistry,b.read(v=>v.input.entity)),forEach(query(entries,b.read(v=>v.input.entity)),entry=>despawnEntity({entity:b.read(v=>v.get(entry).entity),reason:{registryClosed:true}})),
-    b.return(b.read(v=>{if(v.get(query(entries,v.input.entity)).length!==0)throw Error('Status registry cleanup did not finish');return undefined;})),
+    b.return(b.read(v=>{if(v.query(entries,v.input.entity).length!==0)throw Error('Status registry cleanup did not finish');return undefined;})),
   ))});
   return{exports:{kind,registryKind,current,presentation,enabled,level,polarity,entries,find,apply,merge,decrement,deactivate,remove,clearJustApplied,set,changed:changed.public,attached:attached.public,applied:applied.public,beforeApply:beforeApply.public,stages}};
 }});

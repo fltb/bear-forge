@@ -14,7 +14,7 @@ b.assign(health,query(enemies.exports.definitionHealth,{definition:b.read(v=>v.i
     when(b.read(v=>v.get(health).draw),b.assign(hp,call(random.exports.int,{stream:b.read(v=>v.input.hpRng),start:b.read(v=>v.get(health).minimum),end:b.read(v=>v.get(health).maximum)})),b.assign(hp,b.read(v=>v.get(health).minimum))),
     b.assign(parameters,[]),forEach(b.read(v=>v.get(health).parameters),range=>sequence(b.assign(parameter,call(random.exports.int,{stream:b.read(v=>v.input.hpRng),start:b.read(v=>v.get(range).minimum),end:b.read(v=>v.get(range).maximum)})),b.assign(parameters,b.read(v=>[...v.get(parameters),v.get(parameter)]))))
     )),
-    b.assign(actor,spawnEntity({definition:actorDefinition,owner:b.read(v=>v.input.owner),scope:b.read(v=>v.input.scope),setup:{hp,maxHp:hp,block:0,energy:0,gold:0}})),b.return(b.read(v=>({...v.get(query(enemies.exports.metadata,v.input.definition)),actor:v.get(actor),controller:null,miscInfo:0,parameters:v.get(parameters)}))),
+    b.assign(actor,spawnEntity({definition:actorDefinition,owner:b.read(v=>v.input.owner),scope:b.read(v=>v.input.scope),setup:{hp,maxHp:hp,block:0,energy:0,gold:0}})),b.return(b.read(v=>({...v.query(enemies.exports.metadata,v.input.definition),actor:v.get(actor),controller:null,miscInfo:0,parameters:v.get(parameters)}))),
   );});
   return{exports:{prepare}};
 }});

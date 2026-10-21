@@ -31,6 +31,17 @@ function run(entry:ReturnType<typeof defineEffect<number,readonly number[]>>,mod
   const p=new CardProgram(d);return new CardMachine(p,plainCardStorage(p.initial(0)));
 }
 
+test('restore admission follows linked effects through a definition wrapper and rejects corrupted indexes',()=>{
+  const module=fixture(),entry=defineEffect<number,readonly number[]>(b=>sequence(call(choose,0),b.return(query(module.exports.history,0))));
+  const definition=linkRules({id:'restore-index-admission',schemas,initialize:()=>({}),entry,definitions:[entry,choose],modules:[module],initialEntities:[0]});
+  const program=new CardProgram({...definition,initialize:definition.initialize}),machine=new CardMachine(program,plainCardStorage(program.initial(0)));
+  assert.equal(machine.advance().kind,'call');
+  const valid=structuredClone(machine.root);program.validate(valid);
+  const state=(valid.state as unknown as {$rules:{indexes:{entitiesByComponent:Record<number,number[]>}}}).$rules;
+  const index=Number(Object.keys(state.indexes.entitiesByComponent)[0]);state.indexes.entitiesByComponent[index]=[];
+  assert.throws(()=>program.validate(valid),/Invalid saved rule indexes/);
+});
+
 test('pure queries can depend on other queries and cannot change source components',()=>{
   const mod=fixture();
   const entry=defineEffect<number,readonly number[]>(b=>sequence(call(mod.exports.add,7),

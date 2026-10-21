@@ -1,3 +1,4 @@
+import { typedValue } from '../../rules/value.schemas.ts';
 import {PS,MS} from "../../combat-identifiers.ts";
 import {z} from 'zod';
 import {rules} from '@bear-forge/card-engine';
@@ -13,9 +14,9 @@ const {defineRules,defineQuery,defineEffect,defineEntity,modify,replace,sequence
 type Attack=z.infer<typeof attackValueSchema>;
 type Block=z.infer<typeof blockValueSchema>;
 export const basicPowers=defineRules({requires:[powers,attributes,resources,turns],build(){
-  const sourceOwns=defineQuery({input:z.custom<rules.ModifierContext<Attack,number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.source===c.owner&&r.query(powers.exports.enabled,c.source)});
-  const targetOwns=defineQuery({input:z.custom<rules.ModifierContext<Attack,number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.target===c.owner&&r.query(powers.exports.enabled,c.source)});
-  const blockOwns=defineQuery({input:z.custom<rules.ModifierContext<Block,number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.actor===c.owner&&r.query(powers.exports.enabled,c.source)});
+  const sourceOwns=defineQuery({input:typedValue<rules.ModifierContext<Attack,number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.source===c.owner&&r.query(powers.exports.enabled,c.source)});
+  const targetOwns=defineQuery({input:typedValue<rules.ModifierContext<Attack,number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.target===c.owner&&r.query(powers.exports.enabled,c.source)});
+  const blockOwns=defineQuery({input:typedValue<rules.ModifierContext<Block,number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.actor===c.owner&&r.query(powers.exports.enabled,c.source)});
   const strengthBonus=modify(attributes.exports.playerAttack,{condition:sourceOwns,order:{phase:attributes.exports.stages.addition,priority:100},dependencies:[powers.exports.level],transform:(r,c)=>Math.fround(c.value+Math.fround(r.query(powers.exports.level,c.source)))});
   const dexterityBonus=modify(attributes.exports.block,{condition:blockOwns,order:attributes.exports.stages.addition,dependencies:[powers.exports.level],transform:(r,c)=>{const amount=r.query(powers.exports.level,c.source);return amount===0?c.value:Math.max(0,(c.value+amount)|0);}});
   const Strength=defineEntity(powers.exports.kind,{...counterPolicies({bits:32,scalar:true,zeroIsNoop:true}),attach:attachAbilities(scalarBonus(attributes.exports.strength),strengthBonus)});
@@ -34,7 +35,7 @@ export const basicPowers=defineRules({requires:[powers,attributes,resources,turn
   const Frail=defineEntity(powers.exports.kind,{presentation:{key:PS.FRAIL,flag:false},...counterPolicies({bits:16,resetWhenInactive:true,harmful:true,markOnEnemyDebuff:true,enemyDebuffOnlyWhenNew:true,zeroIsNoop:true}),attach:attachAbilities(modify(attributes.exports.block,{condition:blockOwns,order:attributes.exports.stages.sourceScale,transform:(_r,c)=>Math.trunc(((c.value*3)|0)/4)}),expireCounter(turns.exports.playerRoundEnd,10,true))});
   const NoBlock=defineEntity(powers.exports.kind,{presentation:{key:PS.NO_BLOCK,flag:false},...counterPolicies({bits:16,resetWhenInactive:true,harmful:true,zeroIsNoop:true}),attach:attachAbilities(modify(attributes.exports.block,{condition:blockOwns,order:attributes.exports.stages.limit,transform:()=>0}),expireCounter(turns.exports.playerRoundEnd,70,false))});
   function artifact(player:boolean){
-    const condition=defineQuery({input:z.custom<rules.ReplacementContext<PowerApplication>>(),output:z.boolean(),dependencies:[powers.exports.enabled,powers.exports.level],base:(r,c)=>c.value.actor===c.owner&&c.value.debuff&&r.query(powers.exports.enabled,c.source)&&(!player||r.query(powers.exports.level,c.source)!==0)});
+    const condition=defineQuery({input:typedValue<rules.ReplacementContext<PowerApplication>>(),output:z.boolean(),dependencies:[powers.exports.enabled,powers.exports.level],base:(r,c)=>c.value.actor===c.owner&&c.value.debuff&&r.query(powers.exports.enabled,c.source)&&(!player||r.query(powers.exports.level,c.source)!==0)});
     const consume=replace(powers.exports.beforeApply,{condition,order:powers.exports.stages.consumption,effect:defineEffect<rules.ReplacementContext<PowerApplication>,rules.ReplacementResult<PowerApplication>>(b=>sequence(
       call(powers.exports.decrement,{entity:b.read(v=>v.input.source),amount:1}),b.return({kind:'cancel',reason:{artifact:b.read(v=>v.input.source)}}),
     ))});

@@ -9,3 +9,6 @@ export const battleStateSchema=z.object({actor:entityId,registry:entityId,enemie
 export const battleStorageSchema=battleStateSchema.extend({piles:entityId.nullable()});
 export const queueCardSchema=z.object({battle:entityId,card:entityId,target:entityId.nullable(),energyOnUse:z.int32().nonnegative().optional(),options:playOptionsSchema.partial().optional(),state:cardStateSchema.optional(),front:z.boolean().optional(),afterFirst:z.boolean().optional()}).strict();
 export const cardDestinationSchema=z.object({battle:entityId,play:entityId,destination:z.union([z.literal(0),z.literal(1),z.literal(2),z.literal(3)])}).strict();
+
+export const battleStatusSchema=battleStorageSchema.omit({queue:true,current:true,currentIsEndTurn:true,nextPlay:true});
+export const battleOpportunitiesSchema=battleStorageSchema.pick({queue:true,current:true,currentIsEndTurn:true,nextPlay:true});

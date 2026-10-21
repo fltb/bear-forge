@@ -25,13 +25,16 @@ test('reused composition nodes link independently and the loaded schedule is imm
   assert.deepEqual(machine.advance(), { kind: 'done', result: 9 }); assert.deepEqual(names, ['a', 'b', 'root']);
 });
 
-test('invalid opcodes, cyclic blocks and async predicates cannot stall native execution', () => {
+test('assembly rejects invalid opcodes and cyclic structural blocks', () => {
   assert.throws(() => new CardProgram({ ...definition, effects: [{ id: 'root', steps: [{ kind: 'bad' } as any] }] }), /Unknown card instruction/);
   const block: any[] = []; block.push(c.repeat(() => true, block));
   assert.throws(() => new CardProgram({ ...definition, effects: [{ id: 'root', steps: block }] }), /cyclic/);
-  const p = new CardProgram({ ...definition, effects: [{ id: 'root', steps: [c.repeat((async () => true) as any, [])] }] });
-  assert.equal(new CardMachine(p, plainCardStorage(p.initial(1))).advance().kind, 'fault');
 });
+
+if(false){
+  // @ts-expect-error trusted Core predicates must return boolean, not Promise
+  c.repeat(async()=>true,[]);
+}
 
 test('a projection can canonicalize data but cannot replace a request or hide a fault', () => {
   const p = new CardProgram({ ...definition, project: () => ({ kind: 'done' as const, result: {} as any }) });

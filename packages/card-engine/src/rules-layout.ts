@@ -25,7 +25,7 @@ export function ruleLayoutIdentity(id:string,bindings:ModuleBindings,names:Reado
   };
   const statics=bindings.definitions.map(definition=>{
     const metadata=staticDefinitions.get(definition)!;
-    return[metadata.kind,Object.keys(metadata).filter(key=>key!=='creator'&&key!=='input'&&key!=='output'&&key!=='schema'&&key!=='config'&&key!=='setup').map(key=>[key,encode((metadata as any)[key])]),
+    return[metadata.kind,Object.keys(metadata).filter(key=>key!=='creator'&&key!=='input'&&key!=='output'&&key!=='schema'&&key!=='config'&&key!=='setup'&&key!=='schemaPlan'&&key!=='inputPlan'&&key!=='outputPlan'&&key!=='setupPlan').map(key=>[key,encode((metadata as any)[key])]),
       metadata.kind==='entity'?encode(metadata.config):null];
   });
   const effects=[...names].map(([effect,name])=>{const metadata=definitions.get(effect)!;return[name,metadata.kind,metadata.kind==='author'?metadata.build.toString():metadata.kind==='port'?metadata.port:metadata.kind==='bound'?[metadata.bind.toString(),encode(metadata.layout)]:metadata.lower.toString()];});

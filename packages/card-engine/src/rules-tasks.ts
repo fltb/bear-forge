@@ -1,5 +1,7 @@
 import {card} from './card.ts';
-import {dataCopy} from './rules-data.ts';
+import {ownRuleValue} from './rules-values.ts';
+import { indexTask, removeTask, removeIndex } from './rules-indexes.ts';
+import { createDeque, appendDeque, removeDeque, takeDeque } from './rules-deque.ts';
 import {definitions,expressions,handle,statements,expression,freezeAuthorInput} from './rules-internal.ts';
 import {staticDefinitions,declareStatic,stateOf} from './rules-module-internal.ts';
 import {evaluateQuery} from './rules-queries.ts';
@@ -34,13 +36,13 @@ function buildTask<I,O,T>(target:Effect<I,O>|Value<Effect<I,O>>,input:Input<I>,o
       if(!Number.isSafeInteger(args.lifetime)||!scope||scope.phase==='ending'||scope.phase==='closed')throw Error('Invalid task lifetime');
       const source=args.source===undefined?(dynamic?args.reference?.source:(state.sources.at(-1)??null)):args.source;
       if(!validSource(state,source))throw Error('Invalid task source');
-      const reference:RuntimeEffectReference=dynamic?dataCopy(args.reference):{program:link.identity(),effect:Number(name!.slice(1)),source,selector:null};
+      const reference:RuntimeEffectReference=dynamic?ownRuleValue(args.reference):{program:link.identity(),effect:Number(name!.slice(1)),source,selector:null};
       checkReference(reference,state,link);
       if(dynamic&&source!==reference.source)throw Error('Dynamic task source must match its entity entry');
       const id=state.nextTask;if(!Number.isSafeInteger(id)||id>=Number.MAX_SAFE_INTEGER)throw Error('Task identity exhausted');
-      const task:RuleTask={id,effect:reference,input:dataCopy(args.input),queue,source,lifetime:args.lifetime,eligible:options.eligible??'source-present',state:at?'scheduled':'pending',at:event??null,condition:condition??null,position:options.position??'back'};
-      state.tasks[id]=task;state.nextTask++;
-      if(!at){if(!state.queues[queue])state.queues[queue]=[];const ids=state.queues[queue]!;if(task.position==='front')ids.unshift(id);else ids.push(id);}
+      const task:RuleTask={id,effect:reference,input:ownRuleValue(args.input),queue,source,lifetime:args.lifetime,eligible:options.eligible??'source-present',state:at?'scheduled':'pending',at:event??null,condition:condition??null,position:options.position??'back'};
+      state.tasks[id]=task;indexTask(state,task);state.nextTask++;
+      if(!at){state.queues[queue]??=createDeque();appendDeque(state.queues[queue]!,id,task.position==='front');}
       return id;
     },'task'),card.return(s=>s.locals.task)];
   }});
@@ -49,13 +51,13 @@ function buildTask<I,O,T>(target:Effect<I,O>|Value<Effect<I,O>>,input:Input<I>,o
 export function enqueue<I,O>(effect:Effect<I,O>|Value<Effect<I,O>>,input:Input<I>,options:QueueOptions):Command<number>{return buildTask(effect,input,options,null);}
 export function schedule<I,O,T>(effect:Effect<I,O>|Value<Effect<I,O>>,input:Input<I>,options:ScheduleOptions<T,I>):Command<number>{return buildTask(effect,input,options,options.at);}
 export function snapshot<T>(value:Input<T>):Value<T>{
-  const saved=freezeAuthorInput(value);return expression<T>(null,c=>dataCopy(c.evaluate(saved)),{inputs:[saved]});
+  const saved=freezeAuthorInput(value);return expression<T>(null,c=>ownRuleValue(c.evaluate(saved)),{inputs:[saved]});
 }
 /** Physical pending entries, excluding scheduled and currently running tasks. Read-only scheduler view. */
 export function queueSize(queue:RuleQueue):Value<number>{
   queueReference(queue);return expression<number>(null,c=>{
     const index=c.bindings.indices.get(queue);if(index===undefined)throw Error('Unlinked queue definition');
-    return stateOf(c.world).queues[index]?.length??0;
+    return stateOf(c.world).queues[index]?.size??0;
   },{references:[queue]});
 }
 export function cancelScheduled(task:Input<number>):Command<boolean>{
@@ -70,16 +72,16 @@ function drainOneEffect(queue:RuleQueue):Effect<void,boolean>{
     const index=link.register(queue);
     return[card.operation(s=>{
       const state=stateOf(s.state),ids=state.queues[index];
-      if(!ids?.length)return null;
-      const id=ids.shift()!,task=state.tasks[id];if(!task)return undefined;
+      if(!ids?.size)return null;
+      const id=takeDeque(ids)!,task=state.tasks[id];if(!task)return undefined;
       if(task.state!=='pending')throw Error('Invalid queued task phase');
       const lifetime=state.scopes[task.lifetime];
-      if(!lifetime||lifetime.phase==='closed'||task.eligible==='source-present'&&!validSource(state,task.source)||task.effect.selector!==null&&!validSource(state,task.effect.source)){delete state.tasks[id];return undefined;}
+      if(!lifetime||lifetime.phase==='closed'||task.eligible==='source-present'&&!validSource(state,task.source)||task.effect.selector!==null&&!validSource(state,task.effect.source)){removeTask(state,id);return undefined;}
       checkReference(task.effect,state,link);task.state='running';return id;
     },'task'),card.branch(s=>s.locals.task===null,[card.return(()=>false)]),
     card.branch(s=>typeof s.locals.task==='number',[card.operation(s=>{const task=stateOf(s.state).tasks[s.locals.task]!;if(task.source!==null)stateOf(s.state).sources.push(task.source);}),
     card.invoke(s=>checkReference(stateOf(s.state).tasks[s.locals.task]!.effect,stateOf(s.state),link),s=>stateOf(s.state).tasks[s.locals.task]!.input),
-    card.operation(s=>{const state=stateOf(s.state),task=state.tasks[s.locals.task]!;if(task.source!==null&&state.sources.pop()!==task.source)throw Error('Invalid task source stack');delete state.tasks[s.locals.task];})]),
+    card.operation(s=>{const state=stateOf(s.state),task=state.tasks[s.locals.task]!;if(task.source!==null&&state.sources.pop()!==task.source)throw Error('Invalid task source stack');removeTask(state,s.locals.task);})]),
     card.return(()=>true)];
   }});return effect;
 }
@@ -92,23 +94,24 @@ export function drainQueue(queue:RuleQueue):Command<void>{
   return command(effect,undefined);
 }
 export function captureScheduled(event:number,payload:unknown,world:unknown,bindings:ModuleBindings,overlay?:ComponentOverlay):number[]{
-  const state=stateOf(world);return Object.values(state.tasks).filter(task=>{
-    if(task.state!=='scheduled'||task.at!==event)return false;
+  const state=stateOf(world);return (state.indexes.tasksByEvent[event]??[]).filter(id=>{
+    const task=state.tasks[id]!;
     const scope=state.scopes[task.lifetime];if(!scope||scope.phase==='closed')return false;
     if(task.eligible==='source-present'&&!validSource(state,task.source))return false;
     if(task.condition===null)return true;
     const definition=bindings.definitions[task.condition];if(!definition||staticDefinitions.get(definition)?.kind!=='query')throw Error('Invalid task condition');
-    return evaluateQuery(definition as Query<any,boolean>,{event:payload,input:task.input,source:task.source},world,bindings,new Set(),overlay);
-  }).map(task=>task.id);
+    return evaluateQuery(definition as Query<any,boolean>,{event:payload,input:task.input,source:task.source},world,bindings,overlay);
+  });
 }
 export function activateScheduled(world:unknown,ids:readonly number[]):void{
   const state=stateOf(world);for(const id of ids){const task=state.tasks[id];if(!task||task.state!=='scheduled')continue;
-    task.state='pending';if(!state.queues[task.queue])state.queues[task.queue]=[];const queue=state.queues[task.queue]!;if(task.position==='front')queue.unshift(id);else queue.push(id);
+    if(task.at!==null)removeIndex(state.indexes.tasksByEvent,task.at,id);
+    task.state='pending';state.queues[task.queue]??=createDeque();appendDeque(state.queues[task.queue]!,id,task.position==='front');
   }
 }
 
 export function cancelTask(state:ReturnType<typeof stateOf>,id:number):void{
   const task=state.tasks[id];if(!task||task.state==='running')return;
-  const queue=state.queues[task.queue];if(queue){const position=queue.indexOf(id);if(position>=0)queue.splice(position,1);}
-  delete state.tasks[id];
+  const queue=state.queues[task.queue];if(queue)removeDeque(queue,id);
+  removeTask(state,id);
 }

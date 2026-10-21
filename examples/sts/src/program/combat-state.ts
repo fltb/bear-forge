@@ -1,3 +1,4 @@
+import { typedValue } from '../rules/value.schemas.ts';
 import {z} from 'zod';
 import {rules} from '@bear-forge/card-engine';
 
@@ -18,7 +19,7 @@ export const combatPrivate=rules.defineRules({requires:[],build(){
 }});
 export function observeCounter<K extends keyof CombatPrivate>(key:K,component:rules.Component<CombatPrivate[K]>){
   return rules.modify(combatPrivate.exports.player,{
-    condition:rules.defineQuery({input:z.custom<rules.ModifierContext<number,CombatPrivate>>(),output:z.boolean(),base:(_r,c)=>c.input===c.owner}),
+    condition:rules.defineQuery({input:typedValue<rules.ModifierContext<number,CombatPrivate>>(),output:z.boolean(),base:(_r,c)=>c.input===c.owner}),
     reads:[component],transform:(r,c)=>({...c.value,[key]:r.component(c.source,component)}),
   });
 }

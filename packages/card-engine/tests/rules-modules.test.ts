@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { CardMachine, CardProgram, plainCardStorage, linkRules, rules } from '../src/index.ts';
 import type { AtomSpec, Component, RuleEvent } from '../src/rules-module.types.ts';
+const emptyQueue=()=>({first:null,last:null,size:0,links:{}});
+const emptyIndexes=()=>({registrationsByTarget:{},registrationsByTargetArrival:{},registrationsBySource:{},registrationsByScope:{},entitiesByComponent:{0:[0]},entitiesByScope:{0:[0]},childrenByScope:{},tasksBySource:{},tasksByScope:{},tasksByEvent:{}});
 const { defineRules,defineComponent,defineEvent,defineEffect,sequence,call } = rules;
 const schema={setup:z.number(),result:z.number(),ports:{}};
 function temperature(options:{badValue?:boolean;badResult?:boolean;duplicate?:boolean;mutateRead?:boolean}={}){
@@ -34,14 +36,14 @@ test('owned component changes validate before commit and publish one precise fac
   const module=temperature(),first=create(module,15),second=create(module,-9);
   assert.deepEqual(first.advance(),{kind:'done',result:15});
   assert.deepEqual(second.advance(),{kind:'done',result:-9});
-  assert.deepEqual((first.root.state as any).$rules,{entities:{0:{components:{0:{value:15}},definition:null,scope:0,owner:null,phase:'active'}},outbox:[{id:1,event:1,payload:{previous:0,next:15},handlers:[],scheduled:[]}],registrations:{},nextRegistration:1,nextEvent:2,scopes:{0:{kind:null,parent:null,phase:'active'}},nextEntity:1,nextScope:1,sources:[],tasks:{},queues:{},nextTask:1});
+  assert.deepEqual((first.root.state as any).$rules,{indexes:emptyIndexes(),entities:{0:{components:{0:{value:15}},definition:null,scope:0,owner:null,phase:'active'}},outbox:{1:{id:1,event:1,payload:{previous:0,next:15},handlers:[],scheduled:[]}},eventQueues:{queued:{first:1,last:1,size:1,links:{1:{previous:null,next:null}}},immediate:emptyQueue()},registrations:{},nextRegistration:1,nextEvent:2,scopes:{0:{kind:null,parent:null,phase:'active'}},nextEntity:1,nextScope:1,sources:[],tasks:{},queues:{},nextTask:1});
   assert.deepEqual((second.root.state as any).$rules.entities[0].components[0],{value:-9});
 });
 
 for(const failure of ['badValue','badResult','duplicate','mutateRead'] as const)test(`rejected ${failure} leaves components and outbox unchanged`,()=>{
   const m=create(temperature({[failure]:true}),3);
   assert.equal(m.advance().kind,'fault');
-  assert.deepEqual((m.root.state as any).$rules,{entities:{0:{components:{0:{value:0}},definition:null,scope:0,owner:null,phase:'active'}},outbox:[],registrations:{},nextRegistration:1,nextEvent:1,scopes:{0:{kind:null,parent:null,phase:'active'}},nextEntity:1,nextScope:1,sources:[],tasks:{},queues:{},nextTask:1});
+  assert.deepEqual((m.root.state as any).$rules,{indexes:emptyIndexes(),entities:{0:{components:{0:{value:0}},definition:null,scope:0,owner:null,phase:'active'}},outbox:{},eventQueues:{queued:emptyQueue(),immediate:emptyQueue()},registrations:{},nextRegistration:1,nextEvent:1,scopes:{0:{kind:null,parent:null,phase:'active'}},nextEntity:1,nextScope:1,sources:[],tasks:{},queues:{},nextTask:1});
 });
 
 test('dependency imports never grant component ownership or write authority',()=>{
@@ -68,7 +70,7 @@ test('undeclared proposal events and writes fail before any earlier candidate is
   }});
   const m=create(module as any,7);assert.match(JSON.stringify(m.advance()),/Unauthorized rule proposal write/);
   assert.deepEqual((m.root.state as any).$rules.entities[0].components,{0:0,1:0});
-  assert.deepEqual((m.root.state as any).$rules.outbox,[]);
+  assert.deepEqual((m.root.state as any).$rules.outbox,{});
 });
 
 test('module exports never contain a live instance graph',()=>{

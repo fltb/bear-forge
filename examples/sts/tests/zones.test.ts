@@ -33,7 +33,10 @@ function fixture(steps:readonly Step[]){
           const from=v.get(ids[step.from]),to=v.get(ids[step.to]),source=v.get(query(zones.exports.members,from)),target=v.get(query(zones.exports.members,to));
           return{entity:source[step.index]!,from,to,index:step.position??target.length};
         })),b.assign(history,b.read(v=>[...v.get(history),v.get(query(view,{draw:v.get(draw),hand:v.get(inHand),discard:v.get(discard),exhaust:v.get(exhaust)}))])),
-      ]),b.return(history),
+      ]),
+      // Queries borrow versions. Only public history delivery needs independent
+      // writable arrays to satisfy this fixture's tree-shaped output schema.
+      b.return(b.read(v=>v.get(history).map(p=>({draw:[...p.draw],hand:[...p.hand],discard:[...p.discard],exhaust:[...p.exhaust]})))),
     );
   });
   return linkRules({id:'sts/zone-fixture-1',schemas:{setup:z.undefined(),result:z.array(stateSchema),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[views]});
@@ -48,7 +51,7 @@ test('zone moves preserve exact CardManager order in C++ and both real Instance 
     const expected=await reference.call({op:'zone-case',count:4,steps});
     for(const controlled of [false,true]){
       const loaded=unwrap(await createCardLoader({controlled}).load(fixture(steps))),instance=unwrap(await loaded.core.start(undefined));
-      try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error(JSON.stringify(stop));assertSameState(expected,stop.result,`zones controlled=${controlled}`);}
+      try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error(JSON.stringify(stop));assertSameState(expected,stop.result,`zones controlled=${controlled}`);}
       finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
     }
   }finally{await reference.close();}

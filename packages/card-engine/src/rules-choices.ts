@@ -1,5 +1,5 @@
 import {card} from './card.ts';
-import {dataCopy} from './rules-data.ts';
+import {detachRuleValue,readRuleValue} from './rules-values.ts';
 import {definitions,handle,statements} from './rules-internal.ts';
 import {declareStatic,staticDefinitions} from './rules-module-internal.ts';
 import {evaluateQuery} from './rules-queries.ts';
@@ -11,10 +11,9 @@ export function choicePort<T,P,W,R>(spec:ChoiceAdapterSpec<T,P,W,R>):ChoiceAdapt
   const adapter=handle<ChoiceAdapter<T,P,W,R>>();declareStatic(adapter,{kind:'choice-adapter',port:spec.port,request:spec.request,reply:spec.reply,decode:spec.decode});return adapter;
 }
 function decodeSelection(request:ChoiceRequest,output:unknown,adapter:Extract<NonNullable<ReturnType<typeof staticDefinitions.get>>,{kind:'choice-adapter'}>):ChoiceReply{
-  const parsed=adapter.reply.parse(dataCopy(output));const reply=adapter.decode(dataCopy(request,true),dataCopy(parsed,true));
-  if(!reply||typeof (reply as any).then==='function')throw Error('Choice decoder must be synchronous');
+  const parsed=adapter.reply.parse(detachRuleValue(output));const reply=adapter.decode(readRuleValue(request),readRuleValue(parsed));
   if(reply.kind==='skipped'){if(!request.allowSkip)throw Error('Choice cannot be skipped');return{kind:'skipped'};}
-  if(reply.kind!=='selected'||!Array.isArray(reply.indices)||request.kind==='one'&&reply.indices.length!==1||reply.indices.length<request.min||reply.indices.length>request.max)throw Error('Choice cardinality is invalid');
+  if(request.kind==='one'&&reply.indices.length!==1||reply.indices.length<request.min||reply.indices.length>request.max)throw Error('Choice cardinality is invalid');
   const indices=[...reply.indices];if(new Set(indices).size!==indices.length||indices.some(i=>!Number.isSafeInteger(i)||i<0||i>=request.candidates.length))throw Error('Choice contains an invalid candidate');
   if(request.order==='irrelevant')indices.sort((a,b)=>a-b);
   return{kind:'selected',indices};
@@ -32,10 +31,10 @@ function choose<T,P,W,R,O>(kind:'one'|'many'|'order',spec:any):Command<O>{
       if(reply.kind==='skipped')throw Error('Multiple choice cannot be skipped');return reply.indices.map(i=>request.candidates[i])as O;
     };
     return[card.operation(s=>{
-      const args=s.input;if(!Array.isArray(args.candidates))throw Error('Choice candidates must be a finite array');
+      const args=s.input;
       const count=args.candidates.length,min=kind==='one'?(spec.allowSkip?0:1):kind==='order'?count:args.min,max=kind==='one'?1:kind==='order'?count:args.max;
       if(!Number.isSafeInteger(min)||!Number.isSafeInteger(max)||min<0||max<min)throw Error('Invalid choice bounds');
-      const request:ChoiceRequest={kind,player:dataCopy(args.player),candidates:dataCopy(args.candidates),min,max,order:kind==='order'?'chosen':spec.order??'irrelevant',allowSkip:kind==='one'&&spec.allowSkip};
+      const request:ChoiceRequest={kind,player:detachRuleValue(args.player),candidates:detachRuleValue(args.candidates),min,max,order:kind==='order'?'chosen':spec.order??'irrelevant',allowSkip:kind==='one'&&spec.allowSkip};
       s.locals.choice=request;s.locals.automatic=false;
       if(count===0){
         if(kind==='one'&&spec.empty==='request'&&spec.allowSkip){}

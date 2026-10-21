@@ -1,7 +1,10 @@
+import {temporaryLocalBlock} from './card-execution-hints.ts';
 import {captureScheduled,activateScheduled} from './rules-tasks.ts';
 import { card } from './card.ts';
-import { dataCopy } from './rules-data.ts';
-import {resolveOrder,compareOrder} from './rules-order.ts';
+import { detachRuleValue, ownRuleValue } from './rules-values.ts';
+import {resolveOrder} from './rules-order.ts';
+import { addRegistration, removeRegistration } from './rules-indexes.ts';
+import { appendDeque, removeDeque } from './rules-deque.ts';
 import { evaluateQuery } from './rules-queries.ts';
 import { handle, definitions, statements } from './rules-internal.ts';
 import { declareStatic, staticDefinitions, stateOf } from './rules-module-internal.ts';
@@ -22,8 +25,8 @@ export function on<T,E={}>(event:RuleEvent<T>,spec:ReactionSpec<T,E>):Ability<E>
     condition:spec.condition??null,eligible:spec.eligible??'registered',...resolveOrder(eventMetadata.ordering,spec.order)});
   return ability;
 }
-function validEntity(state:ReturnType<typeof stateOf>,id:unknown):id is number{
-  return typeof id==='number'&&Number.isSafeInteger(id)&&id>=0&&Object.hasOwn(state.entities,id);
+function validEntity(state:ReturnType<typeof stateOf>,id:number):boolean{
+  return Number.isSafeInteger(id)&&id>=0&&Object.hasOwn(state.entities,id);
 }
 export function install<E>(spec:InstallSpec<E>):Command<number>{
   const effect=handle<Effect<{source:number;owner:number;environment:E;lifetime:number},number>>();
@@ -37,20 +40,19 @@ export function install<E>(spec:InstallSpec<E>):Command<number>{
     return[card.operation(s=>{
       const state=stateOf(s.state),input=s.input;
       if(!validEntity(state,input.source)||!validEntity(state,input.owner)||!Number.isSafeInteger(input.lifetime)||input.lifetime<0||!state.scopes[input.lifetime]||state.scopes[input.lifetime]!.phase==='closed'||state.scopes[input.lifetime]!.phase==='ending')throw Error('Invalid reaction installation');
-      const environment=dataCopy(input.environment),id=state.nextRegistration;
+      const environment=ownRuleValue(input.environment),id=state.nextRegistration;
       if(!Number.isSafeInteger(id)||id>=Number.MAX_SAFE_INTEGER)throw Error('Registration identity exhausted');
       const registration:Registration={id,definition:index,source:input.source,owner:input.owner,environment,lifetime:input.lifetime,sequence:id};
-      state.registrations[id]=registration;state.nextRegistration++;return id;
+      addRegistration(state,link.bindings,registration);state.nextRegistration++;return id;
     },'registration'),card.return(s=>s.locals.registration)];
   }});
   return command(effect,{source:spec.source,owner:spec.owner,environment:spec.environment,lifetime:spec.lifetime});
 }
 export function uninstall(registration:Input<number>):Command<boolean>{
   const effect=handle<Effect<number,boolean>>();
-  definitions.set(effect,{kind:'compiled',lower(){return[card.operation(s=>{
+  definitions.set(effect,{kind:'compiled',lower(link){return[card.operation(s=>{
     if(!Number.isSafeInteger(s.input)||s.input<1)throw Error('Invalid registration identity');
-    const state=stateOf(s.state),existed=Object.hasOwn(state.registrations,s.input);
-    if(existed)delete state.registrations[s.input];return existed;
+    return removeRegistration(stateOf(s.state),link.bindings,s.input);
   },'removed'),card.return(s=>s.locals.removed)];}});
   return command(effect,registration);
 }
@@ -58,52 +60,44 @@ function reactionInput(registration:Registration,payload:any):ReactionContext<an
   return{event:payload,source:registration.source,owner:registration.owner,environment:registration.environment,registration:registration.id};
 }
 export function captureEvent(event:number,payload:any,world:unknown,bindings:ModuleBindings,overlay?:ComponentOverlay):Omit<EventEnvelope,'id'>{
-  const state=stateOf(world),definition=bindings.definitions[event];
-  if(!definition||staticDefinitions.get(definition)?.kind!=='event')throw Error('Invalid event index');
-  const handlers=Object.values(state.registrations).filter(registration=>{
-    const metadata=staticDefinitions.get(bindings.definitions[registration.definition]!);
-    return metadata?.kind==='ability'&&metadata.abilityKind==='event'&&metadata.target===definition;
-  }).sort((a,b)=>{
-    const ma=staticDefinitions.get(bindings.definitions[a.definition]!)!,mb=staticDefinitions.get(bindings.definitions[b.definition]!)!;
-    if(ma.kind!=='ability'||mb.kind!=='ability')throw Error('Invalid reaction order');return compareOrder(ma,mb)||a.sequence-b.sequence;
-  }).filter(registration=>{
-    const metadata=staticDefinitions.get(bindings.definitions[registration.definition]!)!;
-    return metadata.kind==='ability'&&(!metadata.condition||evaluateQuery(metadata.condition,reactionInput(registration,payload),world,bindings,new Set(),overlay));
-  }).map(registration=>({registration:dataCopy(registration)}));
+  const state=stateOf(world);
+  const handlers=(state.indexes.registrationsByTarget[event]??[]).map(id=>state.registrations[id]!).filter(registration=>{
+    const {metadata}=bindings.reactions.get(registration.definition)!;
+    return !metadata.condition||evaluateQuery(metadata.condition,reactionInput(registration,payload),world,bindings,overlay);
+  }).map(registration=>({registration:detachRuleValue(registration)}));
   return{event,payload,handlers,scheduled:captureScheduled(event,payload,world,bindings,overlay)};
+}
+export function commitEvent(world:unknown,envelope:Omit<EventEnvelope,'id'>,mode:'immediate'|'queued'):void{
+  const state=stateOf(world),id=state.nextEvent++;
+  state.outbox[id]={...envelope,id};appendDeque(state.eventQueues[mode],id);
+  activateScheduled(world,envelope.scheduled);
 }
 function dispatcher(mode:'queued'|'immediate'):Effect<void,void>{
   const effect=handle<Effect<void,void>>();
   definitions.set(effect,{kind:'compiled',lower(link){
     const eligible=(s:any):boolean=>{
       const captured=s.locals.envelope.handlers[s.locals.cursor].registration as Registration;
-      const metadata=staticDefinitions.get(link.bindings.definitions[captured.definition]!);
-      if(metadata?.kind!=='ability'||metadata.abilityKind!=='event')throw Error('Invalid captured ability');
+      const {metadata}=link.bindings.reactions.get(captured.definition)!;
       if(metadata.eligible==='captured')return true;
       const state=stateOf(s.state);
       if(!Object.hasOwn(state.registrations,captured.id)||!validEntity(state,captured.source))return false;
       return typeof metadata.eligible==='object'?evaluateQuery(metadata.eligible,reactionInput(captured,s.locals.envelope.payload),s.state,link.bindings):true;
     };
-    const next=(s:any):number=>stateOf(s.state).outbox.findIndex(envelope=>{
-      const metadata=staticDefinitions.get(link.bindings.definitions[envelope.event]!);
-      return metadata?.kind==='event'&&metadata.dispatch===mode;
-    });
-    return[card.repeat(()=>true,[
+    const next=(s:any):number=>stateOf(s.state).eventQueues[mode].first??-1;
+    return temporaryLocalBlock([card.repeat(()=>true,[
       card.operation(next,'position'),
       card.branch(s=>s.locals.position<0,[card.return()]),
       card.operation(s=>{
-        const state=stateOf(s.state);s.locals.envelope=state.outbox.splice(s.locals.position,1)[0];s.locals.cursor=0;
+        const state=stateOf(s.state),id=s.locals.position;s.locals.envelope=state.outbox[id];delete state.outbox[id];removeDeque(state.eventQueues[mode],id);s.locals.cursor=0;
       }),
       card.repeat(s=>s.locals.cursor<s.locals.envelope.handlers.length,[
         card.branch(eligible,[card.operation(s=>{stateOf(s.state).sources.push(s.locals.envelope.handlers[s.locals.cursor].registration.source);}),card.invoke(s=>{
           const registration=s.locals.envelope.handlers[s.locals.cursor].registration as Registration;
-          const metadata=staticDefinitions.get(link.bindings.definitions[registration.definition]!);
-          if(metadata?.kind!=='ability'||metadata.abilityKind!=='event')throw Error('Invalid captured ability');
-          const name=link.names.get(metadata.effect);if(!name)throw Error('Unlinked reaction effect');return name;
+          return link.bindings.reactions.get(registration.definition)!.effect;
         },s=>reactionInput(s.locals.envelope.handlers[s.locals.cursor].registration,s.locals.envelope.payload)),card.operation(s=>{if(stateOf(s.state).sources.pop()!==s.locals.envelope.handlers[s.locals.cursor].registration.source)throw Error('Invalid reaction source stack');})]),
         card.operation(s=>{s.locals.cursor++;}),
       ]),
-    ])];
+    ])],world=>stateOf(world).eventQueues[mode].size===0);
   }});return effect;
 }
 /** Used by rule schedulers, not an entity-level bypass for protected event publication. */
@@ -116,10 +110,10 @@ export function emit<T>(event:RuleEvent<T>,payload:Input<T>):Command<void>{
     const metadata=staticDefinitions.get(event),index=link.bindings.indices.get(event);
     if(metadata?.kind!=='event'||!metadata.publicEmit||index===undefined)throw Error('Event is not publicly publishable');
     return[card.operation(s=>{
-      const state=stateOf(s.state),parsed=dataCopy(metadata.schema.parse(dataCopy(s.input)));
+      const state=stateOf(s.state),parsed=ownRuleValue(metadata.schemaPlan.apply(s.input));
       const envelope=captureEvent(index,parsed,s.state,link.bindings);
       if(state.nextEvent>=Number.MAX_SAFE_INTEGER)throw Error('Event identity exhausted');
-      state.outbox.push({...envelope,id:state.nextEvent++});activateScheduled(s.state,envelope.scheduled);
+      commitEvent(s.state,envelope,metadata.dispatch);
     }),card.invoke(link.ensure(dispatchImmediateEvents)),card.return()];
   }});return command(effect,payload);
 }

@@ -1,9 +1,10 @@
+import { typedValue } from './value.schemas.ts';
 import {z} from 'zod';
 import {entityId} from './resources.schemas.ts';
 import {int16} from './card-instances.schemas.ts';
 import type {PermanentCardDefinition} from './permanent-decks.types.ts';
 export const permanentDeckSetupSchema=z.object({actor:entityId}).strict();
 export const permanentDeckStateSchema=permanentDeckSetupSchema.extend({scope:z.int32().nonnegative(),cards:z.array(entityId).max(96),bottles:z.tuple([z.int32(),z.int32(),z.int32()]),counts:z.tuple([z.int32(),z.int32(),z.int32(),z.int32()]),upgradeable:z.int32(),transformable:z.int32(),nextBatch:entityId,pending:z.array(z.object({id:entityId,remaining:z.int32().positive()}))});
-export const deckObtainSchema=z.object({deck:entityId,definition:z.custom<PermanentCardDefinition>(),upgraded:z.boolean(),specialData:int16,count:z.int32().nonnegative().max(96),upgrade:z.boolean()}).strict();
+export const deckObtainSchema=z.object({deck:entityId,definition:typedValue<PermanentCardDefinition>(),upgraded:z.boolean(),specialData:int16,count:z.int32().nonnegative().max(96),upgrade:z.boolean()}).strict();
 export const deckBatchSchema=z.object({deck:entityId,actor:entityId,batch:entityId,card:entityId,count:z.int32().positive().max(96)}).strict();
 export const deckCardSchema=z.object({deck:entityId,actor:entityId,card:entityId,index:z.int32().nonnegative()}).strict();

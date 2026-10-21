@@ -8,6 +8,6 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm run typecheck && npm test"
   },
-  "dependencies": { "@bear-forge/contracts": "*" },
-  "devDependencies": { "@bear-forge/compiler": "*", "@bear-forge/runtime-controlled": "*", "zod": "4.6.5" }
+  "dependencies": { "@bear-forge/contracts": "*", "zod": "4.6.5" },
+  "devDependencies": { "@bear-forge/compiler": "*", "@bear-forge/runtime-controlled": "*" }
 }

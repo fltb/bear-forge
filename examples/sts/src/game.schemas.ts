@@ -1,8 +1,9 @@
+import {isolatedDataSchema} from '../../../packages/boundary/src/compiled-schema.ts';
 import {z} from 'zod';
 import {CombatPrivateSchema} from "./program/combat-state.ts";
 export const SetupSchema=z.strictObject({seed:z.string().regex(/^\d+$/).refine(v=>BigInt(v)<=0xffffffffffffffffn)});
-export const ActionSchema=z.strictObject({bits:z.number().int().min(0).max(0xffffffff)});
-export const EventSchema=z.strictObject({kind:z.enum(['game','battle']),bits:z.number().int().min(0).max(0xffffffff)});
+export const ActionSchema=isolatedDataSchema(z.strictObject({bits:z.number().int().min(0).max(0xffffffff)}));
+export const EventSchema=isolatedDataSchema(z.strictObject({kind:z.enum(['game','battle']),bits:z.number().int().min(0).max(0xffffffff)}));
 const object=z.record(z.string(),z.json());
 const n=z.number(),i=z.number().int(),flag=z.boolean(),s=z.string();
 const CardSchema=z.strictObject({id:s,misc:i,upgraded:flag});
@@ -48,9 +49,9 @@ export const PublicGameSchema=GameViewSchema.pick({ascension:true,act:true,floor
 const PublicBattleSchema=z.strictObject({turn:i,player:PlayerSchema,monsters:z.array(MonsterSchema.omit({id:true,miscInfo:true,halfDead:true,escaping:true,escapeNext:true})),
   hand:z.array(CombatCardSchema),drawCount:i,discard:z.array(CombatCardSchema),exhaust:z.array(CombatCardSchema),draw:z.array(CombatCardSchema).optional(),select:BattleViewSchema.shape.select,
 });
-export const FrameSchema=z.strictObject({game:PublicGameSchema,battle:PublicBattleSchema.nullable(),actions:z.array(ActionSchema),decisions:i.nonnegative(),heartDefeated:flag,history:z.array(EventSchema)});
-export const ObservationSchema=FrameSchema.pick({game:true,battle:true,history:true,heartDefeated:true});
-export const ResultSchema=z.strictObject({outcome:z.enum(['death','victory']),heartDefeated:z.boolean(),act:z.number(),floor:z.number(),hp:z.number()});
+export const FrameSchema=isolatedDataSchema(z.strictObject({game:PublicGameSchema,battle:PublicBattleSchema.nullable(),actions:z.array(ActionSchema),decisions:i.nonnegative(),heartDefeated:flag,history:z.array(EventSchema)}));
+export const ObservationSchema=isolatedDataSchema(FrameSchema.pick({game:true,battle:true,history:true,heartDefeated:true}));
+export const ResultSchema=isolatedDataSchema(z.strictObject({outcome:z.enum(['death','victory']),heartDefeated:z.boolean(),act:z.number(),floor:z.number(),hp:z.number()}));
 export type Setup=z.infer<typeof SetupSchema>;
 export type Action=z.infer<typeof ActionSchema>;
 export type Frame=z.infer<typeof FrameSchema>;

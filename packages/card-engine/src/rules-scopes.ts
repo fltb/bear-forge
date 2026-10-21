@@ -1,5 +1,6 @@
 import {compareOrder} from './rules-order.ts';
 import {cancelTask} from './rules-tasks.ts';
+import { insertIndex, removeIndex, removeRegistration } from './rules-indexes.ts';
 import { card } from './card.ts';
 import { definitions,handle,statements,expression,freezeAuthorInput } from './rules-internal.ts';
 import { stateOf,staticDefinitions,declareStatic } from './rules-module-internal.ts';
@@ -17,7 +18,7 @@ export function openScope(kind:ScopeKind,parent:Input<number>):Command<number>{
       const state=stateOf(s.state),parent=state.scopes[s.input];
       if(!Number.isSafeInteger(s.input)||!parent||parent.phase==='ending'||parent.phase==='closed')throw Error('Invalid parent scope');
       const id=state.nextScope;if(!Number.isSafeInteger(id)||id>=Number.MAX_SAFE_INTEGER)throw Error('Scope identity exhausted');
-      state.scopes[id]={kind:link.bindings.indices.get(kind)!,parent:s.input,phase:'initializing'};state.nextScope++;return id;
+      state.scopes[id]={kind:link.bindings.indices.get(kind)!,parent:s.input,phase:'initializing'};insertIndex(state.indexes.childrenByScope,s.input,id);state.nextScope++;return id;
     },'scope'),...names.map(name=>card.invoke(name,s=>({scope:s.locals.scope,parent:s.input}))),
     card.operation(s=>{const scope=stateOf(s.state).scopes[s.locals.scope];if(!scope||scope.phase!=='initializing')throw Error('Scope ended during initialization');scope.phase='active';}),card.return(s=>s.locals.scope)];
   }});return command(effect,parent);
@@ -29,22 +30,27 @@ export function closeScope(scope:Input<number>):Command<boolean>{
   definitions.set(effect,{kind:'compiled',lower(link){
     const self=link.ensure(effect),removeName=link.ensure(removeEffect as Effect<any,any>);
     for(const binding of link.bindings.lifecycles)if(binding.dispose)link.ensure(binding.dispose);
+    const callbacksByKind=new Map<number,readonly string[]>();
+    for(const [definition,index] of link.bindings.indices){
+      if(staticDefinitions.get(definition)?.kind!=='scope-kind')continue;
+      callbacksByKind.set(index,link.bindings.lifecycles.filter(b=>b.scope===definition&&b.dispose!==null)
+        .sort((a,b)=>compareOrder(b,a)||b.sequence-a.sequence).map(b=>link.names.get(b.dispose!)!));
+    }
     return[card.operation(s=>{
       if(!Number.isSafeInteger(s.input)||s.input<=0)throw Error('Root scope cannot be ended');
       const state=stateOf(s.state),record=state.scopes[s.input];if(!record||record.phase==='ending'||record.phase==='closed')return null;
       record.phase='ending';
-      const definition=record.kind===null?null:link.bindings.definitions[record.kind];
-      const callbacks=link.bindings.lifecycles.filter(b=>b.scope===definition&&b.dispose!==null).sort((a,b)=>compareOrder(b,a)||b.sequence-a.sequence);
-      return{parent:record.parent,callbacks:callbacks.map(b=>link.names.get(b.dispose!)!),children:Object.keys(state.scopes).map(Number).filter(id=>state.scopes[id]!.parent===s.input&&state.scopes[id]!.phase!=='closed').sort((a,b)=>b-a)};
+      const callbacks=record.kind===null?[]:callbacksByKind.get(record.kind)??[];
+      return{parent:record.parent,callbacks:[...callbacks],children:[...(state.indexes.childrenByScope[s.input]??[])].reverse()};
     },'ending'),card.branch(s=>s.locals.ending===null,[card.return(()=>false)]),
     card.forEach(s=>s.locals.ending.children,self),
     card.operation(()=>0,'cursor'),card.repeat(s=>s.locals.cursor<s.locals.ending.callbacks.length,[
       card.invoke(s=>s.locals.ending.callbacks[s.locals.cursor],s=>({scope:s.input,parent:s.locals.ending.parent})),card.operation(s=>{s.locals.cursor++;}),
-    ]),card.operation(s=>Object.entries(stateOf(s.state).entities).filter(([,entity])=>entity.scope===s.input).map(([id])=>({entity:Number(id),reason:{kind:'scope-ended'}})),'entities'),
+    ]),card.operation(s=>(stateOf(s.state).indexes.entitiesByScope[s.input]??[]).map(entity=>({entity,reason:{kind:'scope-ended'}})),'entities'),
     card.forEach(s=>s.locals.entities,removeName),card.operation(s=>{
-      const state=stateOf(s.state);for(const registration of Object.values(state.registrations))if(registration.lifetime===s.input)delete state.registrations[registration.id];
-      for(const task of Object.values(state.tasks))if(task.lifetime===s.input&&task.state!=='running')cancelTask(state,task.id);
-      state.scopes[s.input]!.phase='closed';
+      const state=stateOf(s.state);for(const id of [...(state.indexes.registrationsByScope[s.input]??[])])removeRegistration(state,link.bindings,id);
+      for(const id of [...(state.indexes.tasksByScope[s.input]??[])])cancelTask(state,id);
+      const record=state.scopes[s.input]!;record.phase='closed';if(record.parent!==null)removeIndex(state.indexes.childrenByScope,record.parent,s.input);
     }),card.return(()=>true)];
   }});return command(effect,scope);
 }

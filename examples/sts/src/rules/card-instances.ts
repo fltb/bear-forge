@@ -1,3 +1,4 @@
+import { typedValue } from './value.schemas.ts';
 import {z} from 'zod';
 import {rules} from '@bear-forge/card-engine';
 import {zones} from './zones.ts';
@@ -24,7 +25,7 @@ export const cardInstances=defineRules({requires:[zones],build(m){
     call(setInitial,{entity:b.read(v=>v.input.entity),value:query(initial,b.read(v=>({entity:v.input.entity,setup:v.input.setup})))}),
     call(entityEffect(kind,b.read(v=>v.input.entity),c=>c.created??noopCreated),b.input),
   ));
-  const assertDetached=defineEffect<number,void>(b=>b.return(b.read(v=>{if(v.get(query(zones.exports.location,v.input))!==null)throw Error('A card must leave its zone before deletion');return undefined;})));
+  const assertDetached=defineEffect<number,void>(b=>b.return(b.read(v=>{if(v.query(zones.exports.location,v.input)!==null)throw Error('A card must leave its zone before deletion');return undefined;})));
   const dispose=defineEffect<Omit<rules.EntityLifecycle<CardSetup>,'setup'>&{reason:unknown},void>(b=>{
     const location=b.local<number|null>();return sequence(b.assign(location,query(zones.exports.location,b.read(v=>v.input.entity))),
       when(b.read(v=>v.get(location)!==null),call(zones.exports.move,{entity:b.read(v=>v.input.entity),from:location,to:null,index:0})),
@@ -32,10 +33,10 @@ export const cardInstances=defineRules({requires:[zones],build(m){
     );
   });
   const kind:rules.EntityKind<CardConfig,CardSetup>=m.kind({config:z.object({
-    id:z.string(),metadata:metadataSchema,use:z.custom<CardConfig['use']>(),canUpgrade:z.custom<CardConfig['canUpgrade']>(),upgrade:z.custom<CardConfig['upgrade']>(),
-    returned:z.custom<NonNullable<CardConfig['returned']>>().optional(),canTransform:z.custom<NonNullable<CardConfig['canTransform']>>().optional(),canUse:z.custom<NonNullable<CardConfig['canUse']>>().optional(),endTurn:z.custom<NonNullable<CardConfig['endTurn']>>().optional(),
-    upgradeCount:z.custom<NonNullable<CardConfig['upgradeCount']>>().optional(),
-    created:z.custom<NonNullable<CardConfig['created']>>().optional(),removed:z.custom<NonNullable<CardConfig['removed']>>().optional(),
+    id:z.string(),metadata:metadataSchema,use:typedValue<CardConfig['use']>(),canUpgrade:typedValue<CardConfig['canUpgrade']>(),upgrade:typedValue<CardConfig['upgrade']>(),
+    returned:typedValue<NonNullable<CardConfig['returned']>>().optional(),canTransform:typedValue<NonNullable<CardConfig['canTransform']>>().optional(),canUse:typedValue<NonNullable<CardConfig['canUse']>>().optional(),endTurn:typedValue<NonNullable<CardConfig['endTurn']>>().optional(),
+    upgradeCount:typedValue<NonNullable<CardConfig['upgradeCount']>>().optional(),
+    created:typedValue<NonNullable<CardConfig['created']>>().optional(),removed:typedValue<NonNullable<CardConfig['removed']>>().optional(),
   }).strict(),setup:cardSetupSchema,components:[state,zones.exports.member],initialize,dispose});
   const initial=defineQuery({input:z.object({entity:entityId,setup:cardSetupSchema}),output:cardStateSchema,kinds:[kind],base:(r,input)=>{
     const config=r.configuration(input.entity,kind),setup=input.setup;
@@ -44,11 +45,11 @@ export const cardInstances=defineRules({requires:[zones],build(m){
     return{...setup,cost,costForTurn:cost,freeToPlayOnce:false,retain:false};
   }});
   const current=defineQuery({input:entityId,output:cardStateSchema,reads:[state],base:(r,entity)=>r.component(entity,state)});
-  const sameDefinition=defineQuery({input:z.tuple([z.custom<rules.EntityDefinition<CardConfig,CardSetup>>(),z.custom<rules.EntityDefinition<CardConfig,CardSetup>>()]),output:z.boolean(),base:(r,pair)=>r.sameDefinition(pair[0],pair[1])});
-  const matchesDefinition=defineQuery({input:z.object({entity:entityId,definition:z.custom<rules.EntityDefinition<CardConfig,CardSetup>>()}),output:z.boolean(),kinds:[kind],base:(r,i)=>r.configuration(i.entity,kind)===r.definitionConfiguration(i.definition,kind)});
+  const sameDefinition=defineQuery({input:z.tuple([typedValue<rules.EntityDefinition<CardConfig,CardSetup>>(),typedValue<rules.EntityDefinition<CardConfig,CardSetup>>()]),output:z.boolean(),base:(r,pair)=>r.sameDefinition(pair[0],pair[1])});
+  const matchesDefinition=defineQuery({input:z.object({entity:entityId,definition:typedValue<rules.EntityDefinition<CardConfig,CardSetup>>()}),output:z.boolean(),kinds:[kind],base:(r,i)=>r.configuration(i.entity,kind)===r.definitionConfiguration(i.definition,kind)});
   const hasCombatCopies=defineQuery({input:entityId,output:z.boolean(),reads:[state],base:(r,master)=>r.entities(state).some(id=>{const s=r.component(id,state);return s.mode===1&&s.master===master;})});
   const metadata=defineQuery({input:entityId,output:metadataSchema,kinds:[kind],base:(r,entity)=>r.configuration(entity,kind).metadata});
-  const definitionMetadata=defineQuery({input:z.custom<rules.EntityDefinition<CardConfig,CardSetup>>(),output:metadataSchema,kinds:[kind],base:(r,definition)=>r.definitionConfiguration(definition,kind).metadata});
+  const definitionMetadata=defineQuery({input:typedValue<rules.EntityDefinition<CardConfig,CardSetup>>(),output:metadataSchema,kinds:[kind],base:(r,definition)=>r.definitionConfiguration(definition,kind).metadata});
   const variant=defineQuery({input:entityId,output:variantSchema,reads:[state],kinds:[kind],base:(r,entity)=>r.configuration(entity,kind).metadata.variants[r.component(entity,state).upgraded?1:0]});
   const combatView=defineQuery({input:entityId,output:combatCardSchema,reads:[state],kinds:[kind],base:(r,entity)=>{
     const c=r.component(entity,state);return{id:r.configuration(entity,kind).id,uniqueId:c.uniqueId,specialData:c.specialData,cost:c.cost,costForTurn:c.costForTurn,upgraded:c.upgraded,freeToPlayOnce:c.freeToPlayOnce,retain:c.retain};
@@ -56,13 +57,13 @@ export const cardInstances=defineRules({requires:[zones],build(m){
   const permanentView=defineQuery({input:entityId,output:z.object({id:z.string(),misc:int16,upgraded:z.boolean()}),reads:[state],kinds:[kind],base:(r,entity)=>{
     const c=r.component(entity,state);return{id:r.configuration(entity,kind).id,misc:c.specialData,upgraded:c.upgraded};
   }});
-  function mutate<I extends {entity:number}>(input:rules.Schema<I>,update:(state:Readonly<CardState>,input:I)=>CardMutable):rules.Effect<I,void>{
+  function mutate<I extends {entity:number}>(input:rules.Schema<I>,update:(state:rules.Borrowed<CardState>,input:rules.Borrowed<I>)=>CardMutable):rules.Effect<I,void>{
     return m.atom({input,output:z.undefined(),reads:[state],writes:[state],emits:[changed],run(r,input){
-      const before=r.component(input.entity,state),patch=cardMutableSchema.parse(update(before,input)),after={...before,...patch};
+      const before=r.component(input.entity,state),patch=update(before,input),after={...before,...patch};
       return{writes:[{entity:input.entity,component:state,value:after}],events:[{event:changed,payload:{entity:input.entity,before,after}}],result:undefined};
     }});
   }
-  const mutable=(c:Readonly<CardState>):CardMutable=>({specialData:c.specialData,cost:c.cost,costForTurn:c.costForTurn,upgraded:c.upgraded,freeToPlayOnce:c.freeToPlayOnce,retain:c.retain});
+  const mutable=(c:rules.Borrowed<CardState>):CardMutable=>({specialData:c.specialData,cost:c.cost,costForTurn:c.costForTurn,upgraded:c.upgraded,freeToPlayOnce:c.freeToPlayOnce,retain:c.retain});
   const amountInput=z.object({entity:entityId,amount:z.int32()});
   const setCostForCombat=mutate(amountInput,(c,i)=>({...mutable(c),cost:signed8(i.amount)}));
   const setCostForTurn=mutate(amountInput,(c,i)=>({...mutable(c),costForTurn:c.costForTurn<0?c.costForTurn:signed8(Math.max(0,i.amount))}));
@@ -78,11 +79,11 @@ export const cardInstances=defineRules({requires:[zones],build(m){
   const setSpecialData=mutate(z.object({entity:entityId,value:int16}),(c,i)=>({...mutable(c),specialData:i.value}));
   const setMutable=mutate(z.object({entity:entityId,value:cardMutableSchema}),(c,i)=>({...mutable(c),...i.value}));
   const defaultCount=defineQuery({input:cardEvaluationSchema,output:z.int32(),base:(_r,c)=>Number(c.state.upgraded)});
-  const canSelection={kind,select:(c:Readonly<CardConfig>)=>c.canUpgrade},upgradeSelection={kind,select:(c:Readonly<CardConfig>)=>c.upgrade},countSelection={kind,select:(c:Readonly<CardConfig>)=>c.upgradeCount??defaultCount};
+  const canSelection={kind,select:(c:rules.Borrowed<CardConfig>)=>c.canUpgrade},upgradeSelection={kind,select:(c:rules.Borrowed<CardConfig>)=>c.upgrade},countSelection={kind,select:(c:rules.Borrowed<CardConfig>)=>c.upgradeCount??defaultCount};
   const canUpgrade=defineQuery({input:entityId,output:z.boolean(),reads:[state],selections:[canSelection],base:(r,entity)=>r.selected(canSelection,entity,{entity,state:r.component(entity,state)})});
   const upgradeCount=defineQuery({input:entityId,output:z.int32(),reads:[state],selections:[countSelection],base:(r,entity)=>r.selected(countSelection,entity,{entity,state:r.component(entity,state)})});
   const defaultTransform=defineQuery({input:cardEvaluationSchema,output:z.boolean(),base:()=>true});
-  const transformSelection={kind,select:(c:Readonly<CardConfig>)=>c.canTransform??defaultTransform};
+  const transformSelection={kind,select:(c:rules.Borrowed<CardConfig>)=>c.canTransform??defaultTransform};
   const canTransform=defineQuery({input:entityId,output:z.boolean(),reads:[state],selections:[transformSelection],base:(r,entity)=>r.selected(transformSelection,entity,{entity,state:r.component(entity,state)})});
   const nextUpgrade=defineQuery({input:z.object({entity:entityId,force:z.boolean()}),output:cardMutableSchema.nullable(),reads:[state],selections:[canSelection,upgradeSelection],base:(r,{entity,force})=>{
     const value={entity,state:r.component(entity,state)};return force||r.selected(canSelection,entity,value)?r.selected(upgradeSelection,entity,value):null;

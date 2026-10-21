@@ -13,33 +13,16 @@ import type { RawStop } from '@bear-forge/runtime';
 import { read, copy, sameData, fields } from '@bear-forge/boundary';
 import { admitDetached, isOwned, retainOwned, isOwnedTree, isDenseTree } from '../../boundary/src/values.ts';
 import { Records } from '../../runtime/src/records.ts';
+import { bindTraceWriter } from '../../card-engine/src/card-trace.ts';
+import { CardTraceRecords } from './trace.ts';
+import type { TraceLayout } from './trace.ts';
 import { CardGraph, privateCardGraph } from './graph.ts';
+import { publishNativeStop } from './publication.ts';
 import { memorySnapshotStore } from './store.ts';
 import type { SnapshotStore } from './store.ts';
 
 export type CardOptions = { controlled?: boolean; stepBudget?: number; snapshots?: SnapshotStore; recordCore?: boolean; trace?: (event: CardTrace) => void };
 const nativeStructuredClone = globalThis.structuredClone;
-const nativeKeys = Object.keys, nativePrototype = Object.getPrototypeOf;
-/** The pristine native clone built every own field as enumerable data. Only
- * its supported data nodes still need admission; unsupported brands fall back
- * to Controller so fault kind and validation order stay unchanged. */
-function ownNativeClone<T>(value: T): T {
-  if (nativePrototype(Array.prototype) !== Object.prototype) return value;
-  const seen = new Set<object>(); let tree = true, dense = true;
-  function visit(x: any): boolean {
-    if (x === null || typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean' || typeof x === 'undefined' || typeof x === 'bigint') return true;
-    if (typeof x !== 'object') return false;
-    if (seen.has(x)) { tree = false; return true; }
-    const array = Array.isArray(x);
-    if (nativePrototype(x) !== (array ? Array.prototype : Object.prototype)) return false;
-    seen.add(x);
-    const names = nativeKeys(x);
-    if (array && (names.length !== x.length || x.length > 0 && names[x.length - 1] !== String(x.length - 1))) dense = false;
-    for (let i = 0; i < names.length; i++) if (!visit(x[names[i]!])) return false;
-    return true;
-  }
-  return visit(value) ? retainOwned(value, tree, dense) : value;
-}
 const traceReaders = new WeakMap<object, (id: string) => Outcome<CardTrace[]>>();
 /** Companion capture facility; the shared LoadedCore/Instance protocol is unchanged. */
 export function readCardTrace(loaded: object, instanceId: string): Outcome<CardTrace[]> {
@@ -62,13 +45,18 @@ export function createCardLoader(options: CardOptions = {}) {
       // Controller owns parser input/result isolation. Card schemas are host
       // functions, so an additional provider-side adapter would copy them twice.
       const schemas = definition.schemas;
-      const graphStorage = <T>(root: T): CardGraph<T> => definition.project ? new CardGraph(root) : privateCardGraph(root);
+      const traceLayout:TraceLayout={positions:[],offsets:[]};
+      if(recordCore){
+        const positions:Omit<CardTrace,'depth'>[]=[],offsets:number[]=[];
+        program.blocks.forEach((block,index)=>{offsets.push(positions.length);block.forEach((step,position)=>positions.push({effect:program.names[index]!,block:index,index:position,kind:step.kind}));});
+        traceLayout.positions=positions;traceLayout.offsets=offsets;
+      }
+      const graphStorage = <T>(root: T, immutable?:readonly object[]): CardGraph<T> => definition.project ? new CardGraph(root,immutable) : privateCardGraph(root,immutable);
       const nativeStorage = (root: CardRoot<S>) => {
         const clone = globalThis.structuredClone;
         if (definition.project || clone !== nativeStructuredClone) return plainCardStorage(root, clone);
         const storage: CardStorage<CardRoot<S>> = plainCardStorage(root, value => {
-          const detached = clone(value);
-          return value === storage.root.stop ? ownNativeClone(detached) : detached;
+          return value === storage.root.stop ? publishNativeStop(value, clone) : clone(value);
         });
         return storage;
       };
@@ -90,7 +78,7 @@ export function createCardLoader(options: CardOptions = {}) {
       const controllers = recording ? new Map<string, Controller<Setup, P, R>>() : undefined;
       const handles = controlled ? new WeakMap<object, Controller<Setup, P, R>>() : undefined;
       const machines = controlled ? new WeakMap<Controller<Setup, P, R>, CardMachine<S, Setup, P, R>>() : undefined;
-      const coreRecords = recordCore ? new WeakMap<Controller<Setup, P, R>, Records<CardTrace>>() : undefined;
+      const coreRecords = recordCore ? new WeakMap<Controller<Setup, P, R>, CardTraceRecords>() : undefined;
       function remember(handle: Instance<P, R>, controller: Controller<Setup, P, R>): Instance<P, R> {
         if (!handles) return handle;
         handles.set(handle, controller);
@@ -98,7 +86,7 @@ export function createCardLoader(options: CardOptions = {}) {
         handle.transfer = async () => { const result = await transfer(); if (result.ok) remember(result.value, controller); return result; };
         return handle;
       }
-      function instantiate(setup: Setup, restored?: { machine: CardMachine<S, Setup, P, R>; state: InstanceStop<P, R>; records: Records<InstanceRecord<Setup, P, R>> | any[]; core?: Records<CardTrace> | undefined; shared?: true }): Instance<P, R> {
+      function instantiate(setup: Setup, restored?: { machine: CardMachine<S, Setup, P, R>; state: InstanceStop<P, R>; records: Records<InstanceRecord<Setup, P, R>> | any[]; core?: CardTraceRecords | undefined; shared?: true }): Instance<P, R> {
         const budget = options.stepBudget ?? (controlled ? 1_000_000 : Infinity);
         let root: CardRoot<S> | undefined, storage = restored?.machine.storage;
         if (!restored) {
@@ -109,13 +97,17 @@ export function createCardLoader(options: CardOptions = {}) {
             storage = controlled ? graphStorage(root) : nativeStorage(root);
           }
         }
-        const core = recordCore ? restored?.core?.fork() ?? new Records<CardTrace>() : undefined;
+        const core = recordCore ? restored?.core?.fork() ?? new CardTraceRecords(traceLayout) : undefined;
         const observe = recordCore || options.trace ? (event: CardTrace) => {
-          core?.push(event);
+          core?.push(event,event.depth);
           // Diagnostics are not game inputs: isolate their scalar DTO and
           // never turn an observer failure into an unreplayable game fault.
           try { options.trace?.({ ...event }); } catch { /* authoritative records remain available */ }
         } : undefined;
+        if(observe)bindTraceWriter(observe,(position,depth)=>{
+          core?.push(position,depth);
+          if(options.trace)try{options.trace({...position,depth});}catch{/* diagnostic observers do not affect execution */}
+        });
         const machine = new CardMachine(program, storage!, observe);
         // A fork already has an isolated, immutable host stop. Re-exporting the
         // machine here would walk the entire pending view despite COW roots.
@@ -176,7 +168,8 @@ export function createCardLoader(options: CardOptions = {}) {
           if (c.state.kind === 'fault') return { ok: false, error: c.state.error };
           try {
             const machine = machines!.get(c)!;
-            const bytes = serialize({ format: 1, rule: definition.id, root: machine.storage.export(machine.root), state: c.state, records: c.records!.slice(), recordCore, core: coreRecords?.get(c)?.slice() ?? [] });
+            const graph=(machine.storage as CardGraph<CardRoot<S>>).snapshot();
+            const bytes = serialize({ format: 1, rule: definition.id, root: graph.root, immutable:graph.immutable, state: c.state, records: c.records!.slice(), recordCore, core: coreRecords?.get(c)?.snapshot() ?? null });
             const snapshotId = randomUUID(); await store!.put(snapshotId, bytes); return ok(InstanceSnapshotSchema.parse({ snapshotId }));
           } catch (error) { return fail('program_failed', exceptionMessage(error)); }
         },
@@ -184,7 +177,7 @@ export function createCardLoader(options: CardOptions = {}) {
           try {
             const ref = InstanceSnapshotSchema.parse(snapshot), bytes = await store!.get(ref.snapshotId); if (!bytes) return fail('snapshot_not_found');
             const data = deserialize(bytes);
-            if (data?.format !== 1 || data.rule !== definition.id || data.recordCore !== recordCore || !Array.isArray(data.core) || !Array.isArray(data.records) || !data.root || !['call', 'done'].includes(data.state?.kind)) return fail('snapshot_incompatible');
+            if (data?.format !== 1 || data.rule !== definition.id || data.recordCore !== recordCore || (!recordCore && data.core !== null) || !Array.isArray(data.records) || !Array.isArray(data.immutable) || !data.root || !['call', 'done'].includes(data.state?.kind)) return fail('snapshot_incompatible');
             program.validate(data.root);
             if (data.state.kind === 'call') {
               if (!fields(data.state, ['kind', 'callId', 'call']) || !CallIdSchema.safeParse(data.state.callId).success || !fields(data.state.call, ['port', 'input']) || !Object.hasOwn(schemas.ports, data.state.call.port)) return fail('snapshot_incompatible');
@@ -193,10 +186,10 @@ export function createCardLoader(options: CardOptions = {}) {
               if (!fields(data.state, ['kind', 'result'])) return fail('snapshot_incompatible');
               read(schemas.result, data.state.result);
             }
-            const storage = graphStorage<CardRoot<S>>(data.root), machine = new CardMachine(program, storage, options.trace);
+            const storage = graphStorage<CardRoot<S>>(data.root,data.immutable), machine = new CardMachine(program, storage, options.trace);
             if (!sameData(machine.current(), data.state.kind === 'call' ? { kind: 'call', call: data.state.call } : { kind: 'done', result: data.state.result })) return fail('snapshot_incompatible');
             if (data.state.kind === 'call' && (!data.root.waiting || !data.root.frames.length)) return fail('snapshot_incompatible');
-            const core = recordCore ? new Records<CardTrace>() : undefined; if (core) for (const event of data.core) core.push(event);
+            const core = recordCore ? new CardTraceRecords(traceLayout) : undefined; core?.restore(data.core);
             return ok(instantiate(undefined as Setup, { machine, state: data.state, records: data.records, core }));
           } catch (error) { return fail('snapshot_incompatible', exceptionMessage(error)); }
         },

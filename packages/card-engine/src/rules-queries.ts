@@ -1,9 +1,9 @@
-import { dataCopy } from './rules-data.ts';
-import {prepareOrdering,compareOrder} from './rules-order.ts';
+import { ownRuleValue, readRuleValue } from './rules-values.ts';
+import {prepareOrdering} from './rules-order.ts';
 import { expression, handle, freezeAuthorInput } from './rules-internal.ts';
 import { declareStatic, definitionOwners,staticDefinitions, resolveDefinition, stateOf } from './rules-module-internal.ts';
 import type { ComponentOverlay, ModuleBindings } from './rules-module-internal.ts';
-import type { Input, Value } from './rules.types.ts';
+import type { Borrowed, Input, Value } from './rules.types.ts';
 import type { Query, QuerySpec, QueryRead,EntityQuerySelection } from './rules-query.types.ts';
 export type { Query, QuerySpec, QueryRead,EntityQuerySelection } from './rules-query.types.ts';
 
@@ -79,90 +79,109 @@ export function validateQueries(bindings:ModuleBindings):void{
     active.delete(definition);done.add(definition);
   };
   for(const definition of bindings.indices.keys())if(staticDefinitions.get(definition)?.kind==='query')visit(definition);
+  for(const definition of done)bindings.queryExecutors.set(definition,compileQuery(definition,bindings));
 }
-function queryRead(reads:readonly object[],kinds:readonly object[],dependencies:readonly object[],selections:readonly object[],world:unknown,bindings:ModuleBindings,active:Set<object>,overlay?:ComponentOverlay):QueryRead{
+function prepareRead(reads:readonly object[],kinds:readonly object[],dependencies:readonly object[],selections:readonly object[],bindings:ModuleBindings):(world:unknown,overlay?:ComponentOverlay)=>QueryRead{
+  const components=new Map(reads.map(definition=>[definition,bindings.indices.get(definition)!]));
+  const allowedKinds=new Set(kinds),allowedDependencies=new Set(dependencies),allowedSelections=new Set(selections);
+  // These views carry no mutable query result or continuation. Weak keys avoid
+  // retaining a closed Context; each fork/restore has a different world root.
+  const views=new WeakMap<object,QueryRead>();
   const definitionIndex=(value:any):number|null=>{
     if(!value||typeof value!=='object')return null;
     if(staticDefinitions.get(value)?.kind==='entity')return bindings.indices.get(value)??null;
     if(value.program!==bindings.programIdentity||!Number.isSafeInteger(value.definition)||value.definition<0||staticDefinitions.get(bindings.definitions[value.definition]!)?.kind!=='entity')return null;
     return value.definition;
   };
-  return Object.freeze({
+  const create=(world:unknown,overlay?:ComponentOverlay):QueryRead=>Object.freeze({
     entities(component:any):readonly number[]{
-      const target=resolveDefinition(component),index=bindings.indices.get(target);
-      if(!reads.includes(target)||index===undefined)throw Error('Undeclared rule query read');
-      return Object.freeze(Object.keys(stateOf(world).entities).map(Number).filter(id=>Object.hasOwn(stateOf(world).entities[id]!.components,index)).sort((a,b)=>a-b));
+      const index=components.get(resolveDefinition(component));
+      if(index===undefined)throw Error('Undeclared rule query read');
+      return Object.freeze([...(stateOf(world).indexes.entitiesByComponent[index]??[])]);
     },
-    component<T>(entity:number,component:any):Readonly<T>{
-      const target=resolveDefinition(component),index=bindings.indices.get(target);
-      if(!reads.includes(target)||index===undefined)throw Error('Undeclared rule query read');
+    component<T>(entity:number,component:any):Borrowed<T>{
+      const index=components.get(resolveDefinition(component));
+      if(index===undefined)throw Error('Undeclared rule query read');
       const record=stateOf(world).entities[entity];
       if(!record||!Object.hasOwn(record.components,index))throw Error('Missing query component');
-      return dataCopy(overlay?.get(entity)?.has(index)?overlay.get(entity)!.get(index):record.components[index],true);
+      return readRuleValue(overlay?.get(entity)?.has(index)?overlay.get(entity)!.get(index):record.components[index]) as Borrowed<T>;
     },
-    configuration<C,S>(entity:number,kind:import('./rules-entities.types.ts').EntityKind<C,S>):Readonly<C>{
-      if(!kinds.includes(kind))throw Error('Undeclared entity configuration read');
+    configuration<C,S>(entity:number,kind:import('./rules-entities.types.ts').EntityKind<C,S>):Borrowed<C>{
+      if(!allowedKinds.has(kind))throw Error('Undeclared entity configuration read');
       const record=stateOf(world).entities[entity],definition=record&&record.definition!==null?staticDefinitions.get(bindings.definitions[record.definition]!):null;
       if(definition?.kind!=='entity'||definition.entityKind!==kind)throw Error('Entity kind does not match configuration read');
-      return definition.config as Readonly<C>;
+      return definition.config as Borrowed<C>;
     },
-    definitionConfiguration<C,S>(reference:import('./rules-entities.types.ts').EntityDefinition<C,S>,kind:import('./rules-entities.types.ts').EntityKind<C,S>):Readonly<C>{
-      if(!kinds.includes(kind))throw Error('Undeclared entity configuration read');
+    definitionConfiguration<C,S>(reference:import('./rules-entities.types.ts').EntityDefinition<C,S>,kind:import('./rules-entities.types.ts').EntityKind<C,S>):Borrowed<C>{
+      if(!allowedKinds.has(kind))throw Error('Undeclared entity configuration read');
       const index=definitionIndex(reference),definition=index===null?null:staticDefinitions.get(bindings.definitions[index]!);
       if(definition?.kind!=='entity'||definition.entityKind!==kind)throw Error('Definition kind does not match configuration read');
-      return definition.config as Readonly<C>;
+      return definition.config as Borrowed<C>;
     },
-    query<A,B>(other:Query<A,B>,args:A):B{
-      if(!dependencies.includes(other))throw Error('Undeclared rule query dependency');
-      return evaluateQuery(other,args,world,bindings,active,overlay);
+    query<A,B>(other:Query<A,B>,args:Borrowed<A>):Borrowed<B>{
+      if(!allowedDependencies.has(other))throw Error('Undeclared rule query dependency');
+      return evaluateQuery(other,args,world,bindings,overlay);
     },
-    selected<C,I,O,S>(selection:EntityQuerySelection<C,I,O,S>,entity:number,input:I):O{
-      if(!selections.includes(selection))throw Error('Undeclared entity query selection');
+    selected<C,I,O,S>(selection:EntityQuerySelection<C,I,O,S>,entity:number,input:Borrowed<I>):Borrowed<O>{
+      if(!allowedSelections.has(selection))throw Error('Undeclared entity query selection');
       const record=stateOf(world).entities[entity],target=record?.definition===null?null:record&&bindings.querySelections.get(selection)?.get(record.definition);
-      if(!target)throw Error('Entity query selection kind mismatch');return evaluateQuery(target,input,world,bindings,active,overlay);
+      if(!target)throw Error('Entity query selection kind mismatch');return evaluateQuery(target,input,world,bindings,overlay);
     },
-    selectedDefinition<C,I,O,S>(selection:EntityQuerySelection<C,I,O,S>,definition:import('./rules-entities.types.ts').EntityDefinition<C,S>,input:I):O{
-      if(!selections.includes(selection))throw Error('Undeclared entity query selection');
+    selectedDefinition<C,I,O,S>(selection:EntityQuerySelection<C,I,O,S>,definition:import('./rules-entities.types.ts').EntityDefinition<C,S>,input:Borrowed<I>):Borrowed<O>{
+      if(!allowedSelections.has(selection))throw Error('Undeclared entity query selection');
       const index=definitionIndex(definition),target=index===null?null:bindings.querySelections.get(selection)?.get(index);
-      if(!target)throw Error('Definition query selection kind mismatch');return evaluateQuery(target,input,world,bindings,active,overlay);
+      if(!target)throw Error('Definition query selection kind mismatch');return evaluateQuery(target,input,world,bindings,overlay);
     },
     sameDefinition(first:any,second:any):boolean{
       const a=definitionIndex(first),b=definitionIndex(second);return a!==null&&b!==null&&a===b;
     },
   });
+  return(world,overlay)=>{
+    if(overlay)return create(world,overlay);
+    const root=world as object;let view=views.get(root);
+    if(!view){view=create(world);views.set(root,view);}return view;
+  };
 }
-export function evaluateQuery<I,O>(definition:Query<I,O>,input:I,world:unknown,bindings:ModuleBindings,active=new Set<object>(),overlay?:ComponentOverlay):O{
+function compileQuery(definition:object,bindings:ModuleBindings):(input:unknown,world:unknown,overlay?:ComponentOverlay)=>unknown{
   const d=staticDefinitions.get(definition);
-  if(!bindings.indices.has(definition)||d?.kind!=='query')throw Error('Unbound rule query');
-  if(active.has(definition))throw Error('Reentrant rule query');active.add(definition);
-  try{
-    const parsed=d.input.parse(dataCopy(input,false,value=>{
+  if(d?.kind!=='query')throw Error('Unbound rule query');
+  const index=bindings.indices.get(definition)!;
+  const read=prepareRead(d.reads,d.kinds,d.dependencies,d.selections,bindings);
+  const modifiers=new Map<number,{metadata:Extract<import('./rules-module-internal.ts').StaticDefinition,{kind:'ability';abilityKind:'modifier'}>;read:ReturnType<typeof prepareRead>}>();
+  for(let candidate=0;candidate<bindings.definitions.length;candidate++){
+    const metadata=staticDefinitions.get(bindings.definitions[candidate]!);
+    if(metadata?.kind==='ability'&&metadata.abilityKind==='modifier'&&metadata.target===definition)
+      modifiers.set(candidate,{metadata,read:prepareRead(metadata.reads,[],metadata.dependencies,metadata.selections,bindings)});
+  }
+  const lowerReference=(value:object)=>{
       const index=bindings.indices.get(value);
       if(staticDefinitions.get(value)?.kind!=='entity'||index===undefined)throw Error('Unbound static entity query argument');
       return{program:bindings.programIdentity,definition:index};
-    }));
-    let result=d.base(queryRead(d.reads,d.kinds,d.dependencies,d.selections,world,bindings,active,overlay),dataCopy(parsed,true));
+  };
+  return(input,world,overlay)=>{
+    const parsed=d.inputPlan.own(input,lowerReference);
+    let result=d.base(read(world,overlay),parsed);
     if(result&&typeof result.then==='function')throw Error('Rule query must be synchronous');
-    result=dataCopy(d.output.parse(dataCopy(result)));
+    result=d.outputPlan.own(result,lowerReference);
     const state=stateOf(world);
-    const candidates=Object.values(state.registrations).filter(registration=>{
-      const metadata=staticDefinitions.get(bindings.definitions[registration.definition]!);
-      return metadata?.kind==='ability'&&metadata.abilityKind==='modifier'&&metadata.target===definition;
-    }).sort((a,b)=>{
-      const ma=staticDefinitions.get(bindings.definitions[a.definition]!)!,mb=staticDefinitions.get(bindings.definitions[b.definition]!)!;
-      if(ma.kind!=='ability'||mb.kind!=='ability')throw Error('Invalid modifier order');return compareOrder(ma,mb)||a.sequence-b.sequence;
-    });
-    for(const registration of candidates){
-      const modifier=staticDefinitions.get(bindings.definitions[registration.definition]!);
-      if(modifier?.kind!=='ability'||modifier.abilityKind!=='modifier')throw Error('Invalid query modifier');
+    const candidates=state.indexes.registrationsByTarget[index];
+    if(!candidates)return result;
+    for(const id of candidates){
+      const registration=state.registrations[id]!;
+      const bound=modifiers.get(registration.definition)!,modifier=bound.metadata;
       const context={input:parsed,value:result,source:registration.source,owner:registration.owner,environment:registration.environment,registration:registration.id};
       if(modifier.eligible!=='captured'&&!Object.hasOwn(state.entities,registration.source))continue;
-      if(typeof modifier.eligible==='object'&&!evaluateQuery(modifier.eligible,context,world,bindings,active,overlay))continue;
-      if(modifier.condition&&!evaluateQuery(modifier.condition,context,world,bindings,active,overlay))continue;
-      const next=modifier.transform(queryRead(modifier.reads,[],modifier.dependencies,modifier.selections,world,bindings,active,overlay),dataCopy(context,true));
+      if(typeof modifier.eligible==='object'&&!evaluateQuery(modifier.eligible,context,world,bindings,overlay))continue;
+      if(modifier.condition&&!evaluateQuery(modifier.condition,context,world,bindings,overlay))continue;
+      const next=modifier.transform(bound.read(world,overlay),ownRuleValue(context));
       if(next&&typeof next.then==='function')throw Error('Rule modifier must be synchronous');
-      result=dataCopy(d.output.parse(dataCopy(next)));
+      result=d.outputPlan.own(next,lowerReference);
     }
     return result;
-  }finally{active.delete(definition);}
+  };
+}
+export function evaluateQuery<I,O>(definition:Query<I,O>,input:I|Borrowed<I>,world:unknown,bindings:ModuleBindings,overlay?:ComponentOverlay):Borrowed<O>{
+  const evaluate=bindings.queryExecutors.get(definition);
+  if(!evaluate)throw Error('Unbound rule query');
+  return evaluate(input,world,overlay) as Borrowed<O>;
 }

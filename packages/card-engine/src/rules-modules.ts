@@ -1,10 +1,10 @@
-import {activateScheduled} from './rules-tasks.ts';
 import { makeEntityKind } from './rules-entities.ts';
 import type { LifecycleBinding } from './rules-entities.types.ts';
 import { resolveCheckpoint } from './rules-checkpoints.ts';
 import type { Checkpoint } from './rules-checkpoints.types.ts';
-import { captureEvent } from './rules-reactions.ts';
-import { dataCopy } from './rules-data.ts';
+import { captureEvent, commitEvent } from './rules-reactions.ts';
+import { readRuleValue } from './rules-values.ts';
+import { bindRuleSchema } from './rules-schema.ts';
 import {prepareOrdering,resolveOrder} from './rules-order.ts';
 import type {RuleOrdering} from './rules-order.types.ts';
 import type { CardScope } from './card.types.ts';
@@ -12,7 +12,7 @@ import { definitionCapture, definitions, handle } from './rules-internal.ts';
 import { declarationCapture, declareStatic, authorities, definitionOwners, modules, resolveDefinition, stateOf, staticDefinitions } from './rules-module-internal.ts';
 import type { ModuleBindings } from './rules-module-internal.ts';
 import type { AnyEffect } from './rules-internal.ts';
-import type { Effect } from './rules.types.ts';
+import type { Borrowed, Effect } from './rules.types.ts';
 import type { AtomSpec, Component, ComponentReference, ModuleBuilder, Owned, RuleEvent, RuleModule, Schema } from './rules-module.types.ts';
 export type { AtomRead, AtomSpec, Component, ModuleBuilder, Owned, RuleEvent, RuleModule, Schema } from './rules-module.types.ts';
 
@@ -58,7 +58,7 @@ export function defineRules<E>(config: { requires: readonly RuleModule<any>[]; b
       const effect=handle<Effect<I,O>>();
       definitions.set(effect,{kind:'bound',layout:{source:run.toString(),reads:reads.map(resolveDefinition),writes:writes.map(resolveDefinition),emits:emits.map(resolveDefinition)},bind(bindings:ModuleBindings){
         const readSet=new Set(reads.map(resolveDefinition));
-        const writeSet=new Set(writes.map(resolveDefinition)), eventSet=new Set(emits.map(resolveDefinition));
+        const inputPlan=bindRuleSchema(inputSchema),outputPlan=bindRuleSchema(outputSchema);
         for(const capability of [...writes,...emits]) {
           const authority=authorities.get(capability);
           if(!authority||authority.owner!==owner||bindings.owners.get(authority.definition)!==owner)throw Error('Unauthorized rule atom authority');
@@ -70,47 +70,51 @@ export function defineRules<E>(config: { requires: readonly RuleModule<any>[]; b
           if(bindings.owners.get(definition)!==owner && !bindings.readable.get(owner)?.has(definition))throw Error('Unauthorized rule atom read');
           // Read authority is currently explicit dependency/export access; writes remain owner-only.
         }
-        return (scope:CardScope<any>,raw:I):O=>{
+        const readBindings=new Map<object,number>();
+        for(const reference of reads){const definition=resolveDefinition(reference),index=bindings.indices.get(definition)!;readBindings.set(reference,index);readBindings.set(definition,index);}
+        const writeBindings=new Map(writes.map(capability=>{
+          const definition=resolveDefinition(capability),metadata=staticDefinitions.get(definition)!;
+          if(metadata.kind!=='component')throw Error('Atom writes require component authority');
+          return[capability,{index:bindings.indices.get(definition)!,plan:metadata.schemaPlan}] as const;
+        }));
+        const eventBindings=new Map(emits.map(capability=>{
+          const definition=resolveDefinition(capability),metadata=staticDefinitions.get(definition)!;
+          if(metadata.kind!=='event')throw Error('Atom emissions require event authority');
+          return[capability,{index:bindings.indices.get(definition)!,plan:metadata.schemaPlan,dispatch:metadata.dispatch}] as const;
+        }));
+        return (scope:CardScope<any>,raw:I):Borrowed<O>=>{
           const state=stateOf(scope.state);
-          const input=inputSchema.parse(dataCopy(raw));
+          const input=inputPlan.own(raw);
           const proposal=run(Object.freeze({component(entity:number,component:any){
-            const definition=resolveDefinition(component);
-            if(!readSet.has(definition))throw Error('Undeclared rule atom read');
-            const index=bindings.indices.get(definition)!;
+            const index=readBindings.get(component);
+            if(index===undefined)throw Error('Undeclared rule atom read');
             const record=state.entities[entity];
             if(!record||!Object.hasOwn(record.components,index))throw Error('Missing rule component');
-            return dataCopy(record.components[index],true);
-          }}),dataCopy(input,true));
-          if(!proposal||typeof (proposal as any).then==='function')throw Error('Rule atom must be synchronous');
-          if(!Array.isArray(proposal.writes)||!Array.isArray(proposal.events))throw Error('Invalid rule proposal');
-          const checkedWrites:{entity:number;index:number;value:unknown}[]=[],checkedEvents:{event:number;payload:unknown}[]=[];
-          const touched=new Set<string>();
+            return readRuleValue(record.components[index]);
+          }}),input);
+          const checkedWrites:{entity:number;index:number;value:unknown}[]=[],checkedEvents:{event:number;payload:unknown;dispatch:'immediate'|'queued'}[]=[];
+          const touched=new Map<number,Set<number>>();
           for(const write of proposal.writes){
-            const authority=authorities.get(write.component),definition=resolveDefinition(write.component);
-            if(!authority||authority.owner!==owner||!writeSet.has(definition))throw Error('Unauthorized rule proposal write');
-            const index=bindings.indices.get(definition);
-            if(index===undefined||!state.entities[write.entity]||!Object.hasOwn(state.entities[write.entity]!.components,index))throw Error('Missing rule proposal entity/component');
-            const metadata=staticDefinitions.get(definition)!;
-            if(metadata.kind!=='component')throw Error('Invalid proposal component');
-            const key=write.entity+':'+index;if(touched.has(key))throw Error('Duplicate rule proposal write');touched.add(key);
-            checkedWrites.push({entity:write.entity,index,value:dataCopy(metadata.schema.parse(dataCopy(write.value)))});
+            const binding=writeBindings.get(write.component);if(!binding)throw Error('Unauthorized rule proposal write');
+            const {index,plan}=binding;
+            if(!state.entities[write.entity]||!Object.hasOwn(state.entities[write.entity]!.components,index))throw Error('Missing rule proposal entity/component');
+            let components=touched.get(write.entity);if(!components){components=new Set();touched.set(write.entity,components);}
+            if(components.has(index))throw Error('Duplicate rule proposal write');components.add(index);
+            checkedWrites.push({entity:write.entity,index,value:plan.own(write.value)});
           }
           for(const event of proposal.events){
-            const authority=authorities.get(event.event),definition=resolveDefinition(event.event);
-            if(!authority||authority.owner!==owner||!eventSet.has(definition))throw Error('Unauthorized rule proposal event');
-            const metadata=staticDefinitions.get(definition)!;
-            if(metadata.kind!=='event')throw Error('Invalid proposal event');
-            checkedEvents.push({event:bindings.indices.get(definition)!,payload:dataCopy(metadata.schema.parse(dataCopy(event.payload)))});
+            const binding=eventBindings.get(event.event);if(!binding)throw Error('Unauthorized rule proposal event');
+            checkedEvents.push({event:binding.index,payload:binding.plan.own(event.payload),dispatch:binding.dispatch});
           }
-          const result=dataCopy(outputSchema.parse(dataCopy(proposal.result)));
-          const overlay=new Map<number,Map<number,unknown>>();
-          for(const write of checkedWrites){let values=overlay.get(write.entity);if(!values){values=new Map();overlay.set(write.entity,values);}values.set(write.index,write.value);}
+          const result=outputPlan.own(proposal.result);
+          const overlay=checkedEvents.length?new Map<number,Map<number,unknown>>():undefined;
+          if(overlay)for(const write of checkedWrites){let values=overlay.get(write.entity);if(!values){values=new Map();overlay.set(write.entity,values);}values.set(write.index,write.value);}
           const envelopes=checkedEvents.map(event=>captureEvent(event.event,event.payload,scope.state,bindings,overlay));
           if(!Number.isSafeInteger(state.nextEvent)||state.nextEvent+envelopes.length>=Number.MAX_SAFE_INTEGER)throw Error('Event identity exhausted');
           // All author queries, validation and handler capture finish before this commit.
 
           for(const write of checkedWrites)state.entities[write.entity]!.components[write.index]=write.value;
-          for(const envelope of envelopes){state.outbox.push({...envelope,id:state.nextEvent++});activateScheduled(scope.state,envelope.scheduled);}
+          for(let index=0;index<envelopes.length;index++)commitEvent(scope.state,envelopes[index]!,checkedEvents[index]!.dispatch);
           return result;
         };
       }});effects.push(effect);return effect;

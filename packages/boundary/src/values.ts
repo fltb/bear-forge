@@ -141,6 +141,10 @@ function equalOwnedTrees(a: any, b: any, order: { same: boolean }, dense: boolea
 // already validated boundary copy. Neither side can retain host aliases.
 const isolatedParsers = new WeakSet<Function>();
 const isolatedSchemas = new WeakSet<object>();
+// Only audited strict data parsers can certify value preservation. A public
+// parser with the same schema shape does not acquire this capability.
+const faithfulParsers = new WeakSet<Function>();
+export function faithfulParser<T extends Function>(parse:T):T{faithfulParsers.add(parse);return parse;}
 export function isolatedParser<T extends (value: any) => any>(parse: T): T {
   isolatedParsers.add(parse);
   return parse;
@@ -148,17 +152,16 @@ export function isolatedParser<T extends (value: any) => any>(parse: T): T {
 // Private host capability. The host only replaces this isolated graph. Pure
 // GameContract adapters may read it; parsers and public consumers receive copies.
 // Do not re-export these helpers from the public package entry.
-const ownedRoots = new WeakSet<object>();
-const treeRoots = new WeakSet<object>();
-const denseTreeRoots = new WeakSet<object>();
+const ownedProof = new WeakMap<object, number>();
+const ownedBit=1, treeBit=2, denseBit=4, projectionsBit=8;
 export function isOwned(value: unknown): boolean {
-  return value !== null && typeof value === 'object' && ownedRoots.has(value);
+  return value !== null && typeof value === 'object' && ownedProof.has(value);
 }
 export function isOwnedTree(value: unknown): boolean {
-  return value === null || typeof value !== 'object' ? typeof value !== 'function' && typeof value !== 'symbol' : treeRoots.has(value);
+  return value === null || typeof value !== 'object' ? typeof value !== 'function' && typeof value !== 'symbol' : ((ownedProof.get(value)??0)&treeBit)!==0;
 }
 export function isDenseTree(value: unknown): boolean {
-  return value === null || typeof value !== 'object' ? isOwnedTree(value) : denseTreeRoots.has(value);
+  return value === null || typeof value !== 'object' ? isOwnedTree(value) : ((ownedProof.get(value)??0)&denseBit)!==0;
 }
 /** This only inspects a builtin prototype; exotic array bases use data writes. */
 export function arrayPrototypeIsPlain(): boolean {
@@ -344,8 +347,23 @@ function isolatePair<T>(value: T): { value: T; parserInput: T; tree: boolean; de
 export function admittedCopy<T>(value: T): T {
   return isolateData(value).value;
 }
-export function retainOwned<T>(value: T, tree = false, dense = false): T {
-  if (value !== null && typeof value === 'object') { ownedRoots.add(value); if (tree) { treeRoots.add(value); if (dense) denseTreeRoots.add(value); } }
+export function retainOwned<T>(value: T, tree = false, dense = false, projections = false): T {
+  if (value !== null && typeof value === 'object') {
+    const previous=ownedProof.get(value)??0,next=previous|ownedBit|(tree?treeBit|(dense?denseBit:0)|(projections?projectionsBit:0):0);
+    if(next!==previous)ownedProof.set(value,next);
+  }
+  return value;
+}
+/** Brand each node while a detached tree is still private. Subprojections can
+ * then retain that same publication rather than re-admit/copy their subtree. */
+export function retainOwnedTree<T>(value:T,dense=true):T{
+  const pending:unknown[]=[value]; Object.setPrototypeOf(pending,null);
+  while(pending.length){const index=pending.length-1,node=pending[index];pending.length=index;if(node===null||typeof node!=='object')continue;
+    const previous=ownedProof.get(node)??0;
+    if((previous&projectionsBit)!==0&&(!dense||(previous&denseBit)!==0))continue;
+    retainOwned(node,true,dense,true);
+    for(const key of nativeObjectKeys(node))pending[pending.length]=(node as Record<string,unknown>)[key];
+  }
   return value;
 }
 /** For a provider-created detached graph that has never reached author code.
@@ -355,7 +373,7 @@ export function admitDetached<T>(value: T): T {
   return retainOwned(value, proof.tree, proof.dense);
 }
 export function copyOwned<T>(value: T): T {
-  return value !== null && typeof value === 'object' && ownedRoots.has(value)
+  return value !== null && typeof value === 'object' && ownedProof.has(value)
     ? cloneData(value) : admittedCopy(value);
 }
 /** Admit the complete parser result while comparing it to an inaccessible
@@ -451,9 +469,20 @@ function checkResult(original: unknown, result: unknown): { same: boolean; order
   visit(original, result, true);
   return { same, order, tree, dense };
 }
+// Faithful parser proofs already establish equal values and a dense tree.
+// Only property order remains observable; retain the private baseline when it
+// matches, including its identity for other internal borrowers.
+function sameOwnedOrder(a:unknown,b:unknown):boolean{
+  if(a===b)return true;
+  if(a===null||typeof a!=='object')return true;
+  const left=a as Record<string,unknown>,right=b as Record<string,unknown>;
+  const keys=Object.keys(left),other=Object.keys(right);
+  for(let index=0;index<keys.length;index++){const key=keys[index]!;if(key!==other[index]||!sameOwnedOrder(left[key],right[key]))return false;}
+  return true;
+}
 export function readOwned<T>(schema: { parse(value: unknown): T }, value: unknown): T {
   let original = value, parserInput: unknown, pairedInput = false;
-  if (value !== null && typeof value === 'object' && ownedRoots.has(value)) original = value;
+  if (value !== null && typeof value === 'object' && ownedProof.has(value)) original = value;
   else {
     pairedInput = !isolatedSchemas.has(schema);
     if (pairedInput) {
@@ -471,6 +500,10 @@ export function readOwned<T>(schema: { parse(value: unknown): T }, value: unknow
   const isolated = isolatedParsers.has(parse);
   if (isolated) isolatedSchemas.add(schema);
   const result = Reflect.apply(parse, schema, [isolated ? original : pairedInput ? parserInput : cloneData(original)]);
+  // A finite strict data parser cannot strip/default/transform data. On a
+  // dense input tree it also preserves aliases (there are none) and holes.
+  // Its own output supplies the parser's observable property order.
+  if(isolated&&faithfulParsers.has(parse)&&isDenseTree(original)&&isOwned(result))return retainOwnedTree(sameOwnedOrder(original,result)?original as T:result);
   let checked: { same: boolean; order: boolean; tree: boolean; dense: boolean };
   if (isolated && isOwned(result)) {
     const order = { same: true }, tree = isOwnedTree(result), dense = isDenseTree(result);
@@ -481,7 +514,8 @@ export function readOwned<T>(schema: { parse(value: unknown): T }, value: unknow
   // A value-preserving parser need not supply the private representation. If
   // its key order is identical, reuse our inaccessible baseline. Otherwise
   // preserve its observable ordering with one detached clone.
-  return retainOwned(checked.order ? original as T : isolated && isOwned(result) ? result : cloneData(result, checked.tree, checked.dense), checked.tree, checked.dense);
+  const selected=checked.order?original as T:isolated&&isOwned(result)?result:cloneData(result,checked.tree,checked.dense);
+  return checked.tree?retainOwnedTree(selected,checked.dense):retainOwned(selected);
 }
 /** Compare boundary data without invoking accessors on caller-owned objects. */
 export function sameData(a: unknown, b: unknown): boolean {

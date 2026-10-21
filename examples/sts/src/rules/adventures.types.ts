@@ -14,7 +14,7 @@ export type CardPreview={definition:PermanentCardDefinition;upgraded:boolean;mis
 export type AdventureSelected={card:CardPreview;deckIndex:number};
 export type AdventureSelection={type:number;count:number;cards:AdventureSelected[];selected:AdventureSelected[];transformStream:number};
 export type AdventureRewards={gold:number[];cards:CardPreview[][];relics:RelicDefinition[];potions:number[];emeraldKey:boolean;sapphireKey:boolean};
-export type AdventureSetup={start:AdventureSeed;catalog:AdventureCatalog;initial:{event:number;eventList:number[];shrineList:number[];oneTimeEvents:number[];colorlessPool:CardId[];note:CardId}};
+export type AdventureSetup={start:AdventureSeed;initial:{event:number;eventList:number[];shrineList:number[];oneTimeEvents:number[];colorlessPool:CardId[];note:CardId}};
 export type AdventureState=Omit<AdventureSeed,'relicPools'>&{
   catalog:AdventureCatalog;scope:number;potions:number;ascension:number;act:number;floor:number;x:number;y:number;screen:string;outcome:0|1|2;room:Room;lastRoom:Room;event:number;eventData:number;hasContinuation:boolean;
   keys:{red:boolean;green:boolean;blue:boolean};relicPools:Record<RelicTier,RelicDefinition[]>;colorlessPool:PermanentCardDefinition[];eventList:number[];shrineList:number[];oneTimeEvents:number[];monsterOffset:number;eliteOffset:number;

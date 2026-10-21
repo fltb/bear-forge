@@ -24,8 +24,8 @@ async function advance(instance:Instance<Ports,Frame>,bits:number){
 }
 
 test('complete normal A20 run restores and forks every wait; cold restores each encountered interaction without initialization or replay',async()=>{
-  const cost={save:0,restore:0,fork:0};
-  const timed=async<T>(kind:keyof typeof cost,run:()=>Promise<T>):Promise<T>=>{const at=performance.now();try{return await run();}finally{cost[kind]+=performance.now()-at;}};
+  const cost={save:0,restore:0,fork:0,records:0},samples={save:[] as number[],restore:[] as number[],fork:[] as number[],records:[] as number[]};
+  const timed=async<T>(kind:keyof typeof cost,run:()=>Promise<T>):Promise<T>=>{const at=performance.now();try{return await run();}finally{const ms=performance.now()-at;cost[kind]+=ms;samples[kind].push(ms);}};
   const directory=await mkdtemp(join(tmpdir(),'sts-every-wait-')),artifact=join(directory,'program.mjs');
   // Parent and cold process load the same immutable production artifact, including dependencies.
   // Editing source elsewhere cannot turn a valid saved Context into a different Program.
@@ -67,6 +67,7 @@ test('complete normal A20 run restores and forks every wait; cold restores each 
       if((index+1)%128===0)console.log(`STS persistence waits ${index+1}/${trace.actions.length}`);
     }
     assert.equal(frame.heartDefeated,true);assert.equal(unwrap(await parent.inspect()).kind,'done');
+    if(loaded.capture)unwrap(await timed('records',()=>loaded.capture!.read(parent.id,{after:null,limit:1000})));
     await parent.close();
     // The new process throws on initialize: it can only consume the saved Context.
     const script=`
@@ -90,6 +91,8 @@ test('complete normal A20 run restores and forks every wait; cold restores each 
     const result=await promisify(execFile)(process.execPath,['--experimental-strip-types','--input-type=module','-e',script],{maxBuffer:32*1024*1024});
     assert.deepEqual(JSON.parse(result.stdout),[...cold.values()].map(({frame,oracle})=>({frame,oracle})));
     assert.equal(starts,1);
-    console.log('STS persistence cost '+JSON.stringify({waits:trace.actions.length,coldKinds:cold.size,milliseconds:cost,rssBytes:process.memoryUsage().rss}));
+    const medians=Object.fromEntries(Object.entries(samples).map(([kind,values])=>[kind,[...values].sort((a,b)=>a-b)[Math.floor(values.length/2)]]));
+    assert.ok(medians.fork!<=.05,`fork median ${medians.fork}ms exceeds .05ms`);
+    console.log('STS persistence cost '+JSON.stringify({waits:trace.actions.length,coldKinds:cold.size,milliseconds:cost,medianMs:medians,peakRssBytes:process.resourceUsage().maxRSS*1024,rssBytes:process.memoryUsage().rss}));
   }finally{await parent.close();await loaded.capture?.release(parent.id);await reference.close();await rm(directory,{recursive:true,force:true});}
 });

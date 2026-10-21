@@ -14,7 +14,7 @@ test('ordinary native interaction constructs no record logs, COW graph or snapsh
       const result = next(url, context);
       if (url.endsWith('/runtime/src/records.ts')) return { ...result, source: String(result.source).replace('export class Records<T> {', 'export class Records<T> { constructor() { throw Error("unused log constructed"); }') };
       if (url.endsWith('/runtime-card/src/store.ts')) return { ...result, source: String(result.source).replace('export function memorySnapshotStore(): SnapshotStore {', 'export function memorySnapshotStore(): SnapshotStore { throw Error("unused snapshot store constructed");') };
-      if (url.endsWith('/runtime-card/src/graph.ts')) return { ...result, source: String(result.source).replace('constructor(value: T) {', 'constructor(value: T) { throw Error("unused COW graph constructed");') };
+      if (url.endsWith('/runtime-card/src/graph.ts')) return { ...result, source: String(result.source).replace('constructor(value: T, immutable?: readonly object[]) {', 'constructor(value: T, immutable?: readonly object[]) { throw Error("unused COW graph constructed");') };
       return result;
     } });
     const { createCardLoader, readCardTrace } = await import(${JSON.stringify(new URL('../src/index.ts', import.meta.url).href)});

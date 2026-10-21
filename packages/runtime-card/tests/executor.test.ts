@@ -122,3 +122,19 @@ test('diagnostic observer mutation or failure cannot corrupt core records or exe
   const records = unwrap(await loaded.capture!.read(instance.id, { after: null, limit: 1000 })).records, coreTrace = unwrap(readCardTrace(loaded, instance.id));
   assert.equal((await replayCard(definition, records, { coreTrace, trace() { throw Error('observer'); } })).ok, true); await instance.close();
 });
+
+test('loader snapshots store compact trace data and reject corrupted trace positions',async()=>{
+  const store=memorySnapshotStore(),loaded=unwrap(await createCardLoader({snapshots:store}).load(definition));
+  const instance=unwrap(await loaded.core.start(1)),snapshot=unwrap(await loaded.persistence!.save(instance));
+  const original=(await store.get(snapshot.snapshotId))!,data=deserialize(original);
+  assert.deepEqual(Object.keys(data.core),['positions','depths']);
+  assert.equal(data.core.positions.length,unwrap(readCardTrace(loaded,instance.id)).length);
+  for(const corrupt of [()=>{data.core.positions[0]=-1;},()=>{data.core.depths.pop();}]){
+    data.core=deserialize(original).core;corrupt();await store.put(snapshot.snapshotId,serialize(data));
+    assert.equal((await loaded.persistence!.restore(snapshot)).ok,false);
+  }
+  await store.put(snapshot.snapshotId,original);
+  const restored=unwrap(await loaded.persistence!.restore(snapshot));
+  assert.deepEqual(unwrap(readCardTrace(loaded,restored.id)),unwrap(readCardTrace(loaded,instance.id)));
+  await instance.close();await restored.close();await loaded.persistence!.release(snapshot);
+});

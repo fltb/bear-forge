@@ -10,10 +10,14 @@
     "reference:build": "node --experimental-strip-types tests/reference/build.ts",
     "reference:play": "node --experimental-strip-types tests/reference/play.ts",
     "reference:replay": "node --experimental-strip-types tests/reference/replay.ts",
-    "test": "npm run test:differential && npm run test:extended",
+    "test": "npm run test:differential && npm run test:extended && npm run test:volibear",
+    "test:volibear": "node --experimental-strip-types --test tests/volibear-content.test.ts",
     "check": "npm run typecheck && npm test",
     "test:differential": "node --experimental-strip-types --test --test-concurrency=2 tests/adventure-content.test.ts tests/battle-cards.test.ts tests/battle-exit.test.ts tests/battle-selection.test.ts tests/battle-turns.test.ts tests/card-instances.test.ts tests/card-piles.test.ts tests/card.test.ts tests/combat-content.test.ts tests/combat-phases.test.ts tests/compare.test.ts tests/content-cards.test.ts tests/damage.test.ts tests/deck.test.ts tests/game.test.ts tests/map.test.ts tests/normal-start.test.ts tests/opening.test.ts tests/permanent-decks.test.ts tests/powers.test.ts tests/random-rules.test.ts tests/reference.test.ts tests/resources.test.ts tests/rng.test.ts tests/shop.test.ts tests/zones.test.ts",
-    "test:extended": "node --experimental-strip-types --test --test-concurrency=2 tests/adventure-forks.test.ts tests/card-lifecycle-persistence.test.ts tests/card-piles-persistence.test.ts tests/complete-persistence.test.ts tests/game-host.test.ts tests/persistence.test.ts tests/run-acceptance.test.ts"
+    "test:extended": "node --experimental-strip-types --test --test-concurrency=2 tests/adventure-forks.test.ts tests/card-lifecycle-persistence.test.ts tests/card-piles-persistence.test.ts tests/complete-persistence.test.ts tests/game-host.test.ts tests/persistence.test.ts tests/run-acceptance.test.ts tests/adventure-history.test.ts",
+    "performance:acceptance": "node --experimental-strip-types tests/performance.ts",
+    "performance:diagnose": "node --experimental-strip-types tests/performance.ts diagnose",
+    "performance:counts": "node --experimental-strip-types tests/performance.ts counts"
   },
   "dependencies": {
     "@bear-forge/card-engine": "*",

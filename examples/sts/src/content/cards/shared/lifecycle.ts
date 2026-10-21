@@ -3,7 +3,7 @@ import type {CardMutable,CardState,CardEvaluation,CardSetup} from "../../../rule
 import {rules} from '@bear-forge/card-engine';
 import {z} from 'zod';
 import {cardEvaluationSchema,cardMutableSchema} from "../../../rules/card-instances.schemas.ts";
-export function mutableCard(c:Readonly<CardState>):CardMutable{return{specialData:c.specialData,cost:c.cost,costForTurn:c.costForTurn,upgraded:c.upgraded,freeToPlayOnce:c.freeToPlayOnce,retain:c.retain};}
+export function mutableCard(c:rules.Borrowed<CardState>):CardMutable{return{specialData:c.specialData,cost:c.cost,costForTurn:c.costForTurn,upgraded:c.upgraded,freeToPlayOnce:c.freeToPlayOnce,retain:c.retain};}
 export function upgradeOnce(metadata:CardMetadata):rules.Query<CardEvaluation,boolean>{const type=metadata.type;return rules.defineQuery({input:cardEvaluationSchema,output:z.boolean(),base:(_r,c)=>type>=0&&type<=2&&!c.state.upgraded});}
 export function standardUpgrade(metadata:CardMetadata):rules.Query<CardEvaluation,CardMutable>{
   const changed=metadata.variants[0].cost!==metadata.variants[1].cost,cost=metadata.variants[1].cost;

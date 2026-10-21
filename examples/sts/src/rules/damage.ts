@@ -27,9 +27,9 @@ export const damage=defineRules({requires:[resources,attributes],build(m){
     const empty=b.read(v=>emptyHit(v.input));
     return sequence(b.assign(checked,m.resolve(beforeDamage,b.input)),when(b.read(v=>v.get(checked).kind==='cancel'),b.return(empty)),
       b.assign(request,b.read(v=>{const resolution=v.get(checked);if(resolution.kind==='cancel')throw Error('Canceled hit');return resolution.value;})),
-      when(b.read(v=>!v.get(query(attributes.exports.damageable,v.get(request).target))),b.return(b.read(v=>emptyHit(v.get(request))))),call(announceStarted,request),
-      when(b.read(v=>!v.get(query(attributes.exports.damageable,v.get(request).target))),b.return(b.read(v=>emptyHit(v.get(request))))),
-      b.assign(hadBlock,b.read(v=>v.get(query(resources.exports.current,v.get(request).target)).block>0)),
+      when(b.read(v=>!v.query(attributes.exports.damageable,v.get(request).target)),b.return(b.read(v=>emptyHit(v.get(request))))),call(announceStarted,request),
+      when(b.read(v=>!v.query(attributes.exports.damageable,v.get(request).target)),b.return(b.read(v=>emptyHit(v.get(request))))),
+      b.assign(hadBlock,b.read(v=>v.query(resources.exports.defense,v.get(request).target).block>0)),
       b.assign(absorbed,call(resources.exports.consumeBlock,{entity:b.read(v=>v.get(request).target),amount:b.read(v=>v.get(request).amount)})),
       b.assign(facts,b.read(v=>({blockTarget:v.get(request).target,requested:v.get(request).amount,blocked:v.get(absorbed),hadBlock:v.get(hadBlock),unblocked:Math.max(0,v.get(request).amount-v.get(absorbed))}))),
       b.assign(hpRequest,b.read(v=>({...v.get(request),amount:v.get(facts).unblocked}))),call(announceBlocked,{request:hpRequest,facts}),

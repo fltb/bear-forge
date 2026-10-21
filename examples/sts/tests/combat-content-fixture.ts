@@ -21,7 +21,7 @@ const fixture=defineRules({requires:[adventureProgram],build(){
     const run=b.local<number>();
     const state=(v:rules.ReadView<CombatContentCase>)=>v.get(query(adventures.exports.current,v.get(run)));
     return sequence(
-      b.assign(run,call(adventureStart.exports.initialize,{setup:b.read(v=>({seed:v.input.seed})),catalog:{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions}})),
+      b.assign(run,call(adventureStart.exports.initialize,{setup:b.read(v=>({seed:v.input.seed})),definition:rules.defineEntity(adventures.exports.kind,{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),
       when(b.read(v=>v.input.durable),call(resources.exports.setHealth,{entity:b.read(v=>state(v).actor),hp:9990,maxHp:10000})),
       when(b.read(v=>v.input.potion===potionId.FAIRY_POTION||v.input.relics.includes('LIZARD_TAIL')),call(resources.exports.setHealth,{entity:b.read(v=>state(v).actor),hp:1,maxHp:80})),
       forEach(b.read(v=>v.input.relics),id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),

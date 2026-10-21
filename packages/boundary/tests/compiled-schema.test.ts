@@ -88,3 +88,37 @@ test('approved refinements inspect fresh values and failure error callbacks cann
   errorInput.rows[0].n = 99;
   assert.equal(invalid.rows[0].n, 1);
 });
+
+test('private nested projections retain ownership without certifying mutable public copies',()=>{
+  const schema=isolatedDataSchema(z.strictObject({rows:z.array(z.strictObject({n:z.number().int()}))}));
+  const first=readOwned(schema,{rows:[{n:3}]});
+  const repeated=readOwned(schema,first);
+  const projected=readOwned(isolatedDataSchema(z.array(z.strictObject({n:z.number().int()}))),repeated.rows);
+  assert.deepEqual(projected,[{n:3}]);
+  const external=copyOwned(projected);external[0]!.n=1.5;
+  assert.throws(()=>readOwned(isolatedDataSchema(z.array(z.strictObject({n:z.number().int()}))),external));
+  assert.equal(projected[0]!.n,3);
+});
+
+test('only the selected publication acquires reusable nested projection ownership',()=>{
+  const leaf=z.strictObject({n:z.number()}), schema=isolatedDataSchema(z.strictObject({a:leaf,b:leaf}));
+  for(const input of [{a:{n:1},b:{n:2}},{b:{n:2},a:{n:1}}]){
+    const publication=readOwned(schema,input);
+    assert.equal(isOwned(publication.a),true);assert.equal(isOwned(publication.b),true);
+    assert.equal(readOwned(isolatedDataSchema(leaf),publication.a),publication.a);
+    const copy=copyOwned(publication);assert.equal(isOwned(copy.a),false);
+    copy.a.n=9;assert.equal(publication.a.n,1);
+  }
+});
+
+test('compiled assertion-only private parsing borrows unchanged trees and separates only reordered containers',()=>{
+  const leaf=z.strictObject({a:z.number(),b:z.number()}),schema=isolatedDataSchema(z.strictObject({rows:z.array(leaf)}));
+  const owned=readOwned(schema,{rows:[{a:1,b:2}]});
+  assert.equal(schema.parse(owned),owned);
+  const reversed=readOwned(z.any(),{rows:[{b:2,a:1},{a:3,b:4}]});
+  const normalized=schema.parse(reversed);
+  assert.notEqual(normalized,reversed);assert.notEqual(normalized.rows,reversed.rows);
+  assert.notEqual(normalized.rows[0],reversed.rows[0]);assert.equal(normalized.rows[1],reversed.rows[1]);
+  assert.deepEqual(Object.keys(normalized.rows[0]!),['a','b']);
+  const external={rows:[{a:1,b:2}]};assert.notEqual(schema.parse(external).rows[0],external.rows[0]);
+});

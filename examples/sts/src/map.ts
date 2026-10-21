@@ -1,9 +1,10 @@
 // Literal algorithm port of sts_lightspeed 7476a819 src/game/Map.cpp.
 import {randomState,randomInt,nextInt,type RandomState} from './rng.ts';
+import type {rules} from '@bear-forge/card-engine';
 import type {Room,MapNode,SpireMap} from './map.types.ts';
 const roomIds:Record<Room,number>={SHOP:0,REST:1,EVENT:2,ELITE:3,MONSTER:4,TREASURE:5,BOSS:6,BOSS_TREASURE:7,NONE:8,INVALID:9};
 const masks=Array.from({length:7},(_,i)=>0x0101010101010101n<<BigInt(i));
-export function nodeAt(map:SpireMap,x:number,y:number):MapNode {
+export function nodeAt<N extends rules.Borrowed<MapNode>>(map:{readonly nodes:readonly N[]},x:number,y:number):N {
   if(x<0||x>6||y<0||y>14)throw Error('Map position out of bounds');return map.nodes[y*7+x]!;
 }
 function emptyMap():SpireMap {

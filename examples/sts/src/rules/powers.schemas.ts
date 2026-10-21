@@ -1,3 +1,4 @@
+import { typedValue } from './value.schemas.ts';
 import {z} from 'zod';
 import {entityId} from './resources.schemas.ts';
 import type {PowerDefinition} from './powers.types.ts';
@@ -5,7 +6,7 @@ export const powerChangeSchema=z.object({amount:z.int32(),source:entityId.nullab
 export const powerMutableSchema=z.object({level:z.int32(),active:z.boolean(),justApplied:z.boolean()}).strict();
 export const powerStateSchema=powerMutableSchema.extend({registry:entityId,actor:entityId,phase:z.union([z.literal(0),z.literal(1),z.literal(2)])});
 export const powerSetupSchema=powerChangeSchema.extend({registry:entityId,actor:entityId});
-export const powerDefinitionSchema=z.custom<PowerDefinition>();
+export const powerDefinitionSchema=typedValue<PowerDefinition>();
 export const powerEntrySchema=z.object({entity:entityId,definition:powerDefinitionSchema}).strict();
 export const registrySchema=z.object({accepting:z.boolean(),entries:z.array(powerEntrySchema)}).strict();
 export const powerApplySchema=powerSetupSchema.extend({definition:powerDefinitionSchema,scope:entityId});

@@ -7,9 +7,10 @@ import {resolveOrder} from './rules-order.ts';
 import type {RuleOrder} from './rules-order.types.ts';
 import {captureQuerySelections} from './rules-queries.ts';
 import type {EntityQuerySelection} from './rules-query.types.ts';
+import type {Borrowed} from './rules.types.ts';
 export type ModifierContext<I,O,E={}>={input:I;value:O;source:number;owner:number;environment:E;registration:number};
 export type ModifierSpec<I,O,E>={
-  transform:(read:QueryRead,context:ModifierContext<I,O,E>)=>O;
+  transform:(read:QueryRead,context:Borrowed<ModifierContext<I,O,E>>)=>O|Borrowed<O>;
   reads?:readonly (Component<any>|Owned<Component<any>>)[];
   dependencies?:readonly Query<any,any>[];
   condition?:Query<ModifierContext<I,O,E>,boolean>;

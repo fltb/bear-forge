@@ -14,7 +14,7 @@ export const zones=defineRules({requires:[],build(m){
   const reordered=m.own(defineEvent({payload:zoneReorderSchema,dispatch:'immediate'}));
   const moving=m.own(defineCheckpoint({input:zoneMoveSchema,output:zoneMoveSchema}));
   const dispose=defineEffect<rules.EntityLifecycle&{reason:unknown},void>(b=>b.return(b.read(v=>{
-    if(v.get(rules.query(members,v.input.entity)).length!==0)throw Error('An occupied zone cannot be despawned');return undefined;
+    if(v.query(members,v.input.entity).length!==0)throw Error('An occupied zone cannot be despawned');return undefined;
   })));
   const kind=m.kind({config:z.object({capacity:z.int32().nonnegative().nullable()}).strict(),components:[contents],dispose});
   const members=defineQuery({input:entityId,output:zoneContentsSchema,reads:[contents],base:(r,entity)=>r.component(entity,contents)});
@@ -44,7 +44,7 @@ export const zones=defineRules({requires:[],build(m){
     b.assign(checked,m.resolve(moving,b.input)),when(b.read(v=>v.get(checked).kind==='cancel'),b.return(false)),
     b.assign(result,call(commit,b.read(v=>{
       const resolved=v.get(checked);if(resolved.kind==='cancel')throw Error('Canceled movement');
-      return{...resolved.value,capacity:resolved.value.to===null?null:v.get(rules.query(capacity,resolved.value.to))};
+      return{...resolved.value,capacity:resolved.value.to===null?null:v.query(capacity,resolved.value.to)};
     }))),b.return(result),
   );});
   const reorder=m.atom({input:zoneReorderSchema,output:z.undefined(),reads:[contents],writes:[contents],emits:[reordered],run(r,input){

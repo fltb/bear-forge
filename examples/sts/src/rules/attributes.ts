@@ -12,7 +12,7 @@ export const attributes=defineRules({requires:[resources],build(){
   const dexterity=defineQuery({input:entityId,output:z.int32(),base:()=>0});
   const focus=defineQuery({input:entityId,output:z.int32(),base:()=>0});
   const artifact=defineQuery({input:entityId,output:z.int32(),base:()=>0});
-  const damageable=defineQuery({input:entityId,output:z.boolean(),dependencies:[resources.exports.current],base:(r,actor)=>r.query(resources.exports.current,actor).hp>0});
+  const damageable=defineQuery({input:entityId,output:z.boolean(),dependencies:[resources.exports.current,resources.exports.vitality],base:(r,actor)=>r.query(resources.exports.vitality,actor).hp>0});
   const weakFactor=defineQuery({input:attackValueSchema,output:z.number(),base:()=>Math.fround(0.75)});
   const vulnerableFactor=defineQuery({input:attackValueSchema,output:z.number(),base:()=>Math.fround(1.5)});
   const playerAttack=defineQuery({input:attackValueSchema,output:z.number(),order,base:(_r,input)=>Math.fround(input.base)});

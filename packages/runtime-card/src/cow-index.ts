@@ -9,6 +9,7 @@ type Entry<T> = { owner: object; value: T };
 type Node<T> = { owner: object; slots: (Node<T> | Entry<T> | undefined)[]; count: number };
 const width = 32;
 const powers = Array.from({length: 11}, (_, level) => width ** level);
+export type CowCursor<T> = { key: number; value: T; advance(): boolean };
 
 export class CowStore<T> {
   private owner: object = {};
@@ -109,6 +110,45 @@ export class CowStore<T> {
     this.height = 0;
     this.count = 0;
     this.owner = {};
+  }
+
+  /** Complete internal traversal, without iterator objects or entry tuples.
+   * Deleting the current entry is permitted; insertion during traversal is not. */
+  forEach(visitValue: (value: T, key: number) => void): void {
+    const visit = (node: Node<T>, level: number, prefix: number): void => {
+      for (let index = 0; index < node.slots.length; index++) {
+        const slot = node.slots[index];
+        if (!slot) continue;
+        const key = prefix + index * powers[level]!;
+        if (level) visit(slot as Node<T>, level - 1, key);
+        else visitValue((slot as Entry<T>).value, key);
+      }
+    };
+    if (this.root) visit(this.root, this.height, 0);
+  }
+
+  /** Resumable radix traversal with one result slot, no recursive generators
+   * or per-entry tuples. A collector's insertion barrier handles new edges;
+   * deleting the current entry does not invalidate the captured traversal. */
+  cursor(minimum = 0): CowCursor<T> {
+    this.key(minimum);
+    const nodes: Node<T>[] = this.root ? [this.root] : [];
+    const levels = [this.height], prefixes = [0], positions = [0];
+    let depth = this.root ? 0 : -1;
+    return { key: 0, value: undefined as T, advance() {
+      while (depth >= 0) {
+        const node = nodes[depth]!, level = levels[depth]!;
+        const index = positions[depth]!;
+        if (index >= node.slots.length) { depth--; continue; }
+        positions[depth] = index + 1;
+        const slot = node.slots[index]; if (!slot) continue;
+        const key = prefixes[depth]! + index * powers[level]!;
+        if (key < minimum && minimum - key >= powers[level]!) continue;
+        if (level) { depth++; nodes[depth] = slot as Node<T>; levels[depth] = level - 1; prefixes[depth] = key; positions[depth] = 0; continue; }
+        this.key = key; this.value = (slot as Entry<T>).value; return true;
+      }
+      return false;
+    } };
   }
 
   *entries(minimum = 0): IterableIterator<[number, T]> {

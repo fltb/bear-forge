@@ -6,7 +6,7 @@ import {moveId as mm,monsterId as mid} from "../../../combat-identifiers.ts";
 import type {EnemyAction,EnemyRoll} from "../../../rules/enemies.types.ts";
 const {defineRules,defineEffect,call,query}=rules;
 export const maskedBandits=defineRules({requires:[enemyUtilities,enemies,basicPowers],build(){
-  const s=(v:rules.ReadView<EnemyAction>)=>v.get(query(enemies.exports.current,v.input.enemy));
+  const s=(v:rules.ReadView<EnemyAction>)=>v.query(enemies.exports.current,v.input.enemy);
   const next=(move:number)=>defineEffect<EnemyAction,void>(b=>call(enemies.exports.setMove,{enemy:b.read(v=>v.input.enemy),move}));
   const Bear=enemyDefinition({id:mid.BEAR,choose:defineEffect<EnemyRoll,number>(b=>b.return(mm.BEAR_BEAR_HUG)),moves:[{move:mm.BEAR_BEAR_HUG,execute:enemyProgram(enemyPower(basicPowers.exports.Dexterity,v=>s(v).ascension>=17?-4:-2,true,true),next(mm.BEAR_LUNGE))},{move:mm.BEAR_LUNGE,damage:s=>s.ascension>=2?10:9,execute:enemyProgram(enemyAttack(v=>s(v).ascension>=2?10:9),enemyBlock(9),next(mm.BEAR_MAUL))},{move:mm.BEAR_MAUL,damage:s=>s.ascension>=2?20:18,execute:enemyProgram(enemyAttack(v=>s(v).ascension>=2?20:18),next(mm.BEAR_LUNGE))}]});
   const Pointy=enemyDefinition({id:mid.POINTY,choose:defineEffect<EnemyRoll,number>(b=>b.return(mm.POINTY_ATTACK)),moves:[{move:mm.POINTY_ATTACK,damage:s=>s.ascension>=2?6:5,hits:2,execute:enemyAttack(v=>s(v).ascension>=2?6:5,2)}]});

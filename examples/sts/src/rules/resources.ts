@@ -39,6 +39,10 @@ export const resources=defineRules({requires:[],build(m){
   const current=defineQuery({input:entityId,output:resourceSetupSchema,reads:[health,block,energy,gold],base:(r,entity)=>({
     ...r.component(entity,health),block:r.component(entity,block),energy:r.component(entity,energy),gold:r.component(entity,gold),
   })});
+  const vitality=defineQuery({input:entityId,output:healthSchema,reads:[health],base:(r,id)=>r.component(id,health)});
+  const defense=defineQuery({input:entityId,output:z.object({block:resourceSetupSchema.shape.block}).strict(),reads:[block],base:(r,id)=>({block:r.component(id,block)})});
+  const stamina=defineQuery({input:entityId,output:z.object({energy:resourceSetupSchema.shape.energy}).strict(),reads:[energy],base:(r,id)=>({energy:r.component(id,energy)})});
+  const wealth=defineQuery({input:entityId,output:z.object({gold:resourceSetupSchema.shape.gold}).strict(),reads:[gold],base:(r,id)=>({gold:r.component(id,gold)})});
   const side=defineQuery({input:entityId,output:z.union([z.literal(0),z.literal(1)]),kinds:[actor],base:(r,entity)=>r.configuration(entity,actor).side});
 
   // Every checkpoint is resolved by its owner. Each commit sees the latest data after any suspended replacement.
@@ -60,7 +64,7 @@ export const resources=defineRules({requires:[],build(m){
   const loseHpDetailed=defineEffect<HpLoss,HpLossReceipt>(b=>{const checked=b.local<ReplacementResult<HpLoss>>(),result=b.local<HpLossReceipt>();return sequence(
     b.assign(checked,m.resolve(beforeHpLoss,b.input)),when(b.read(v=>v.get(checked).kind==='cancel'),b.return({entity:b.read(v=>v.input.entity),amount:0,lost:0})),
     b.assign(result,call(commitLoss,b.read(v=>{const resolved=v.get(checked);if(resolved.kind==='cancel')throw Error('Canceled HP loss');return resolved.value;}))),
-    when(b.read(v=>v.get(result).lost>0&&v.get(query(current,v.get(result).entity)).hp===0),call(announceDeath,b.read(v=>v.get(result).entity))),b.return(result),
+    when(b.read(v=>v.get(result).lost>0&&v.query(vitality,v.get(result).entity).hp===0),call(announceDeath,b.read(v=>v.get(result).entity))),b.return(result),
   );});
   const loseHp=defineEffect<HpLoss,number>(b=>{const result=b.local<HpLossReceipt>();return sequence(b.assign(result,call(loseHpDetailed,b.input)),b.return(b.read(v=>v.get(result).lost)));});
   const gainBlock=through(beforeBlockGain,m.atom({input:resourceAmountSchema,output:amount,reads:[block],writes:[block],emits:[blockGained],run(r,input){
@@ -89,7 +93,7 @@ export const resources=defineRules({requires:[],build(m){
   const spendGold=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[gold],writes:[gold],emits:[],run(r,i){return{writes:[{entity:i.entity,component:gold,value:Math.max(0,r.component(i.entity,gold)-i.amount)}],events:[],result:undefined};}});
   const setHealth=m.atom({input:z.object({entity:entityId,hp:z.int32().nonnegative(),maxHp:z.int32().positive()}),output:z.undefined(),reads:[],writes:[health],emits:[],run(_r,i){if(i.hp>i.maxHp)throw Error('Health exceeds maximum');return{writes:[{entity:i.entity,component:health,value:{hp:i.hp,maxHp:i.maxHp}}],events:[],result:undefined};}});
   const limitHp=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[health],writes:[health],emits:[],run(r,i){const s=r.component(i.entity,health);return{writes:[{entity:i.entity,component:health,value:{...s,hp:Math.min(s.hp,i.amount)}}],events:[],result:undefined};}});
-  return{exports:{actor,current,side,heal,loseHp,loseHpDetailed,gainBlock,consumeBlock,gainEnergy,useEnergy,rechargeEnergy,gainGold,spendGold,setHealth,limitHp,increaseMaxHp,raiseMaxHp,loseMaxHp,stages,
+  return{exports:{actor,current,vitality,defense,stamina,wealth,side,heal,loseHp,loseHpDetailed,gainBlock,consumeBlock,gainEnergy,useEnergy,rechargeEnergy,gainGold,spendGold,setHealth,limitHp,increaseMaxHp,raiseMaxHp,loseMaxHp,stages,
     beforeHeal:beforeHeal.public,beforeHpLoss:beforeHpLoss.public,beforeBlockGain:beforeBlockGain.public,beforeGoldGain:beforeGoldGain.public,
     healed:healed.public,hpLost:hpLost.public,wouldDie:wouldDie.public,blockGained:blockGained.public,energyGained:energyGained.public,goldGained:goldGained.public}};
 }});

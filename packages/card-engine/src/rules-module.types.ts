@@ -1,6 +1,6 @@
 import type { EntityKind,EntityKindSpec,ScopeKind,LifecycleSpec } from './rules-entities.types.ts';
 import type { Checkpoint, ReplacementResult } from './rules-checkpoints.types.ts';
-import type { Command, Input } from './rules.types.ts';
+import type { Borrowed, Command, Input } from './rules.types.ts';
 import type { Effect } from './rules.types.ts';
 declare const componentBrand: unique symbol;
 declare const eventBrand: unique symbol;
@@ -14,11 +14,11 @@ export type RuleModule<E = unknown> = { readonly exports: E; readonly [moduleBra
 export type ComponentValue<C> = C extends Component<infer T> ? T : never;
 export type EventValue<E> = E extends RuleEvent<infer T> ? T : never;
 export type ComponentWrite<C extends Component<any>> = C extends Component<any>?{
-  entity: number; component: Owned<C>; value: ComponentValue<C>;
+  entity: number; component: Owned<C>; value: ComponentValue<C>|Borrowed<ComponentValue<C>>;
 }:never;
-export type EventProposal<E extends RuleEvent<any>> = E extends RuleEvent<any>?{ event: Owned<E>; payload: EventValue<E> }:never;
+export type EventProposal<E extends RuleEvent<any>> = E extends RuleEvent<any>?{ event: Owned<E>; payload: EventValue<E>|Borrowed<EventValue<E>> }:never;
 export type AtomRead<C extends Component<any>> = {
-  component<T extends C>(entity: number, component: Owned<T> | T): Readonly<ComponentValue<T>>;
+  component<T extends C>(entity: number, component: Owned<T> | T): Borrowed<ComponentValue<T>>;
 };
 export type ComponentReference=Component<any>|Owned<Component<any>>;
 export type PublicDefinition<T>=T extends Owned<infer U>?U:T;
@@ -28,10 +28,10 @@ export type AtomSpec<I, O, R extends readonly ComponentReference[], W extends re
   reads: R;
   writes: W;
   emits: E;
-  run: (read: AtomRead<PublicDefinition<R[number]>>, input: I) => {
+  run: (read: AtomRead<PublicDefinition<R[number]>>, input: Borrowed<I>) => {
     writes: readonly ComponentWrite<PublicDefinition<W[number]>>[];
     events: readonly EventProposal<PublicDefinition<E[number]>>[];
-    result: O;
+    result: O|Borrowed<O>;
   };
 };
 export type ModuleBuilder = {

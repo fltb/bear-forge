@@ -23,7 +23,7 @@ import {MS} from "../combat-identifiers.ts";
 const {defineRules,defineQuery}=rules;
 export const combatViews=defineRules({requires:[enemyUtilities,combatSessions,adventures,combatStorageViews,combatPrivate],build(){
   const tags=Array.from({length:8},(_,value)=>defineQuery({input:z.undefined(),output:z.int32(),base:()=>value}));
-  const counterTags={kind:cardInstances.exports.kind,select:(config:Readonly<import('../rules/card-instances.types.ts').CardConfig>)=>tags[Number(config.id==='NORMALITY')|Number(config.id==='PAIN')<<1|Number(config.id==='BLOOD_FOR_BLOOD'||config.id==='MASTERFUL_STAB')<<2]!};
+  const counterTags={kind:cardInstances.exports.kind,select:(config:rules.Borrowed<import('../rules/card-instances.types.ts').CardConfig>)=>tags[Number(config.id==='NORMALITY')|Number(config.id==='PAIN')<<1|Number(config.id==='BLOOD_FOR_BLOOD'||config.id==='MASTERFUL_STAB')<<2]!};
   const status=defineQuery({input:z.object({registry:z.number(),actor:z.number(),side:z.union([z.literal(0),z.literal(1)])}),output:z.object({unique0:z.number(),unique1:z.number(),bits0:z.string(),bits1:z.number(),justApplied:z.number(),statuses:z.array(z.tuple([z.number(),z.number()])),values:z.record(z.string(),z.number())}),dependencies:[powers.exports.entries,powers.exports.current,powers.exports.presentation],base(r,i){
     let bits=0n,justApplied=0,unique0=0,unique1=0;const statuses:[number,number][]=[],values:Record<string,number>={};
     for(const entry of r.query(powers.exports.entries,i.registry)){
@@ -37,13 +37,13 @@ export const combatViews=defineRules({requires:[enemyUtilities,combatSessions,ad
   }});
   const selectionSchema=z.object({screen:z.number(),cards:z.array(z.number()),pickCount:z.number().optional(),canPickZero:z.boolean().optional(),canPickAnyNumber:z.boolean().optional()}).nullable();
   const battle=defineQuery({input:z.object({run:z.number(),selection:selectionSchema}),output:FrameSchema.shape.battle,
-    dependencies:[combatSessions.exports.forRun,combatSessions.exports.current,battles.exports.current,turns.exports.current,turns.exports.rechargeAmount,turns.exports.drawCount,cardPiles.exports.current,cardInstances.exports.combatView,zones.exports.members,resources.exports.current,attributes.exports.strength,attributes.exports.dexterity,attributes.exports.artifact,attributes.exports.focus,enemies.exports.current,enemies.exports.intent,enemies.exports.presentation,adventures.exports.hasRelic,adventures.exports.current,status],base(r,i){
+    dependencies:[combatSessions.exports.forRun,combatSessions.exports.current,battles.exports.current,turns.exports.current,turns.exports.rechargeAmount,turns.exports.drawCount,cardPiles.exports.current,cardInstances.exports.combatView,zones.exports.members,resources.exports.current,attributes.exports.strength,attributes.exports.dexterity,attributes.exports.artifact,attributes.exports.focus,enemies.exports.current,enemies.exports.intent,enemies.exports.presentation,adventures.exports.hasRelic,adventures.exports.current,status,adventures.exports.location,battles.exports.status],base(r,i){
       const id=r.query(combatSessions.exports.forRun,i.run);if(id===null)return null;
-      const s=r.query(combatSessions.exports.current,id),b=r.query(battles.exports.current,s.battle),p=r.query(resources.exports.current,b.actor),piles=r.query(cardPiles.exports.current,b.piles),ps=r.query(status,{registry:b.registry,actor:b.actor,side:0});
+      const s=r.query(combatSessions.exports.current,id),b=r.query(battles.exports.status,s.battle),p=r.query(resources.exports.current,b.actor),piles=r.query(cardPiles.exports.current,b.piles),ps=r.query(status,{registry:b.registry,actor:b.actor,side:0});
       const pile=(zone:number)=>r.query(zones.exports.members,zone).map(card=>r.query(cardInstances.exports.combatView,card));
       const monsters=s.roster.map((meta,index)=>{
         if(meta.actor===null||meta.controller===null){
-          const run=r.query(adventures.exports.current,i.run),burning=run.x===run.map.burningEliteX&&run.y===run.map.burningEliteY;
+          const run=r.query(adventures.exports.location,i.run),burning=run.x===run.map.burningEliteX&&run.y===run.map.burningEliteY;
           const strength=meta.initialized===false?0:Number(r.query(adventures.exports.hasRelic,{run:i.run,id:'PHILOSOPHERS_STONE'}))+(burning&&run.map.burningEliteBuff===0?run.act:0);
           let bits=0n;if(meta.initialized!==false&&burning&&run.map.burningEliteBuff>=2)bits|=1n<<BigInt([MS.METALLICIZE,MS.REGEN][run.map.burningEliteBuff-2]!);
           return{index:-1,name:sourceMonsterNames[meta.id]??meta.name,hp:0,maxHp:0,block:0,moves:[0,0],damage:0,hits:0,strength,weak:0,vulnerable:0,artifact:0,poison:0,statusBits:bits.toString(),uniquePower0:0,uniquePower1:0};
@@ -58,10 +58,10 @@ export const combatViews=defineRules({requires:[enemyUtilities,combatSessions,ad
       };
     }});
   const privateBattle=defineQuery({input:z.object({run:z.number(),selection:selectionSchema,actionQueueSize:z.int32().nonnegative()}),output:BattleViewSchema.nullable(),
-    selections:[counterTags],dependencies:[battle,combatSessions.exports.forRun,combatSessions.exports.current,battles.exports.current,turns.exports.current,cardPiles.exports.current,cardInstances.exports.combatView,cardInstances.exports.metadata,zones.exports.members,enemies.exports.current,enemies.exports.presentation,adventures.exports.current,potions.exports.current,random.exports.current,combatStorageViews.exports.slots,combatPrivate.exports.player],base(r,input){
+    selections:[counterTags],dependencies:[battle,combatSessions.exports.forRun,combatSessions.exports.current,battles.exports.current,turns.exports.current,cardPiles.exports.current,cardInstances.exports.combatView,cardInstances.exports.metadata,zones.exports.members,enemies.exports.current,enemies.exports.presentation,adventures.exports.current,potions.exports.current,random.exports.current,combatStorageViews.exports.slots,combatPrivate.exports.player,adventures.exports.bindings],base(r,input){
       const id=r.query(combatSessions.exports.forRun,input.run);if(id===null)return null;
       const s=r.query(combatSessions.exports.current,id),board=r.query(battles.exports.current,s.battle),turn=r.query(turns.exports.current,s.controller),piles=r.query(cardPiles.exports.current,board.piles),view=r.query(battle,{run:input.run,selection:input.selection})!;
-      const inventory=r.query(potions.exports.current,r.query(adventures.exports.current,input.run).potions);
+      const inventory=r.query(potions.exports.current,r.query(adventures.exports.bindings,input.run).potions);
       const cardList=(zone:number)=>r.query(zones.exports.members,zone).map(card=>r.query(cardInstances.exports.combatView,card));
       const empty=(cost:number)=>({id:'INVALID',uniqueId:-1,specialData:0,cost,costForTurn:cost,upgraded:false,freeToPlayOnce:false,retain:false});
       const stasis=[empty(1),empty(1)];for(const slot of r.query(combatStorageViews.exports.slots,board.registry)){const cards=cardList(slot.zone);if(slot.index<stasis.length&&cards.length>0)stasis[slot.index]=cards[0]!;}

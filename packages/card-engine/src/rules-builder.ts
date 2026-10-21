@@ -1,4 +1,6 @@
-import type { Builder, Command, Input, Local, Statement, Value } from './rules.types.ts';
+import { evaluateQuery } from './rules-queries.ts';
+import type { Query } from './rules-query.types.ts';
+import type { Borrowed, Builder, Command, Input, Local, ReadView, Statement, Value } from './rules.types.ts';
 import { expression, readExpression, slots, statements, handle } from './rules-internal.ts';
 import type { Node, Owner } from './rules-internal.ts';
 function makeStatement(node: Node): Statement { const value = handle<Statement>(); statements.set(value,node); return value; }
@@ -18,11 +20,12 @@ export function createBuilder<I, O>(owner: Owner, allocated: Map<object, string>
       if (slots.get(slot) !== owner) throw Error('Foreign rule local');
       return makeStatement({ kind: 'assign', slot, value });
     },
-    read<T>(fn: (view: { input: I; get<V>(value: Value<V>): V }) => T): Value<T> {
+    read<T>(fn: (view: ReadView<I>) => T): Value<T> {
       if (typeof fn !== 'function') throw Error('Rule read requires an expression');
       return expression<T>(owner, context => {
-        const result = fn(Object.freeze({ input: context.input as I,
-          get: <V>(value: Value<V>): V => readExpression(value, context),
+        const result = fn(Object.freeze({ input: context.input as Borrowed<I>,
+          get: <V>(value: Value<V>): Borrowed<V> => readExpression(value, context),
+          query:<A,B>(definition:Query<A,B>,input:Borrowed<A>):Borrowed<B>=>evaluateQuery(definition,input,context.world,context.bindings),
         }));
         if (result && typeof (result as { then?: unknown }).then === 'function') throw Error('Rule read must be synchronous');
         return result;

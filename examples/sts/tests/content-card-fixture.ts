@@ -47,7 +47,7 @@ const fixture=defineRules({requires:[adventureProgram],build(m){
   const kind=m.kind({config:z.undefined(),setup:setupSchema.extend({run:z.number()}),components:[],initialize:defineEffect<rules.EntityLifecycle<Environment>,void>(b=>install({ability:enter,source:b.read(v=>v.input.entity),owner:b.read(v=>v.input.owner!),environment:b.read(v=>v.input.setup),lifetime:b.read(v=>v.input.scope)}))});
   const anchor=defineEntity(kind,undefined,{components:[done]});
   const entry=defineEffect<ContentCase,Frame>(b=>{const run=b.local<number>();return sequence(
-    b.assign(run,call(adventureStart.exports.initialize,{setup:b.read(v=>({seed:v.input.seed})),catalog:{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions}})),
+    b.assign(run,call(adventureStart.exports.initialize,{setup:b.read(v=>({seed:v.input.seed})),definition:rules.defineEntity(adventures.exports.kind,{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),
     when(b.read(v=>cards[v.input.id].type!==4),call(permanentDecks.exports.obtain,{deck:b.read(v=>v.get(query(adventures.exports.current,v.get(run))).deck),definition:query(adventures.exports.card,{run,id:b.read(v=>v.input.id)}),upgraded:b.read(v=>v.input.upgraded),specialData:0,count:1,upgrade:false})),
     call(adventures.exports.setRoom,{run,room:'MONSTER',event:0}),call(stsPorts.exports.initialize,run),spawnEntity({definition:anchor,owner:b.read(v=>v.get(query(adventures.exports.current,v.get(run))).actor),scope:0,setup:b.read(v=>({...v.input,run:v.get(run)}))}),
     call(combatProgram.exports.run,{run,encounter:encounterId.CULTIST}),b.return(query(stsPorts.exports.frame,{run,actions:[],selection:null})),

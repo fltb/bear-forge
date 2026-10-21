@@ -1,3 +1,4 @@
+import { typedValue } from '../../rules/value.schemas.ts';
 import {z} from 'zod';
 import {rules} from '@bear-forge/card-engine';
 import {resources} from "../../rules/resources.ts";
@@ -34,6 +35,6 @@ export function attachAbilities(...abilities:rules.Ability[]):rules.Effect<Power
   return defineEffect(b=>rules.sequence(...abilities.map(ability=>install({ability,source:b.read(v=>v.input.entity),owner:b.read(v=>v.input.setup.actor),environment:{},lifetime:b.read(v=>v.input.scope)}))));
 }
 export function scalarBonus(target:rules.Query<number,number>):rules.Ability{
-  const condition=defineQuery({input:z.custom<rules.ModifierContext<number,number>>(),output:z.boolean(),base:(_r,c)=>c.input===c.owner});
+  const condition=defineQuery({input:typedValue<rules.ModifierContext<number,number>>(),output:z.boolean(),base:(_r,c)=>c.input===c.owner});
   return rules.modify(target,{condition,dependencies:[powers.exports.level],transform:(r,c)=>(c.value+r.query(powers.exports.level,c.source))|0});
 }

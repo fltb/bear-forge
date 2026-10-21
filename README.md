@@ -1,6 +1,6 @@
 # Bear Forge
 
-正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；受控执行采用共享 Program 与独立 Context，分支及恢复不重新初始化程序；完整验收进度见 docs/plan.md。训练入口包含现成 DouZero 学习器及两游戏共用的自研 Transformer/PPO，模型通过同一 Policy 和 Card Core 执行。玩家搜索、Rust 迁移和运行时性能优化继续后置。
+正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；受控执行采用共享 Program 与独立 Context，分支及恢复不重新初始化程序；完整验收进度见 docs/plan.md。训练入口包含现成 DouZero 学习器及两游戏共用的自研 Transformer/PPO，模型通过同一 Policy 和 Card Core 执行。STS/Card Core 的[三层整体优化设计与计划](docs/card-core-spec.md#whole-stack-optimization)已写定，实施与验收状态见 docs/plan.md；玩家搜索和 Rust 迁移继续后置。
 
 完整介绍与审核入口：[项目介绍](docs/project-overview.md)。
 
@@ -158,7 +158,7 @@ npm run serve -- --output ./data/demo
 
 同一 cardDefinition 的原生/受控模式都经过卡牌 Core，没有无 Core 的正式卡牌模式。斗地主、Forge Duel 和 STS 的 card:run/card:replay、build:games 均接此路径；demo/experiment 继续使用既有游戏。旧 async 游戏入口移入 tests/generic，作为通用后端的兼容性夹具；旧参考仅生成差分期望，正式 BaseGame 基准使用生产契约。
 
-当前基准为同一 Card Core 上的完整可交互 GameHost：原生游戏自身的多余路径单独核算，受控再核算新增能力的成本。默认原生不承担未启用的训练、记录、COW 或存档管理；游戏历史、观察、合法动作及实际事件交付保留。[完整游戏优化方案](docs/card-core-spec.md#gamehost-optimization) 与尚未完成项保留，当前按用户要求冻结性能优化，实际完成状态见 plan.md。原生审计使用已有 recordCore:true；默认原生不发布 capture，--records 等显式消费者保留完整记录与重放。
+当前基准为同一 Card Core 上的完整可交互 GameHost：原生游戏自身的多余路径单独核算，受控再核算新增能力的成本。默认原生不承担未启用的训练、记录、COW 或存档管理；游戏历史、观察、合法动作及实际事件交付保留。[完整游戏优化方案](docs/card-core-spec.md#gamehost-optimization) 与尚未完成项保留，当前按三层整体优化方案实施，实际完成状态见 plan.md。原生审计使用已有 recordCore:true；默认原生不发布 capture，--records 等显式消费者保留完整记录与重放。
 
 通用 Program/编译执行入口保留。专用卡牌规则导出为各游戏的 `cardDefinition`，通过 `createCardLoader({ controlled: true | false })` 装载；加载结果仍为既有 Core/Instance/capture/persistence，GameContract 与 BaseGameBinder 不变。专用 Card Core 解释静态效果步骤，内部同步推进，遇端口才返回；受控模式提供步骤预算、分支隔离、存档与记录，不宣称任意 JS 的编译沙箱保障。
 

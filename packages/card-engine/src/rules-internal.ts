@@ -2,7 +2,7 @@ import type {ChoiceReplyGuard} from './rules-reply-guards.ts';
 import type { ModuleBindings } from './rules-module-internal.ts';
 import type { CardStep } from './card.types.ts';
 import type { CardScope } from './card.types.ts';
-import type { Builder, Effect, Value } from './rules.types.ts';
+import type { Builder, Effect, Input, Value } from './rules.types.ts';
 
 export type AnyEffect = Effect<any, any>;
 export type Owner = object;
@@ -28,9 +28,9 @@ export type Expression = {
 };
 export type Node =
   | { kind: 'sequence'; steps: object[] }
-  | { kind: 'when'; test: unknown; yes: object; no: object }
-  | { kind: 'while'; test: unknown; body: object }
-  | { kind: 'each'; items: unknown; item: object; body: object }
+  | { kind: 'when'; test: Input<boolean>; yes: object; no: object }
+  | { kind: 'while'; test: Input<boolean>; body: object }
+  | { kind: 'each'; items: Input<readonly unknown[]>; item: object; body: object }
   | { kind: 'call'; definition: AnyEffect | Value<AnyEffect>; input: unknown }
   | { kind: 'assign'; slot: object; value: unknown }
   | { kind: 'return'; value: unknown };

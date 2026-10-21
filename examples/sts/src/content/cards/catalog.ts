@@ -1,0 +1,50 @@
+import {basicCards} from "../characters/ironclad/cards/basic.ts";
+import {colorlessBasicCards} from "./colorless/basic.ts";
+import {curseBasicCards} from "./curses/ascenders-bane.ts";
+import {pileCards} from "./statuses/definitions.ts";
+import {ironcladPileCards} from "../characters/ironclad/cards/sentinel.ts";
+import {permanentCards} from "../characters/ironclad/cards/permanent.ts";
+import {cursePermanentCards} from "./curses/permanent.ts";
+import {attackCards} from "../characters/ironclad/cards/attacks.ts";
+import {colorlessAttackCards} from "./colorless/attacks.ts";
+import {skillCards} from "../characters/ironclad/cards/skills.ts";
+import {colorlessSkillCards} from "./colorless/skills.ts";
+import {advancedAttacks} from "../characters/ironclad/cards/advanced-attacks.ts";
+import {colorlessAdvancedAttacks} from "./colorless/growing-attacks.ts";
+import {createSelectionCardPrograms} from "../characters/ironclad/cards/selections.ts";
+import {createColorlessSelectionCardPrograms} from "./colorless/selections.ts";
+import {createGeneratedSkills} from "../characters/ironclad/cards/generation.ts";
+import {createColorlessGeneratedSkills} from "./colorless/generation.ts";
+import {powerCards} from "../characters/ironclad/cards/powers.ts";
+import {colorlessPowerCards} from "./colorless/powers.ts";
+import type {createSelectionCards} from "../characters/ironclad/cards/deck-order.ts";
+import type {createColorlessSelectionCards} from "./colorless/thinking-ahead.ts";
+import {z} from 'zod';
+import {rules} from '@bear-forge/card-engine';
+import {cardInstances} from "../../rules/card-instances.ts";
+import {cardEvaluationSchema} from "../../rules/card-instances.schemas.ts";
+import type {CardUse} from "../../rules/card-instances.types.ts";
+import type {CardChoiceExports} from "../../rules/card-choices.types.ts";
+import type {PermanentCardDefinition} from "../../rules/permanent-decks.types.ts";
+import type {CardId} from "../../identifiers.ts";
+import {cards} from "../../cards.ts";
+import {groupCards} from "../characters/ironclad/cards/multi-target.ts";
+import {curseCards} from "./curses/definitions.ts";
+import type {createCombatSelectionUtils} from "./shared/selection-utils.ts";
+import {standardUpgrade,upgradeOnce} from "./shared/lifecycle.ts";
+
+/** Every admitted definition can be previewed/obtained; missing use programs fail explicitly until migrated. */
+export function createCardCatalog(selection:ReturnType<typeof createSelectionCards>,colorlessSelection:ReturnType<typeof createColorlessSelectionCards>,choices:rules.RuleModule<CardChoiceExports>,selectionUtils:ReturnType<typeof createCombatSelectionUtils>){const selections=createSelectionCardPrograms(choices),colorlessSelections=createColorlessSelectionCardPrograms(choices),generated=createGeneratedSkills(choices,selectionUtils),colorlessGenerated=createColorlessGeneratedSkills(choices,selectionUtils);return rules.defineRules({requires:[basicCards,colorlessBasicCards,curseBasicCards,pileCards,ironcladPileCards,permanentCards,cursePermanentCards,groupCards,attackCards,colorlessAttackCards,skillCards,colorlessSkillCards,powerCards,colorlessPowerCards,advancedAttacks,colorlessAdvancedAttacks,curseCards,selections,colorlessSelections,generated,colorlessGenerated,selection,colorlessSelection],build(){
+  const unsupported=rules.defineEffect<CardUse,void>(b=>b.return(b.read(v=>{throw Error('Card use is not implemented: '+v.get(rules.query(cardInstances.exports.combatView,v.input.card)).id);}))),fixed=rules.defineQuery({input:cardEvaluationSchema,output:z.boolean(),base:()=>false});
+  const implemented:Partial<Record<CardId,PermanentCardDefinition>>={STRIKE_RED:basicCards.exports.StrikeRed,DEFEND_RED:basicCards.exports.DefendRed,BASH:basicCards.exports.Bash,DEMON_FORM:basicCards.exports.DemonForm,ASCENDERS_BANE:curseBasicCards.exports.AscendersBane,INFLAME:basicCards.exports.Inflame,BATTLE_TRANCE:basicCards.exports.BattleTrance,POMMEL_STRIKE:basicCards.exports.PommelStrike,SHRUG_IT_OFF:basicCards.exports.ShrugItOff,IRON_WAVE:basicCards.exports.IronWave,FLASH_OF_STEEL:colorlessBasicCards.exports.FlashOfSteel,FINESSE:colorlessBasicCards.exports.Finesse,SEEING_RED:basicCards.exports.SeeingRed,SENTINEL:ironcladPileCards.exports.Sentinel,VOID:pileCards.exports.Void,HEADBUTT:selection.exports.Headbutt,WARCRY:selection.exports.Warcry,SEARING_BLOW:permanentCards.exports.SearingBlow,PARASITE:cursePermanentCards.exports.Parasite,REGRET:cursePermanentCards.exports.Regret,BARRICADE:permanentCards.exports.Barricade,NECRONOMICURSE:cursePermanentCards.exports.Necronomicurse,CURSE_OF_THE_BELL:cursePermanentCards.exports.CurseOfTheBell};
+  Object.assign(implemented,{SWORD_BOOMERANG:groupCards.exports.SwordBoomerang,REAPER:groupCards.exports.Reaper,FLAME_BARRIER:groupCards.exports.FlameBarrier,METALLICIZE:groupCards.exports.Metallicize});
+  Object.assign(implemented,{ANGER:attackCards.exports.Anger,BITE:colorlessAttackCards.exports.Bite,BODY_SLAM:attackCards.exports.BodySlam,BLOOD_FOR_BLOOD:attackCards.exports.BloodForBlood,BLUDGEON:attackCards.exports.Bludgeon,CARNAGE:attackCards.exports.Carnage,CLASH:attackCards.exports.Clash,CLEAVE:attackCards.exports.Cleave,CLOTHESLINE:attackCards.exports.Clothesline,DRAMATIC_ENTRANCE:colorlessAttackCards.exports.DramaticEntrance,HEAVY_BLADE:attackCards.exports.HeavyBlade,HEMOKINESIS:attackCards.exports.Hemokinesis,IMMOLATE:attackCards.exports.Immolate,MIND_BLAST:colorlessAttackCards.exports.MindBlast,PUMMEL:attackCards.exports.Pummel,RECKLESS_CHARGE:attackCards.exports.RecklessCharge,SWIFT_STRIKE:colorlessAttackCards.exports.SwiftStrike,THUNDERCLAP:attackCards.exports.Thunderclap,TWIN_STRIKE:attackCards.exports.TwinStrike,UPPERCUT:attackCards.exports.Uppercut,WILD_STRIKE:attackCards.exports.WildStrike,WOUND:pileCards.exports.Wound,DAZED:pileCards.exports.Dazed,SLIMED:pileCards.exports.Slimed,BURN:pileCards.exports.Burn});
+  Object.assign(implemented,{APOTHEOSIS:colorlessSkillCards.exports.Apotheosis,APPARITION:colorlessSkillCards.exports.Apparition,BANDAGE_UP:colorlessSkillCards.exports.BandageUp,BLIND:colorlessSkillCards.exports.Blind,BLOODLETTING:skillCards.exports.Bloodletting,DISARM:skillCards.exports.Disarm,ENLIGHTENMENT:colorlessSkillCards.exports.Enlightenment,ENTRENCH:skillCards.exports.Entrench,GHOSTLY_ARMOR:skillCards.exports.GhostlyArmor,GOOD_INSTINCTS:colorlessSkillCards.exports.GoodInstincts,IMPATIENCE:colorlessSkillCards.exports.Impatience,IMPERVIOUS:skillCards.exports.Impervious,INTIMIDATE:skillCards.exports.Intimidate,JAX:colorlessSkillCards.exports.Jax,LIMIT_BREAK:skillCards.exports.LimitBreak,MADNESS:colorlessSkillCards.exports.Madness,MASTER_OF_STRATEGY:colorlessSkillCards.exports.MasterOfStrategy,OFFERING:skillCards.exports.Offering,PANACEA:colorlessSkillCards.exports.Panacea,PANIC_BUTTON:colorlessSkillCards.exports.PanicButton,POWER_THROUGH:skillCards.exports.PowerThrough,SHOCKWAVE:skillCards.exports.Shockwave,TRIP:colorlessSkillCards.exports.Trip});
+  Object.assign(implemented,{BERSERK:powerCards.exports.Berserk,BRUTALITY:powerCards.exports.Brutality,CORRUPTION:powerCards.exports.Corruption,DARK_EMBRACE:powerCards.exports.DarkEmbrace,EVOLVE:powerCards.exports.Evolve,FEEL_NO_PAIN:powerCards.exports.FeelNoPain,FIRE_BREATHING:powerCards.exports.FireBreathing,JUGGERNAUT:powerCards.exports.Juggernaut,RUPTURE:powerCards.exports.Rupture,RAGE:powerCards.exports.Rage,DOUBLE_TAP:powerCards.exports.DoubleTap,FLEX:powerCards.exports.Flex});
+  Object.assign(implemented,{ARMAMENTS:selections.exports.Armaments,BURNING_PACT:selections.exports.BurningPact,DUAL_WIELD:selections.exports.DualWield,EXHUME:selections.exports.Exhume,FORETHOUGHT:colorlessSelections.exports.Forethought,PURITY:colorlessSelections.exports.Purity,SECRET_TECHNIQUE:colorlessSelections.exports.SecretTechnique,SECRET_WEAPON:colorlessSelections.exports.SecretWeapon,SECOND_WIND:selections.exports.SecondWind,TRUE_GRIT:selections.exports.TrueGrit,THINKING_AHEAD:colorlessSelection.exports.ThinkingAhead});
+  Object.assign(implemented,{DROPKICK:advancedAttacks.exports.Dropkick,FEED:advancedAttacks.exports.Feed,FIEND_FIRE:advancedAttacks.exports.FiendFire,HAND_OF_GREED:colorlessAdvancedAttacks.exports.HandOfGreed,PERFECTED_STRIKE:advancedAttacks.exports.PerfectedStrike,RAMPAGE:advancedAttacks.exports.Rampage,RITUAL_DAGGER:colorlessAdvancedAttacks.exports.RitualDagger,SEVER_SOUL:advancedAttacks.exports.SeverSoul,WHIRLWIND:advancedAttacks.exports.Whirlwind});
+  Object.assign(implemented,{DEEP_BREATH:colorlessGenerated.exports.DeepBreath,DISCOVERY:colorlessGenerated.exports.Discovery,HAVOC:generated.exports.Havoc,INFERNAL_BLADE:generated.exports.InfernalBlade,JACK_OF_ALL_TRADES:colorlessGenerated.exports.JackOfAllTrades,CHRYSALIS:colorlessGenerated.exports.Chrysalis,METAMORPHOSIS:colorlessGenerated.exports.Metamorphosis,SPOT_WEAKNESS:generated.exports.SpotWeakness,TRANSMUTATION:colorlessGenerated.exports.Transmutation,VIOLENCE:colorlessGenerated.exports.Violence,DARK_SHACKLES:colorlessSkillCards.exports.DarkShackles});
+  Object.assign(implemented,{COMBUST:powerCards.exports.Combust,THE_BOMB:colorlessPowerCards.exports.TheBomb,PANACHE:colorlessPowerCards.exports.Panache,MAYHEM:colorlessPowerCards.exports.Mayhem,MAGNETISM:colorlessPowerCards.exports.Magnetism,SADISTIC_NATURE:colorlessPowerCards.exports.SadisticNature,CLUMSY:curseCards.exports.Clumsy,DECAY:curseCards.exports.Decay,DOUBT:curseCards.exports.Doubt,SHAME:curseCards.exports.Shame,INJURY:curseCards.exports.Injury,NORMALITY:curseCards.exports.Normality,PAIN:curseCards.exports.Pain,PRIDE:curseCards.exports.Pride,WRITHE:curseCards.exports.Writhe});
+  const definitions=(Object.keys(cards) as (keyof typeof cards)[]).map(id=>({id,definition:implemented[id]??rules.defineEntity(cardInstances.exports.kind,{id,metadata:cards[id],use:unsupported,canUpgrade:upgradeOnce(cards[id]),upgrade:standardUpgrade(cards[id])})}));
+  return{exports:{definitions}};
+}});}

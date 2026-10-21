@@ -1,3 +1,7 @@
+import {drawPowers} from "../src/content/powers/draw.ts";
+import {ironcladDrawPowers} from "../src/content/characters/ironclad/powers/draw.ts";
+import {pileCards} from "../src/content/cards/statuses/definitions.ts";
+import {ironcladPileCards} from "../src/content/characters/ironclad/cards/sentinel.ts";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
@@ -10,10 +14,10 @@ import {powers} from '../src/rules/powers.ts';
 import {cardInstances} from '../src/rules/card-instances.ts';
 import {cardPiles} from '../src/rules/card-piles.ts';
 import {actionQueue,combatScope} from '../src/rules/combat-actions.ts';
-import {drawPowers} from '../src/content/draw-powers.ts';
-import {pileRelics} from '../src/content/pile-relics.ts';
-import {pileCards} from '../src/content/pile-cards.ts';
-import {upgradeOnce,standardUpgrade} from '../src/content/card-utils.ts';
+
+import {pileRelics} from "../src/content/relics/common/piles.ts";
+
+import {upgradeOnce,standardUpgrade} from "../src/content/cards/shared/lifecycle.ts";
 import {cards} from '../src/cards.ts';
 import {cardId,relicId} from '../src/identifiers.ts';
 import {PS} from '../src/combat-identifiers.ts';
@@ -28,9 +32,9 @@ const noop=defineEffect<CardUse,void>(b=>b.return(undefined));
 type CardId=keyof typeof cards;
 const names=Object.keys(cards) as CardId[];
 // Ordinary entries are isolated pile fixtures, not replacements for unimplemented production card programs.
-const definitions=names.map(id=>id==='VOID'?pileCards.exports.Void:id==='SENTINEL'?pileCards.exports.Sentinel:defineEntity(cardInstances.exports.kind,{id,metadata:cards[id],use:noop,canUpgrade:upgradeOnce(cards[id]),upgrade:standardUpgrade(cards[id])}));
-const powerBindings=[{definition:drawPowers.exports.NoDraw,id:PS.NO_DRAW},{definition:drawPowers.exports.Confused,id:PS.CONFUSED,flag:true},{definition:drawPowers.exports.Evolve,id:PS.EVOLVE},{definition:drawPowers.exports.DarkEmbrace,id:PS.DARK_EMBRACE},{definition:drawPowers.exports.FeelNoPain,id:PS.FEEL_NO_PAIN}];
-const views=defineRules({requires:[drawPowers,pileRelics,pileCards],build(){return{exports:{view:defineQuery({
+const definitions=names.map(id=>id==='VOID'?pileCards.exports.Void:id==='SENTINEL'?ironcladPileCards.exports.Sentinel:defineEntity(cardInstances.exports.kind,{id,metadata:cards[id],use:noop,canUpgrade:upgradeOnce(cards[id]),upgrade:standardUpgrade(cards[id])}));
+const powerBindings=[{definition:drawPowers.exports.NoDraw,id:PS.NO_DRAW},{definition:drawPowers.exports.Confused,id:PS.CONFUSED,flag:true},{definition:ironcladDrawPowers.exports.Evolve,id:PS.EVOLVE},{definition:ironcladDrawPowers.exports.DarkEmbrace,id:PS.DARK_EMBRACE},{definition:ironcladDrawPowers.exports.FeelNoPain,id:PS.FEEL_NO_PAIN}];
+const views=defineRules({requires:[drawPowers,ironcladDrawPowers,pileRelics,pileCards,ironcladPileCards],build(){return{exports:{view:defineQuery({
   input:z.object({piles:z.number(),registry:z.number(),sundial:z.number().nullable()}),output:z.any(),dependencies:[cardPiles.exports.current,zones.exports.members,cardInstances.exports.combatView,cardInstances.exports.metadata,resources.exports.current,random.exports.current,powers.exports.find,powers.exports.current,pileRelics.exports.sundialCount],
   base(r,input){
     const p=r.query(cardPiles.exports.current,input.piles),resource=r.query(resources.exports.current,p.actor);
@@ -54,7 +58,7 @@ function fixture(s:Setup,steps:readonly Step[]){
   const entry=defineEffect<void,unknown[]>(b=>{
     const catalog=b.local<readonly rules.EntityDefinition<CardConfig,CardSetup>[]>(),powerCatalog=b.local<readonly PowerDefinition[]>(),masters=b.local<number[]>(),owner=b.local<number>(),scope=b.local<number>(),draw=b.local<number>(),inHand=b.local<number>(),discard=b.local<number>(),exhaust=b.local<number>(),shuffle=b.local<number>(),cardRng=b.local<number>(),piles=b.local<number>(),registry=b.local<number>(),sundial=b.local<number|null>(),history=b.local<unknown[]>(),found=b.local<number|null>();
     const ids={draw,hand:inHand,discard,exhaust},view=()=>b.read(v=>({...v.get(query(views.exports.view,{piles:v.get(piles),registry:v.get(registry),sundial:v.get(sundial)})),queueSize:v.get(ruleModules.queueSize(actionQueue))}));
-    return sequence(b.assign(catalog,definitions),b.assign(powerCatalog,Object.values(drawPowers.exports)),b.assign(scope,ruleModules.openScope(combatScope,0)),b.assign(owner,spawnEntity({definition:actor,owner:null,scope:0,setup:{hp:80,maxHp:80,energy:s.energy??3,block:0,gold:0}})),
+    return sequence(b.assign(catalog,definitions),b.assign(powerCatalog,Object.values({...drawPowers.exports,...ironcladDrawPowers.exports})),b.assign(scope,ruleModules.openScope(combatScope,0)),b.assign(owner,spawnEntity({definition:actor,owner:null,scope:0,setup:{hp:80,maxHp:80,energy:s.energy??3,block:0,gold:0}})),
       b.assign(draw,spawnEntity({definition:unbounded,owner,scope})),b.assign(inHand,spawnEntity({definition:hand,owner,scope})),b.assign(discard,spawnEntity({definition:unbounded,owner,scope})),b.assign(exhaust,spawnEntity({definition:unbounded,owner,scope})),
       b.assign(shuffle,spawnEntity({definition:stream,owner:null,scope,setup:BigInt(s.seed)})),b.assign(cardRng,spawnEntity({definition:stream,owner:null,scope,setup:BigInt(s.cardSeed)})),
       b.assign(piles,spawnEntity({definition:pileDefinition,owner,scope,setup:{actor:owner,battle:owner,draw,hand:inHand,discard,exhaust,shuffleRng:shuffle,cardRng,actionScope:scope}})),

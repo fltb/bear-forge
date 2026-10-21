@@ -1,12 +1,12 @@
 import {z} from 'zod';
 import {rules,linkRules} from '@bear-forge/card-engine';
-import {adventureStart} from '../src/content/adventure-start.ts';
-import {adventureContent} from '../src/content/adventure-program.ts';
-import {adventureViews} from '../src/content/adventure-views.ts';
+import {adventureStart} from "../src/program/start.ts";
+import {adventureContent} from "../src/program/adventure.ts";
+import {adventureViews} from "../src/adapters/adventure-views.ts";
 import {adventures} from '../src/rules/adventures.ts';
 import {permanentDecks} from '../src/rules/permanent-decks.ts';
 import {resources} from '../src/rules/resources.ts';
-import {cardInstances} from '../src/rules/card-instances.ts';
+
 import {programSchemas,GameViewSchema,type Setup,type Ports} from '../src/game.schemas.ts';
 import type {CardId,RelicId} from '../src/identifiers.ts';
 const {defineEffect,sequence,forEach,call,query}=rules;

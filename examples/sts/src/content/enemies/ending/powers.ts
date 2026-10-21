@@ -1,0 +1,28 @@
+import {z} from 'zod';
+import {rules} from '@bear-forge/card-engine';
+import {powers} from "../../../rules/powers.ts";
+import {damage} from "../../../rules/damage.ts";
+import {resources} from "../../../rules/resources.ts";
+import {attributes} from "../../../rules/attributes.ts";
+import {battles} from "../../../rules/battles.ts";
+import {turns} from "../../../rules/turns.ts";
+import {counterPolicies,attachAbilities} from "../../powers/utils.ts";
+import {ownsTurn} from "../../powers/turn-hooks.ts";
+import {MS,PS} from "../../../combat-identifiers.ts";
+import {actionQueue} from "../../../rules/combat-actions.ts";
+import type {HpDamageRequest} from "../../../rules/damage.types.ts";
+import type {PowerLifecycle} from "../../../rules/powers.types.ts";
+import type {TurnActor} from "../../../rules/turns.types.ts";
+import type {CardUse} from "../../../rules/card-instances.types.ts";
+const {defineRules,defineEffect,defineQuery,defineEntity,defineComponent,sequence,when,call,query,on,modify,replace,enqueue,readComponent,updateLocalComponent}=rules;
+export const finalPowers=defineRules({requires:[powers,damage,resources,attributes,battles,turns],build(){
+  const maximum=defineComponent({schema:z.int32(),initial:()=>0});
+  const cap=replace(damage.exports.beforeHpDamage,{condition:defineQuery({input:z.custom<rules.ReplacementContext<HpDamageRequest>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.value.request.target===c.owner&&r.query(powers.exports.enabled,c.source)}),order:{phase:damage.exports.stages.limit,priority:0},effect:defineEffect<rules.ReplacementContext<HpDamageRequest>,rules.ReplacementResult<HpDamageRequest>>(b=>{const amount=b.local<number>(),level=b.local<number>();return sequence(b.assign(level,query(powers.exports.level,b.read(v=>v.input.source))),b.assign(amount,b.read(v=>Math.min(v.input.value.request.amount,v.get(level)))),call(powers.exports.set,{entity:b.read(v=>v.input.source),next:{level:b.read(v=>v.get(level)-v.get(amount)),active:true,justApplied:false}}),b.return(b.read(v=>v.get(amount)===v.input.value.request.amount?{kind:'keep',value:v.input.value}:{kind:'change',value:{...v.input.value,request:{...v.input.value.request,amount:v.get(amount)}}})));})});
+  const reset=on(turns.exports.enemyStart,{condition:ownsTurn(),effect:defineEffect<rules.ReactionContext<TurnActor>,void>(b=>call(powers.exports.set,{entity:b.read(v=>v.input.source),next:{level:readComponent(b.read(v=>v.input.source),maximum),active:true,justApplied:false}}))});
+  const Invincible=defineEntity(powers.exports.kind,{presentation:{key:MS.INVINCIBLE,flag:false,slot:1},...counterPolicies({bits:32}),attach:defineEffect<PowerLifecycle,void>(b=>sequence(updateLocalComponent(b.read(v=>v.input.entity),maximum,b.read(v=>v.input.setup.amount)),call(attachAbilities(cap,reset),b.input)))},{components:[maximum]});
+  const ownCard=defineQuery({input:z.custom<rules.ReactionContext<CardUse>>(),output:z.boolean(),dependencies:[powers.exports.enabled,powers.exports.current,battles.exports.current],base:(r,c)=>c.event.triggerOnUse&&r.query(powers.exports.enabled,c.source)&&r.query(powers.exports.current,c.source).registry===r.query(battles.exports.current,c.event.battle).registry&&r.query(battles.exports.current,c.event.battle).enemies[0]===c.owner});
+  const BeatOfDeath=defineEntity(powers.exports.kind,{presentation:{key:MS.BEAT_OF_DEATH,flag:false,slot:0},...counterPolicies({bits:32}),attach:attachAbilities(on(battles.exports.afterUse,{condition:ownCard,order:{phase:battles.exports.stages.enemy,priority:20},effect:defineEffect<rules.ReactionContext<CardUse>,void>(b=>enqueue(battles.exports.hit,{battle:b.read(v=>v.input.event.battle),source:b.read(v=>v.input.owner),target:b.read(v=>v.input.event.owner),amount:query(powers.exports.level,b.read(v=>v.input.source)),attack:false,selfDamage:false},{queue:actionQueue,source:b.read(v=>v.input.source),lifetime:b.read(v=>v.get(query(battles.exports.current,v.input.event.battle)).actionScope),eligible:'captured'}))}))});
+  const Surrounded=defineEntity(powers.exports.kind,{presentation:{key:PS.SURROUNDED,flag:true},...counterPolicies({bits:32,flag:true}),attach:attachAbilities(modify(attributes.exports.enemyAttack,{condition:defineQuery({input:z.custom<rules.ModifierContext<{source:number;target:number;base:number;card:number|null},number>>(),output:z.boolean(),dependencies:[powers.exports.enabled,powers.exports.current,battles.exports.forRegistry,battles.exports.current,battles.exports.targetable],base:(r,c)=>{if(c.input.target!==c.owner||!r.query(powers.exports.enabled,c.source))return false;const id=r.query(battles.exports.forRegistry,r.query(powers.exports.current,c.source).registry);if(id===null)return false;const board=r.query(battles.exports.current,id),facing=board.lastTargeted??board.enemies[1]??board.enemies[0]!;return c.input.source!==facing&&r.query(battles.exports.targetable,facing);}}),order:{phase:attributes.exports.stages.sourceScale,priority:-100},transform:(_r,c)=>Math.fround(c.value*Math.fround(1.5))}))});
+  const Regen=defineEntity(powers.exports.kind,{presentation:{key:MS.REGEN,flag:false},...counterPolicies({bits:16}),attach:attachAbilities(on(turns.exports.enemyEnd,{condition:ownsTurn(),order:{phase:turns.exports.stages.content,priority:40},effect:defineEffect<rules.ReactionContext<TurnActor>,void>(b=>call(resources.exports.heal,{entity:b.read(v=>v.input.owner),amount:query(powers.exports.level,b.read(v=>v.input.source))}))}))});
+  return{exports:{Invincible,BeatOfDeath,Surrounded,Regen}};
+}});

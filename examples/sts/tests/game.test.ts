@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {rules,linkRules,CardProgram,CardMachine,plainCardStorage} from '@bear-forge/card-engine';
 import {random} from '../src/rules/random.ts';
-import {encounterPlans} from '../src/content/encounter-plans.ts';
+import {encounterPlans} from "../src/content/enemies/plans.ts";
 import {productionDriver} from './production-driver.ts';
 import {adventureView} from './state-inspection.ts';
 import {ReferenceClient} from './reference/client.ts';

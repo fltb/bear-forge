@@ -9,7 +9,7 @@ import {battles} from '../src/rules/battles.ts';
 import {powers} from '../src/rules/powers.ts';
 import {random} from '../src/rules/random.ts';
 import {combatScope} from '../src/rules/combat-actions.ts';
-import {resourceRelics} from '../src/content/resource-relics.ts';
+import {resourceRelics} from "../src/content/relics/common/resources.ts";
 import {relicId,type RelicId} from '../src/identifiers.ts';
 import {resourceSetupSchema} from '../src/rules/resources.schemas.ts';
 import type {ResourceSetup,ResourceAmount} from '../src/rules/resources.types.ts';

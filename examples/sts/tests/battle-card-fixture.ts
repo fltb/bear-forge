@@ -1,27 +1,39 @@
+import {permanentCards} from "../src/content/characters/ironclad/cards/permanent.ts";
+import {cursePermanentCards} from "../src/content/cards/curses/permanent.ts";
+import {turnPowers} from "../src/content/characters/ironclad/powers/turn.ts";
+import {enemyTurnPowers} from "../src/content/enemies/shared/ritual.ts";
+import {basicCards} from "../src/content/characters/ironclad/cards/basic.ts";
+import {colorlessBasicCards} from "../src/content/cards/colorless/basic.ts";
+import {curseBasicCards} from "../src/content/cards/curses/ascenders-bane.ts";
+
+import {ironcladPileCards} from "../src/content/characters/ironclad/cards/sentinel.ts";
+import {drawPowers} from "../src/content/powers/draw.ts";
+
+import {createSelectionCards} from "../src/content/characters/ironclad/cards/deck-order.ts";
+import {createColorlessSelectionCards} from "../src/content/cards/colorless/thinking-ahead.ts";
 import {z} from 'zod';
 import {rules,ruleModules,linkRules} from '@bear-forge/card-engine';
 import {battles} from '../src/rules/battles.ts';
 import {permanentDecks} from '../src/rules/permanent-decks.ts';
-import {permanentCards} from '../src/content/permanent-cards.ts';
+
 import {turns} from '../src/rules/turns.ts';
 import {enemies} from '../src/rules/enemies.ts';
-import {cultist} from '../src/content/cultist.ts';
-import {turnPowers} from '../src/content/turn-powers.ts';
+import {cultist} from "../src/content/enemies/exordium/cultist.ts";
+
 import {resources} from '../src/rules/resources.ts';
 import {random} from '../src/rules/random.ts';
 import {powers} from '../src/rules/powers.ts';
 import {cardInstances} from '../src/rules/card-instances.ts';
 import {cardPiles} from '../src/rules/card-piles.ts';
 import {zones} from '../src/rules/zones.ts';
-import {basicCards} from '../src/content/basic-cards.ts';
-import {pileCards} from '../src/content/pile-cards.ts';
-import {basicPowers} from '../src/content/basic-powers.ts';
-import {drawPowers} from '../src/content/draw-powers.ts';
+
+import {basicPowers} from "../src/content/powers/attributes.ts";
+
 import {createCardChoices} from '../src/rules/card-choices.ts';
 import type {CardChoicePlayer} from '../src/rules/card-choices.types.ts';
-import {createSelectionCards} from '../src/content/selection-cards.ts';
+
 import {actionQueue,combatScope} from '../src/rules/combat-actions.ts';
-import {cardId} from '../src/identifiers.ts';
+
 import {PS,MS} from '../src/combat-identifiers.ts';
 import type {CardPlay,PlayOptions} from '../src/rules/battles.types.ts';
 import type {CardConfig,CardSetup} from '../src/rules/card-instances.types.ts';
@@ -35,8 +47,8 @@ const choiceWire=defineRules({requires:[cardInstances],build(){
   }})}};
 }});
 export const choices=createCardChoices(choiceWire.exports.adapter,[choiceWire]);
-const selectionCards=createSelectionCards(choices);
-const contents={SEARING_BLOW:permanentCards.exports.SearingBlow,BARRICADE:permanentCards.exports.Barricade,REGRET:permanentCards.exports.Regret,DEMON_FORM:basicCards.exports.DemonForm,ASCENDERS_BANE:basicCards.exports.AscendersBane,STRIKE_RED:basicCards.exports.StrikeRed,DEFEND_RED:basicCards.exports.DefendRed,BASH:basicCards.exports.Bash,SENTINEL:pileCards.exports.Sentinel,INFLAME:basicCards.exports.Inflame,BATTLE_TRANCE:basicCards.exports.BattleTrance,POMMEL_STRIKE:basicCards.exports.PommelStrike,SHRUG_IT_OFF:basicCards.exports.ShrugItOff,IRON_WAVE:basicCards.exports.IronWave,FLASH_OF_STEEL:basicCards.exports.FlashOfSteel,FINESSE:basicCards.exports.Finesse,SEEING_RED:basicCards.exports.SeeingRed,HEADBUTT:selectionCards.exports.Headbutt,WARCRY:selectionCards.exports.Warcry};
+const selectionCards=createSelectionCards(choices),colorlessSelectionCards=createColorlessSelectionCards(choices);
+const contents={SEARING_BLOW:permanentCards.exports.SearingBlow,BARRICADE:permanentCards.exports.Barricade,REGRET:cursePermanentCards.exports.Regret,DEMON_FORM:basicCards.exports.DemonForm,ASCENDERS_BANE:curseBasicCards.exports.AscendersBane,STRIKE_RED:basicCards.exports.StrikeRed,DEFEND_RED:basicCards.exports.DefendRed,BASH:basicCards.exports.Bash,SENTINEL:ironcladPileCards.exports.Sentinel,INFLAME:basicCards.exports.Inflame,BATTLE_TRANCE:basicCards.exports.BattleTrance,POMMEL_STRIKE:basicCards.exports.PommelStrike,SHRUG_IT_OFF:basicCards.exports.ShrugItOff,IRON_WAVE:basicCards.exports.IronWave,FLASH_OF_STEEL:colorlessBasicCards.exports.FlashOfSteel,FINESSE:colorlessBasicCards.exports.Finesse,SEEING_RED:basicCards.exports.SeeingRed,HEADBUTT:selectionCards.exports.Headbutt,WARCRY:selectionCards.exports.Warcry};
 const enemyProbe=defineRules({requires:[enemies,choices],build(){return{exports:{ability:rules.replace(enemies.exports.beforeIntent,{
   condition:defineQuery({input:z.custom<rules.ReplacementContext<EnemyAction>>(),output:z.boolean(),base:(_r,c)=>c.value.actor===c.owner}),
   effect:defineEffect<rules.ReplacementContext<EnemyAction>,rules.ReplacementResult<EnemyAction>>(b=>sequence(
@@ -48,7 +60,7 @@ export type Name=keyof typeof contents;
 const names=Object.keys(contents) as Name[],definitions=names.map(id=>contents[id]);
 const actor=defineEntity(resources.exports.actor,{side:0}),enemy=defineEntity(resources.exports.actor,{side:1}),registryDefinition=defineEntity(powers.exports.registryKind,undefined),stream=defineEntity(random.exports.stream,undefined),battleDefinition=defineEntity(battles.exports.kind,undefined),turnDefinition=defineEntity(turns.exports.kind,undefined),permanentDeckDefinition=defineEntity(permanentDecks.exports.kind,undefined);
 const emptyCard={id:'INVALID',uniqueId:-1,specialData:0,cost:0,costForTurn:0,upgraded:false,freeToPlayOnce:false,retain:false};
-const views=defineRules({requires:[basicCards,pileCards,selectionCards,permanentDecks,permanentCards],build(){return{exports:{view:defineQuery({input:z.number(),output:z.any(),dependencies:[battles.exports.current,cardPiles.exports.current,zones.exports.members,cardInstances.exports.combatView,resources.exports.current,random.exports.current,powers.exports.find,powers.exports.current],base(r,battle){
+const views=defineRules({requires:[basicCards,colorlessBasicCards,curseBasicCards,ironcladPileCards,selectionCards,colorlessSelectionCards,permanentDecks,permanentCards,cursePermanentCards],build(){return{exports:{view:defineQuery({input:z.number(),output:z.any(),dependencies:[battles.exports.current,cardPiles.exports.current,zones.exports.members,cardInstances.exports.combatView,resources.exports.current,random.exports.current,powers.exports.find,powers.exports.current],base(r,battle){
   const board=r.query(battles.exports.current,battle),p=r.query(cardPiles.exports.current,board.piles),player=r.query(resources.exports.current,board.actor),monster=r.query(resources.exports.current,board.enemies[0]!);
   const pile=(zone:number)=>r.query(zones.exports.members,zone).map(card=>r.query(cardInstances.exports.combatView,card));
   const play=(c:CardPlay|null)=>({card:c===null?emptyCard:{...r.query(cardInstances.exports.combatView,c.card),...c.state,id:c.vanished?'INVALID':r.query(cardInstances.exports.combatView,c.card).id,mode:undefined,master:undefined},target:c?.target===null||c===null?0:board.enemies.indexOf(c.target),isEndTurn:board.currentIsEndTurn,triggerOnUse:c?.triggerOnUse??true,ignoreEnergyTotal:c?.ignoreEnergyTotal??false,energyOnUse:c?.energyOnUse??0,freeToPlay:c?.freeToPlay??false,randomTarget:c?.randomTarget??false,autoplay:c?.autoplay??false,regretCardCount:c?.regretCardCount??0,purgeOnUse:c?.purgeOnUse??false,exhaustOnUse:c?.exhaustOnUse??false});
@@ -63,7 +75,7 @@ const views=defineRules({requires:[basicCards,pileCards,selectionCards,permanent
 const turnViews=defineRules({requires:[views,cultist],build(){return{exports:{view:defineQuery({input:z.number(),output:z.any(),dependencies:[views.exports.view,battles.exports.current,turns.exports.forBattle,turns.exports.current,enemies.exports.forActor,enemies.exports.current,enemies.exports.intent,powers.exports.find,powers.exports.current,random.exports.current,cardPiles.exports.current],base(r,battle){
   const base=r.query(views.exports.view,battle),board=r.query(battles.exports.current,battle),id=r.query(turns.exports.forBattle,battle);if(id===null)throw Error('No turn fixture controller');const controller=r.query(turns.exports.current,id),enemyId=r.query(enemies.exports.forActor,board.enemies[0]!);if(enemyId===null)throw Error('No enemy fixture controller');const e=r.query(enemies.exports.current,enemyId);
   const lookup=(definition:PowerDefinition,actor:number)=>{const id=r.query(powers.exports.find,{registry:board.registry,actor,definition});return id===null?null:r.query(powers.exports.current,id);};
-  const barricade=lookup(permanentCards.exports.BarricadePower,board.actor),demon=lookup(turnPowers.exports.DemonForm,board.actor),ritual=lookup(turnPowers.exports.EnemyRitual,e.actor),strength=lookup(basicPowers.exports.Strength,e.actor),vulnerable=lookup(basicPowers.exports.EnemyVulnerable,e.actor);
+  const barricade=lookup(permanentCards.exports.BarricadePower,board.actor),demon=lookup(turnPowers.exports.DemonForm,board.actor),ritual=lookup(enemyTurnPowers.exports.EnemyRitual,e.actor),strength=lookup(basicPowers.exports.Strength,e.actor),vulnerable=lookup(basicPowers.exports.EnemyVulnerable,e.actor);
   const statuses=[...base.player.statuses,...(demon?[[PS.DEMON_FORM,demon.level]]:[])].sort((a,b)=>a[0]-b[0]);
   return{...base,turn:board.turn,energyWasted:board.energyWasted,endTurnQueued:board.endTurnQueued,discarded:r.query(cardPiles.exports.current,board.piles).discarded,
     player:{...base.player,bits:(BigInt(base.player.bits)|(demon?.active?1n<<BigInt(PS.DEMON_FORM):0n)|(barricade?.active?1n<<BigInt(PS.BARRICADE):0n)).toString(),statuses},

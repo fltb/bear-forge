@@ -175,4 +175,26 @@ npm run benchmark:card -w @bear-forge/doudizhu -- instance-controlled
 
 STS 从正常铁甲 A20 开局，CLI 使用首个合法动作策略。规则按稳定内核、类型化规则模块和组合实体装配；完整碎心动作带与独立 C++ 差分只用于测试，生产入口不读取它们。设计与扩展契约见 [第二层接口](docs/card-core-spec.md#第二层向上公开的完整接口目录2026-10-20设计收敛)，当前验收结果见 plan.md。
 
+STS 的第三层按游戏内容和角色组织，入口如下：
+
+~~~text
+examples/sts/src/
+├── rules/                         # 第二层：公共领域状态、操作与扩展契约
+├── content/                       # 第三层：具体游戏内容
+│   ├── characters/ironclad/        # 铁甲的开局、卡牌、状态和专属遗物
+│   ├── cards/{colorless,curses,statuses,shared}/
+│   ├── powers/                    # 多种内容共用的具体状态与 hooks 工具
+│   ├── relics/                    # 公共遗物、获取与登记
+│   ├── potions/
+│   ├── enemies/{exordium,city,beyond,ending,events,shared}/
+│   ├── events/                    # 冒险事件与 Neow
+│   ├── rooms/
+│   └── rewards/
+├── program/                       # 组装内容并编排冒险、战斗、跨房间流程
+└── adapters/                      # IO、观察、展示和参考编号转换
+~~~
+
+查找一张铁甲牌从 content/characters/ironclad/cards/ 开始，无色牌从 content/cards/colorless/ 开始；卡牌目录只收集定义引用，规则求值仍经第二层。混合文件已拆分，没有旧路径转发入口。
+
+
 完整游戏基准使用 game-native/game-controlled（benchmark:card 默认 game-controlled），两模式都按收到的合法选项选动作并实际接收事件，计时前与独立旧游戏逐项比较完整交互。card-native、card-controlled、card-controlled-recorded、instance-native、instance-controlled、basegame-native、basegame-controlled 保留为局部诊断；裸 Core/Instance 不包含完整交互，不能据此计算合理包装预算或完整原生下界。游戏规则与装载、声明语义、正确性证明及边界见 [专用后端方案](docs/card-core-spec.md)、[证明](docs/card-core-proof.md)。实际进度与尚未完成的验证只见 docs/plan.md。

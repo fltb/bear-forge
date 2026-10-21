@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {CardProgram,CardMachine,plainCardStorage} from '@bear-forge/card-engine';
 import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
 import {adventures} from '../src/rules/adventures.ts';
-import {adventureViews} from '../src/content/adventure-views.ts';
+import {adventureViews} from "../src/adapters/adventure-views.ts";
 import {shopCaseFixture,eventSamplingFixture} from './adventure-case-fixture.ts';
 import {relicId,type RelicId} from '../src/identifiers.ts';
 import {ReferenceClient} from './reference/client.ts';

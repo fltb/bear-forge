@@ -4,9 +4,9 @@ import {cardDefinition} from '../src/card.ts';
 import {adventures} from '../src/rules/adventures.ts';
 import {combatSessions} from '../src/rules/combat-sessions.ts';
 import {actionQueue} from '../src/rules/combat-actions.ts';
-import {adventureViews} from '../src/content/adventure-views.ts';
-import {combatViews} from '../src/content/combat-views.ts';
-import {combatChoices} from '../src/content/sts-ports.ts';
+import {adventureViews} from "../src/adapters/adventure-views.ts";
+import {combatViews} from "../src/adapters/combat-views.ts";
+import {combatChoices} from "../src/adapters/ports.ts";
 import type {Frame} from '../src/game.schemas.ts';
 import type {rules,CardDefinition} from '@bear-forge/card-engine';
 export function ownerQuery<I,O>(state:unknown,query:rules.Query<I,O>,input:I):O{return inspectRuleQuery(cardDefinition,state,query,input);}

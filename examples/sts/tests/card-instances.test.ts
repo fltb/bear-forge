@@ -9,7 +9,7 @@ import type {CardConfig,CardUse,CardSetup} from '../src/rules/card-instances.typ
 import {combatCardSchema,cardEvaluationSchema,cardMutableSchema,cardChangeSchema} from '../src/rules/card-instances.schemas.ts';
 import {cards} from '../src/cards.ts';
 import {cardId} from '../src/identifiers.ts';
-import {standardUpgrade,repeatedUpgrade,upgradeOnce,mutableCard} from '../src/content/card-utils.ts';
+import {standardUpgrade,repeatedUpgrade,upgradeOnce,mutableCard} from "../src/content/cards/shared/lifecycle.ts";
 import {ReferenceClient} from './reference/client.ts';
 import {assertSameState} from './reference/compare.ts';
 const {defineRules,defineEffect,defineQuery,defineEntity,sequence,spawnEntity,call,query}=rules;

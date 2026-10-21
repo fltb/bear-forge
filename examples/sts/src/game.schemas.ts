@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {CombatPrivateSchema} from './content/combat-private.ts';
+import {CombatPrivateSchema} from "./program/combat-state.ts";
 export const SetupSchema=z.strictObject({seed:z.string().regex(/^\d+$/).refine(v=>BigInt(v)<=0xffffffffffffffffn)});
 export const ActionSchema=z.strictObject({bits:z.number().int().min(0).max(0xffffffff)});
 export const EventSchema=z.strictObject({kind:z.enum(['game','battle']),bits:z.number().int().min(0).max(0xffffffff)});

@@ -5,7 +5,7 @@ import {cardInstances,CardMode} from '../src/rules/card-instances.ts';
 import type {CardSetup,CardState,CardUse} from '../src/rules/card-instances.types.ts';
 import {cardStateSchema} from '../src/rules/card-instances.schemas.ts';
 import {cards} from '../src/cards.ts';
-import {standardUpgrade,upgradeOnce} from '../src/content/card-utils.ts';
+import {standardUpgrade,upgradeOnce} from "../src/content/cards/shared/lifecycle.ts";
 const {defineRules,defineComponent,defineQuery,defineEffect,defineEntity,sequence,spawnEntity,despawnEntity,call,query}=rules;
 const choose=portEffect<number,number>('choose');
 export let initializations=0;

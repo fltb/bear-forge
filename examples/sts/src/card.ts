@@ -1,7 +1,7 @@
 import {linkRules} from '@bear-forge/card-engine';
 import type {Setup,Ports,Frame} from './game.schemas.ts';
 import {programSchemas} from './game.schemas.ts';
-import {adventureProgram} from './content/adventure-program.ts';
+import {adventureProgram} from "./program/adventure.ts";
 
 /** Shared Program plus one independent rules Context; native/controlled use this same definition. */
 export const cardDefinition=linkRules<{},Setup,Ports,Frame>({

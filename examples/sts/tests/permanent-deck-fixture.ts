@@ -1,33 +1,37 @@
+import {basicCards} from "../src/content/characters/ironclad/cards/basic.ts";
+
+import {curseBasicCards} from "../src/content/cards/curses/ascenders-bane.ts";
+import {permanentCards} from "../src/content/characters/ironclad/cards/permanent.ts";
+import {cursePermanentCards} from "../src/content/cards/curses/permanent.ts";
 import {z} from 'zod';
 import {rules,ruleModules,linkRules} from '@bear-forge/card-engine';
 import {permanentDecks} from '../src/rules/permanent-decks.ts';
 import {resources} from '../src/rules/resources.ts';
 import {random} from '../src/rules/random.ts';
-import {cardInstances} from '../src/rules/card-instances.ts';
+
 import {relics} from '../src/rules/relics.ts';
-import {basicCards} from '../src/content/basic-cards.ts';
-import {permanentCards} from '../src/content/permanent-cards.ts';
-import {deckRelics} from '../src/content/deck-relics.ts';
-import {resourceRelics} from '../src/content/resource-relics.ts';
+
+import {deckRelics} from "../src/content/relics/common/decks.ts";
+import {resourceRelics} from "../src/content/relics/common/resources.ts";
 import type {CardConfig,CardSetup} from '../src/rules/card-instances.types.ts';
 import type {DeckBatch} from '../src/rules/permanent-decks.types.ts';
 import type {RelicDefinition} from '../src/rules/relics.ts';
 const {defineRules,defineEffect,defineQuery,defineEntity,sequence,call,query,spawnEntity,forEach}=rules;
-const contents={ASCENDERS_BANE:basicCards.exports.AscendersBane,STRIKE_RED:basicCards.exports.StrikeRed,DEFEND_RED:basicCards.exports.DefendRed,BASH:basicCards.exports.Bash,
-  SEARING_BLOW:permanentCards.exports.SearingBlow,PARASITE:permanentCards.exports.Parasite,REGRET:permanentCards.exports.Regret,BARRICADE:permanentCards.exports.Barricade,SHRUG_IT_OFF:basicCards.exports.ShrugItOff,NECRONOMICURSE:permanentCards.exports.Necronomicurse,CURSE_OF_THE_BELL:permanentCards.exports.CurseOfTheBell};
+const contents={ASCENDERS_BANE:curseBasicCards.exports.AscendersBane,STRIKE_RED:basicCards.exports.StrikeRed,DEFEND_RED:basicCards.exports.DefendRed,BASH:basicCards.exports.Bash,
+  SEARING_BLOW:permanentCards.exports.SearingBlow,PARASITE:cursePermanentCards.exports.Parasite,REGRET:cursePermanentCards.exports.Regret,BARRICADE:permanentCards.exports.Barricade,SHRUG_IT_OFF:basicCards.exports.ShrugItOff,NECRONOMICURSE:cursePermanentCards.exports.Necronomicurse,CURSE_OF_THE_BELL:cursePermanentCards.exports.CurseOfTheBell};
 const relicContents={OMAMORI:deckRelics.exports.Omamori,CERAMIC_FISH:deckRelics.exports.CeramicFish,MOLTEN_EGG:deckRelics.exports.MoltenEgg,TOXIC_EGG:deckRelics.exports.ToxicEgg,FROZEN_EGG:deckRelics.exports.FrozenEgg,ECTOPLASM:resourceRelics.exports.Ectoplasm,BLOODY_IDOL:resourceRelics.exports.BloodyIdol};
 export type Name=keyof typeof contents;
 export type RelicName=keyof typeof relicContents;
 export type Step={kind:'obtain';id:Name;count?:number;upgraded?:boolean;misc?:number}|{kind:'remove';index:number}|{kind:'upgrade';index:number}|{kind:'upgrade-random';count:number}|{kind:'bottle';index:number;type:0|1|2};
 const names=Object.keys(contents) as Name[],definitions=names.map(name=>contents[name]),relicNames=Object.keys(relicContents) as RelicName[],relicDefinitions=relicNames.map(name=>relicContents[name]);
 const actorDefinition=defineEntity(resources.exports.actor,{side:0}),deckDefinition=defineEntity(permanentDecks.exports.kind,undefined),streamDefinition=defineEntity(random.exports.stream,undefined);
-const views=defineRules({requires:[basicCards,permanentCards,deckRelics,resourceRelics],build(){return{exports:{view:defineQuery({input:z.object({deck:z.number(),stream:z.number()}),output:z.unknown(),dependencies:[permanentDecks.exports.current,permanentDecks.exports.view,resources.exports.current,random.exports.current,relics.exports.owned,relics.exports.view],base(r,i){const s=r.query(permanentDecks.exports.current,i.deck),actor=r.query(resources.exports.current,s.actor);return{...r.query(permanentDecks.exports.view,i.deck),hp:actor.hp,maxHp:actor.maxHp,gold:actor.gold,relics:r.query(relics.exports.owned,s.actor).map(id=>r.query(relics.exports.view,id)),miscRng:r.query(random.exports.current,i.stream)};}})}};}});
+const views=defineRules({requires:[basicCards,curseBasicCards,permanentCards,cursePermanentCards,deckRelics,resourceRelics],build(){return{exports:{view:defineQuery({input:z.object({deck:z.number(),stream:z.number()}),output:z.unknown(),dependencies:[permanentDecks.exports.current,permanentDecks.exports.view,resources.exports.current,random.exports.current,relics.exports.owned,relics.exports.view],base(r,i){const s=r.query(permanentDecks.exports.current,i.deck),actor=r.query(resources.exports.current,s.actor);return{...r.query(permanentDecks.exports.view,i.deck),hp:actor.hp,maxHp:actor.maxHp,gold:actor.gold,relics:r.query(relics.exports.owned,s.actor).map(id=>r.query(relics.exports.view,id)),miscRng:r.query(random.exports.current,i.stream)};}})}};}});
 const probe=defineRules({requires:[views],build(){
   const publication=defineQuery({input:z.custom<rules.ChoiceRequest<number,number>>(),output:z.unknown(),dependencies:[permanentDecks.exports.current,permanentDecks.exports.view,resources.exports.current],base:(r,i)=>{const s=r.query(permanentDecks.exports.current,i.player);return{...r.query(permanentDecks.exports.view,i.player),pending:s.pending,gold:r.query(resources.exports.current,s.actor).gold};}});
   const adapter=ruleModules.choicePort({port:'probe',request:publication,reply:z.int32().min(0).max(1),decode:(_request,index)=>({kind:'selected',indices:[index]})});
   const pause=rules.on(permanentDecks.exports.obtaining,{condition:defineQuery({input:z.custom<rules.ReactionContext<DeckBatch>>(),output:z.boolean(),base:(_r,c)=>c.event.actor===c.owner&&c.event.count===2}),effect:defineEffect<rules.ReactionContext<DeckBatch>,void>(b=>{const chosen=b.local<rules.ChoiceResult<number>>();return sequence(
     b.assign(chosen,rules.chooseOne({adapter,player:b.read(v=>v.input.event.deck),candidates:[0,1],empty:'error',singleton:'request',allowSkip:false})),
-    rules.when(b.read(v=>{const c=v.get(chosen);return c.kind==='selected'&&c.value===1;}),call(permanentDecks.exports.obtain,{deck:b.read(v=>v.input.event.deck),definition:permanentCards.exports.Regret,count:1,upgraded:false,specialData:0,upgrade:false})),
+    rules.when(b.read(v=>{const c=v.get(chosen);return c.kind==='selected'&&c.value===1;}),call(permanentDecks.exports.obtain,{deck:b.read(v=>v.input.event.deck),definition:cursePermanentCards.exports.Regret,count:1,upgraded:false,specialData:0,upgrade:false})),
   );})});return{exports:{pause}};
 }});
 export let initializations=0;

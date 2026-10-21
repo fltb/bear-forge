@@ -10,7 +10,7 @@ import {actionQueue,combatScope} from '../src/rules/combat-actions.ts';
 import {cards} from '../src/cards.ts';
 import type {CardUse} from '../src/rules/card-instances.types.ts';
 import type {PileCard} from '../src/rules/card-piles.types.ts';
-import {registerCardAbilities,standardUpgrade,upgradeOnce} from '../src/content/card-utils.ts';
+import {registerCardAbilities,standardUpgrade,upgradeOnce} from "../src/content/cards/shared/lifecycle.ts";
 const {defineRules,defineComponent,defineQuery,defineEntity,defineEffect,on,sequence,call,query,spawnEntity,forEach}=rules;
 const choose=portEffect<unknown,number>('choose');
 const logger=defineRules({requires:[],build(m){

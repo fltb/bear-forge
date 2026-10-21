@@ -1,0 +1,22 @@
+import {z} from 'zod';
+import {rules} from '@bear-forge/card-engine';
+import {battles} from "../../../rules/battles.ts";
+import {cardPiles} from "../../../rules/card-piles.ts";
+import {zones} from "../../../rules/zones.ts";
+import {resources} from "../../../rules/resources.ts";
+import {powers} from "../../../rules/powers.ts";
+import {basicPowers} from "../../powers/attributes.ts";
+import {registerCardAbilities} from "../shared/lifecycle.ts";
+import {concreteCard} from "../shared/programs.ts";
+import {actionQueue} from "../../../rules/combat-actions.ts";
+import type {CardUse} from "../../../rules/card-instances.types.ts";
+const {defineRules,defineEffect,defineQuery,sequence,when,call,query,on,modify,enqueue}=rules;
+export const curseCards=defineRules({requires:[battles,basicPowers],build(){
+  const inert=defineEffect<CardUse,void>(b=>b.return(undefined));
+  const located=defineQuery({input:z.custom<rules.ModifierContext<number,boolean>>(),output:z.boolean(),dependencies:[battles.exports.current,cardPiles.exports.current,zones.exports.location],base:(r,c)=>{const board=r.query(battles.exports.current,c.input);return board.actor===c.owner&&r.query(zones.exports.location,c.source)===r.query(cardPiles.exports.current,board.piles).hand;}});
+  const normality=modify(battles.exports.playAllowed,{condition:located,dependencies:[battles.exports.current],transform:(r,c)=>c.value&&r.query(battles.exports.current,c.input).cardsPlayed<3});
+  const pain=on(battles.exports.otherCardPlayed,{condition:defineQuery({input:z.custom<rules.ReactionContext<CardUse>>(),output:z.boolean(),dependencies:[battles.exports.current,cardPiles.exports.current,zones.exports.location],base:(r,c)=>c.event.owner===c.owner&&c.event.card!==c.source&&r.query(zones.exports.location,c.source)===r.query(cardPiles.exports.current,r.query(battles.exports.current,c.event.battle).piles).hand}),effect:defineEffect<rules.ReactionContext<CardUse>,void>(b=>enqueue(defineEffect<{battle:number;actor:number},void>(b=>sequence(call(resources.exports.loseHp,{entity:b.read(v=>v.input.actor),amount:1,selfDamage:false}),call(battles.exports.checkOutcome,b.read(v=>v.input.battle)))),{battle:b.read(v=>v.input.event.battle),actor:b.read(v=>v.input.owner)},{queue:actionQueue,position:'front',source:b.read(v=>v.input.source),lifetime:b.read(v=>v.get(query(battles.exports.current,v.input.event.battle)).scope),eligible:'captured'}))});
+  const decay=defineEffect<CardUse,void>(b=>enqueue(battles.exports.hit,{battle:b.read(v=>v.input.battle),source:null,target:b.read(v=>v.input.owner),amount:2,attack:false,selfDamage:true},{queue:actionQueue,position:'front',source:b.read(v=>v.input.card),lifetime:b.read(v=>v.get(query(battles.exports.current,v.input.battle)).scope),eligible:'captured'}));
+  const endPower=(definition:typeof basicPowers.exports.Frail)=>defineEffect<CardUse,void>(b=>call(powers.exports.apply,{registry:b.read(v=>v.get(query(battles.exports.current,v.input.battle)).registry),actor:b.read(v=>v.input.owner),definition,amount:1,skipFirstDecay:b.read(v=>{const board=v.get(query(battles.exports.current,v.input.battle)),existing=v.get(query(powers.exports.find,{registry:board.registry,actor:v.input.owner,definition}));return existing===null||!v.get(query(powers.exports.enabled,existing));}),source:b.read(v=>v.input.owner),debuff:true,scope:b.read(v=>v.get(query(battles.exports.current,v.input.battle)).scope)}));
+  return{exports:{Clumsy:concreteCard('CLUMSY',inert),Decay:concreteCard('DECAY',inert,{endTurn:decay}),Doubt:concreteCard('DOUBT',inert,{endTurn:endPower(basicPowers.exports.PlayerWeak)}),Shame:concreteCard('SHAME',inert,{endTurn:endPower(basicPowers.exports.Frail)}),Injury:concreteCard('INJURY',inert),Normality:concreteCard('NORMALITY',inert,{created:registerCardAbilities(normality)}),Pain:concreteCard('PAIN',inert,{created:registerCardAbilities(pain)}),Pride:concreteCard('PRIDE',inert),Writhe:concreteCard('WRITHE',inert)}};
+}});

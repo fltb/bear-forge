@@ -7,7 +7,7 @@ import {oracleViewOf} from './state-inspection.ts';
 import {ReferenceClient,type RefAction} from './reference/client.ts';
 import {assertSameState} from './reference/compare.ts';
 import {commonRelicPool,uncommonRelicPool,rareRelicPool,bossRelicPool,shopRelicPool,ironcladPotions} from '../src/pools.ts';
-import {encounterContent} from '../src/content/encounter-content.ts';
+import {encounterContent} from "../src/content/enemies/encounters.ts";
 import {encounterId,potionId,relicId,type RelicId} from '../src/identifiers.ts';
 import type {Frame} from '../src/game.schemas.ts';
 

@@ -1,12 +1,13 @@
-import {rules} from '@bear-forge/card-engine';
+import {EffectKind} from '../../../rules/effect-policy.ts';
+import {rules} from '../../../rules/execution.ts';
 import {battles} from "../../../rules/battles.ts";
 import {cardPiles} from "../../../rules/card-piles.ts";
 import {resources} from "../../../rules/resources.ts";
 import {actionQueue} from "../../../rules/combat-actions.ts";
 import type {PermanentCardDefinition} from "../../../rules/permanent-decks.types.ts";
 import type {EnemyAction} from "../../../rules/enemies.types.ts";
-export function enemyCards(definition:PermanentCardDefinition,count:number,destination:0|1|2|3,shuffle=false,queued=true){
-  const make=rules.defineEffect<EnemyAction,void>(b=>rules.forEach(Array.from({length:count},(_,i)=>i),()=>rules.call(cardPiles.exports.create,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),definition,upgraded:false,specialData:0,destination,shuffle,mutable:null})));
+export function enemyCards(definition:PermanentCardDefinition,count:number|((v:rules.ReadView<EnemyAction>)=>number),destination:0|1|2|3,shuffle=false,queued=true,upgraded:boolean|((v:rules.ReadView<EnemyAction>)=>boolean)=false){
+  const make=rules.defineEffect<EnemyAction,void>({effect:EffectKind.Special},b=>rules.forEach(b.read(v=>Array.from({length:typeof count==='number'?count:count(v)},(_,i)=>i)),()=>rules.call(cardPiles.exports.create,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),definition,upgraded:b.read(v=>typeof upgraded==='boolean'?upgraded:upgraded(v)),specialData:0,destination,shuffle,mutable:null})));
   return rules.defineEffect<EnemyAction,void>(b=>queued?rules.enqueue(make,b.input,{queue:actionQueue,source:b.read(v=>v.input.enemy),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}):rules.call(make,b.input));
 }
 /** Source suicide with relic triggers uses ordinary damage; fading bypasses death reactions. */

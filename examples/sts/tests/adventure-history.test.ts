@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
-import {rules,ruleModules,linkRules} from '@bear-forge/card-engine';
+import {rules} from '../src/rules/execution.ts';
+import {ruleModules,linkRules} from '@bear-forge/card-engine';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {adventureHistory} from '../src/rules/adventure-history.ts';
 import type {Outcome} from '@bear-forge/contracts/instance';

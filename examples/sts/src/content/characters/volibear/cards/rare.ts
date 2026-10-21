@@ -1,4 +1,7 @@
-import {rules} from '@bear-forge/card-engine';
+import {volibearStormSelf} from '../powers/storm-self.ts';
+import {volibearBattleBody} from '../powers/battle-body.ts';
+import {cardEffects} from '../../../../rules/card-effects.ts';
+import {rules} from '../../../../rules/execution.ts';
 import {resources} from '../../../../rules/resources.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {cardPiles} from '../../../../rules/card-piles.ts';
@@ -8,11 +11,17 @@ import {basicPowers} from '../../../powers/attributes.ts';
 import {volibearTraining} from '../mechanics/training.ts';
 import {volibearInscription} from '../powers/inscription.ts';
 import {volibearHunt} from '../powers/hunt.ts';
+import {volibearImmovable} from '../powers/immovable.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
 import {volibearCardDescriptions as cards} from './metadata.ts';
 import {volibearCardPrograms,card,attack,block,thunder,compose,queued,draw} from './programs.ts';
 
-export const volibearRareCards=rules.defineRules({requires:[volibearCardPrograms,volibearTraining,basicPowers,volibearInscription,volibearHunt],build(){
+export const volibearRareCards=rules.defineRules({requires:[volibearStormSelf,volibearBattleBody,volibearCardPrograms,volibearTraining,basicPowers,volibearInscription,volibearHunt,volibearImmovable],build(){
+  const becomeImmovable=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
+    registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
+    scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
+    definition:volibearImmovable.exports.ImmovableBody,actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),debuff:false,amount:1,
+  }));
   const hunt=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
     registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
     scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
@@ -33,10 +42,21 @@ export const volibearRareCards=rules.defineRules({requires:[volibearCardPrograms
     const piles=v.get(rules.query(cardPiles.exports.current,v.get(rules.query(battles.exports.current,v.input.battle)).piles));
     return v.get(rules.query(zones.exports.members,piles.hand)).filter(id=>v.get(rules.query(volibearTraining.exports.eligible,id)));
   }),card=>rules.call(volibearTraining.exports.add,{battle:b.read(v=>v.input.battle),card,amount:b.read(v=>v.input.state.upgraded?4:3)})));
-  const tripleBlock=rules.defineEffect<CardUse,void>(b=>rules.call(resources.exports.gainBlock,{
-    entity:b.read(v=>v.input.owner),amount:b.read(v=>2*v.get(rules.query(resources.exports.current,v.input.owner)).block),
+  const tripleBlock=rules.defineEffect<CardUse,void>(b=>rules.call(cardEffects.exports.gainBlock,{
+    use:b.input,amount:b.read(v=>2*v.get(rules.query(resources.exports.current,v.input.owner)).block),
+  }));
+  const battleBody=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
+    registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope),
+    definition:volibearBattleBody.exports.BattleBody,actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),debuff:false,amount:1,
+  }));
+  const stormSelf=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
+    registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope),
+    definition:volibearStormSelf.exports.StormIsMe,actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),debuff:false,amount:1,
   }));
   return {exports:{
+    StormIsMe:card(cards.R15,queued(stormSelf)),
+    BattleBody:card(cards.R16,queued(battleBody)),
+    ImmovableBody:card(cards.R02,queued(becomeImmovable)),
     ThunderInscription:card(cards.R04,queued(inscribe)),
     EndlessHunt:card(cards.R14,queued(hunt)),
     WholeBodyStrength:card(cards.R05,queued(tripleBlock)),

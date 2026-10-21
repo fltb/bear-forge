@@ -1,7 +1,7 @@
 import { typedValue } from '../../../rules/value.schemas.ts';
 import {monsterId as monsterIds} from "../../../combat-identifiers.ts";
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {enemyHealthSchema,enemyIntentSchema} from "../../../rules/enemies.schemas.ts";
 import {monsterHpRanges} from "../../../monster-data.ts";
 import {enemies} from "../../../rules/enemies.ts";

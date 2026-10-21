@@ -1,7 +1,8 @@
+import {EffectKind} from '../../rules/effect-policy.ts';
 import { typedValue } from '../../rules/value.schemas.ts';
 import {PS,MS} from "../../combat-identifiers.ts";
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 import {powers} from "../../rules/powers.ts";
 import {attributes} from "../../rules/attributes.ts";
 import {resources} from "../../rules/resources.ts";
@@ -9,7 +10,7 @@ import {turns} from "../../rules/turns.ts";
 import {expireCounter} from "./turn-hooks.ts";
 import {attackValueSchema,blockValueSchema} from "../../rules/attributes.schemas.ts";
 import type {PowerApplication} from "../../rules/powers.types.ts";
-import {counterPolicies,attachAbilities,scalarBonus} from "./utils.ts";
+import {counterPolicies,attachAbilities,scalarBonus,effectAbility} from "./utils.ts";
 const {defineRules,defineQuery,defineEffect,defineEntity,modify,replace,sequence,call}=rules;
 type Attack=z.infer<typeof attackValueSchema>;
 type Block=z.infer<typeof blockValueSchema>;
@@ -19,7 +20,7 @@ export const basicPowers=defineRules({requires:[powers,attributes,resources,turn
   const blockOwns=defineQuery({input:typedValue<rules.ModifierContext<Block,number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.actor===c.owner&&r.query(powers.exports.enabled,c.source)});
   const strengthBonus=modify(attributes.exports.playerAttack,{condition:sourceOwns,order:{phase:attributes.exports.stages.addition,priority:100},dependencies:[powers.exports.level],transform:(r,c)=>Math.fround(c.value+Math.fround(r.query(powers.exports.level,c.source)))});
   const dexterityBonus=modify(attributes.exports.block,{condition:blockOwns,order:attributes.exports.stages.addition,dependencies:[powers.exports.level],transform:(r,c)=>{const amount=r.query(powers.exports.level,c.source);return amount===0?c.value:Math.max(0,(c.value+amount)|0);}});
-  const Strength=defineEntity(powers.exports.kind,{...counterPolicies({bits:32,scalar:true,zeroIsNoop:true}),attach:attachAbilities(scalarBonus(attributes.exports.strength),strengthBonus)});
+  const Strength=defineEntity(powers.exports.kind,{...counterPolicies({bits:32,scalar:true,zeroIsNoop:true}),grantEffect:EffectKind.Strength,attach:attachAbilities(effectAbility(scalarBonus(attributes.exports.strength),EffectKind.Strength),effectAbility(strengthBonus,EffectKind.Strength))});
   const Dexterity=defineEntity(powers.exports.kind,{...counterPolicies({bits:32,scalar:true,zeroIsNoop:true}),attach:attachAbilities(scalarBonus(attributes.exports.dexterity),dexterityBonus)});
   const Focus=defineEntity(powers.exports.kind,{...counterPolicies({bits:32,scalar:true,zeroIsNoop:true}),attach:attachAbilities(scalarBonus(attributes.exports.focus))});
   function weak(target:rules.Query<Attack,number>,player:boolean){

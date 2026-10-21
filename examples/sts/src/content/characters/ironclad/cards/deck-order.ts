@@ -1,4 +1,7 @@
-import {rules} from '@bear-forge/card-engine';
+import {targetAttack} from '../../../cards/shared/programs.ts';
+import {cardTargets} from '../../../../rules/card-targets.ts';
+import {cardEffects} from '../../../../rules/card-effects.ts';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from "../../../../rules/battles.ts";
 import {cardPiles} from "../../../../rules/card-piles.ts";
 import {cardInstances} from "../../../../rules/card-instances.ts";
@@ -13,7 +16,7 @@ import type {CardPilesState} from "../../../../rules/card-piles.types.ts";
 import {standardUpgrade,upgradeOnce} from "../../../cards/shared/lifecycle.ts";
 const {defineRules,defineEntity,defineEffect,sequence,enqueue,query,call,when}=rules;
 import {CardScreen as SelectionScreen} from "../../../../adapters/selection-presentations.ts";
-export function createSelectionCards(choices:rules.RuleModule<CardChoiceExports>){return defineRules({requires:[battles,choices],build(){
+export function createSelectionCards(choices:rules.RuleModule<CardChoiceExports>){return defineRules({requires:[cardTargets,cardEffects,battles,choices],build(){
   function putOneOnTop(source:(piles:rules.Borrowed<CardPilesState>)=>number,screen:number,rollSingleton:boolean){return defineEffect<number,void>(b=>{
     const from=b.local<number>(),candidates=b.local<readonly number[]>(),selected=b.local<number|null>(),moved=b.local<boolean>();return sequence(
       b.assign(from,b.read(v=>source(v.query(cardPiles.exports.current,v.query(battles.exports.status,v.input).piles)))),b.assign(candidates,query(zones.exports.members,from)),
@@ -26,8 +29,7 @@ export function createSelectionCards(choices:rules.RuleModule<CardChoiceExports>
   const headbuttChoice=putOneOnTop(p=>p.discard,SelectionScreen.Headbutt,false);
   const warcryChoice=putOneOnTop(p=>p.hand,SelectionScreen.Warcry,true);
   const headbutt=defineEffect<CardUse,void>(b=>sequence(
-    enqueue(battles.exports.hit,b.read(v=>{if(v.input.target===null)throw Error('Headbutt needs a target');return{battle:v.input.battle,source:v.input.owner,target:v.input.target,amount:v.query(attributes.exports.attackAmount,{source:v.input.owner,target:v.input.target,base:v.input.state.upgraded?12:9,card:v.input.card}),attack:true,selfDamage:false};}),
-      {queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}),
+    call(targetAttack([9,12]),b.input),
     enqueue(headbuttChoice,b.read(v=>v.input.battle),{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}),
   ));
   const warcry=defineEffect<CardUse,void>(b=>sequence(

@@ -5,7 +5,9 @@ import { detachRuleValue, ownRuleValue } from './rules-values.ts';
 import {resolveOrder} from './rules-order.ts';
 import { addRegistration, removeRegistration } from './rules-indexes.ts';
 import { appendDeque, removeDeque } from './rules-deque.ts';
-import { evaluateQuery } from './rules-queries.ts';
+import { evaluateQuery,defineQuery } from './rules-queries.ts';
+import {z} from 'zod';
+import type {Query} from './rules-query.types.ts';
 import { handle, definitions, statements } from './rules-internal.ts';
 import { declareStatic, staticDefinitions, stateOf } from './rules-module-internal.ts';
 import type { ComponentOverlay, ModuleBindings } from './rules-module-internal.ts';
@@ -24,6 +26,16 @@ export function on<T,E={}>(event:RuleEvent<T>,spec:ReactionSpec<T,E>):Ability<E>
   declareStatic(ability,{kind:'ability',abilityKind:'event',target:event,effect:spec.effect,
     condition:spec.condition??null,eligible:spec.eligible??'registered',...resolveOrder(eventMetadata.ordering,spec.order)});
   return ability;
+}
+/** Compose a source guard with an ability's own qualification. The original
+ * condition still receives the full event/modifier/replacement context. */
+export function guardAbility<E>(ability:Ability<E>,guard:Query<{source:number;owner:number;environment:E},boolean>):Ability<E>{
+  const metadata=staticDefinitions.get(ability);
+  if(metadata?.kind!=='ability')throw Error('Guard requires a declared ability');
+  const original=metadata.condition;
+  const condition=defineQuery({input:z.custom<{source:number;owner:number;environment:E}>(),output:z.boolean(),
+    dependencies:original?[guard,original]:[guard],base:(r,c)=>r.query<{source:number;owner:number;environment:E},boolean>(guard,c)&&(!original||r.query<any,boolean>(original,c))});
+  const guarded=handle<Ability<E>>();declareStatic(guarded,{...metadata,condition});return guarded;
 }
 function validEntity(state:ReturnType<typeof stateOf>,id:number):boolean{
   return Number.isSafeInteger(id)&&id>=0&&Object.hasOwn(state.entities,id);

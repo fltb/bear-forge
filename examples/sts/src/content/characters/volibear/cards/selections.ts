@@ -1,10 +1,14 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
+import {ruleModules} from '@bear-forge/card-engine';
+import {z} from 'zod';
 import {battles} from '../../../../rules/battles.ts';
 import {cardInstances} from '../../../../rules/card-instances.ts';
 import {cardPiles} from '../../../../rules/card-piles.ts';
 import {zones} from '../../../../rules/zones.ts';
 import type {CardChoiceExports} from '../../../../rules/card-choices.types.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
+import {cardUseSchema} from '../../../../rules/card-instances.schemas.ts';
+import {actionQueue} from '../../../../rules/combat-actions.ts';
 import {volibearCardDescriptions as cards,CardType} from './metadata.ts';
 import {volibearCardPrograms,card,block,draw,compose,queued} from './programs.ts';
 import {volibearRetention} from '../mechanics/retention.ts';
@@ -14,9 +18,26 @@ import {volibearTraining} from '../mechanics/training.ts';
 import {volibearNextAttack} from '../mechanics/next-attack.ts';
 
 /** Presentation is supplied by the normal host adapter, independently of effects. */
-export type VolibearSelectionScreens={discard:number;discardToTop:number;scry:number;retain:number;copy:number;recover:number;train:number};
+export type VolibearSelectionScreens={discard:number;exhaust:number;discardToTop:number;scry:number;retain:number;copy:number;recover:number;train:number};
 export function createVolibearSelectionCards(choices:rules.RuleModule<CardChoiceExports>,screens:VolibearSelectionScreens){
   return rules.defineRules({requires:[volibearCardPrograms,cardInstances,cardPiles,zones,choices,volibearRetention,volibearCopying,volibearNextPlayDiscount,volibearTraining,volibearNextAttack],build(){
+    const hand=rules.defineQuery({input:cardUseSchema,output:z.array(z.number()),dependencies:[battles.exports.status,cardPiles.exports.bindings,zones.exports.members],base:(r,use)=>
+      r.query(zones.exports.members,r.query(cardPiles.exports.bindings,r.query(battles.exports.status,use.battle).piles).hand).filter(id=>id!==use.card)});
+    const canExchange=rules.defineQuery({input:cardUseSchema,output:z.boolean(),dependencies:[hand],base:(r,use)=>r.query(hand,use).length>0});
+    const bad=rules.defineQuery({input:z.number(),output:z.boolean(),dependencies:[cardInstances.exports.metadata],base:(r,id)=>{const type=r.query(cardInstances.exports.metadata,id).type;return type===3||type===4;}});
+    const cleanse=rules.defineEffect<CardUse,void>(b=>{const candidates=b.local<readonly number[]>(),selected=b.local<readonly number[]>();return rules.sequence(
+      b.assign(candidates,b.read(v=>v.query(hand,v.input).filter(id=>v.query(bad,id)))),
+      rules.when(b.read(v=>v.get(candidates).length===0),b.return(undefined)),
+      b.assign(selected,rules.call(choices.exports.many,{battle:b.read(v=>v.input.battle),screen:screens.exhaust,cards:candidates,minimum:0,maximum:b.read(v=>v.input.state.upgraded?v.get(candidates).length:Math.min(2,v.get(candidates).length))})),
+      rules.forEach(selected,card=>rules.when(b.read(v=>v.query(battles.exports.status,v.input.battle).outcome===0),rules.call(cardPiles.exports.exhaustWithoutOwnEffects,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),card}))),
+    );});
+    const exchange=rules.defineEffect<CardUse,void>(b=>{const selected=b.local<number|null>();return rules.sequence(
+      b.assign(selected,rules.call(choices.exports.one,{battle:b.read(v=>v.input.battle),screen:screens.exhaust,cards:rules.query(hand,b.input)})),
+      rules.when(b.read(v=>v.get(selected)===null),b.return(undefined)),
+      rules.when(rules.query(bad,b.read(v=>v.get(selected)!)),
+        rules.call(cardPiles.exports.exhaustWithoutOwnEffects,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),card:b.read(v=>v.get(selected)!)}),
+        ruleModules.runTaskGroup(actionQueue,cardPiles.exports.exhaust,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),card:b.read(v=>v.get(selected)!)})),
+    );});
     const prepareHunt=rules.defineEffect<CardUse,void>(b=>{
       const list=b.local<readonly number[]>(),valid=b.local<number[]>(),selected=b.local<number|null>();
       return rules.sequence(
@@ -174,6 +195,8 @@ export function createVolibearSelectionCards(choices:rules.RuleModule<CardChoice
       );
     });
     return {exports:{
+      TearBonds:card(cards.C16,compose(queued(cleanse),draw(1))),
+      StormBreathing:card(cards.U15,compose(queued(exchange),draw([2,3])),{canUse:canExchange}),
       Breathing:card(cards.C13,compose(draw([3,4]),queued(discardOne))),
       RegroupClaws:card(cards.C15,queued(recover(false))),
       HuntPreparation:card(cards.C19,queued(prepareHunt)),

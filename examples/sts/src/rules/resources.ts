@@ -1,5 +1,6 @@
+import {EffectKind} from './effect-policy.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
 import type {ruleModules} from '@bear-forge/card-engine';
 import {amount,entityId,healthSchema,resourceSetupSchema,resourceAmountSchema,hpLossSchema,resourceChangeSchema,healthChangeSchema,hpLostSchema} from './resources.schemas.ts';
 import type {ResourceSetup,ResourceAmount,HpLoss,HpLossReceipt} from './resources.types.ts';
@@ -19,6 +20,7 @@ export const resources=defineRules({requires:[],build(m){
   const block=m.own(defineComponent({schema:amount,initial:()=>0}));
   const energy=m.own(defineComponent({schema:amount,initial:()=>0}));
   const gold=m.own(defineComponent({schema:z.int32().min(-32768).max(32767),initial:()=>0}));
+  const changed=m.own(defineEvent({payload:z.object({entity:entityId,resource:z.enum(['energy','block','gold','hp','maxHp']),before:z.number(),after:z.number()}),dispatch:'immediate'}));
   const healed=m.own(defineEvent({payload:healthChangeSchema,dispatch:'immediate'}));
   const hpLost=m.own(defineEvent({payload:hpLostSchema,dispatch:'immediate'}));
   const wouldDie=m.own(defineEvent({payload:z.object({entity:entityId}).strict(),dispatch:'immediate'}));
@@ -52,10 +54,11 @@ export const resources=defineRules({requires:[],build(m){
       b.assign(result,call(commit,b.read(v=>{const result=v.get(checked);if(result.kind==='cancel')throw Error('Canceled resource transition');return result.value;}))),b.return(result),
     );});
   }
-  const heal=through(beforeHeal,m.atom({input:resourceAmountSchema,output:amount,reads:[health],writes:[health],emits:[healed],run(r,input){
+  const healBody=through(beforeHeal,m.atom({input:resourceAmountSchema,output:amount,reads:[health],writes:[health],emits:[healed],run(r,input){
     const before=r.component(input.entity,health),after=Math.min(before.maxHp,before.hp+input.amount);
     return{writes:[{entity:input.entity,component:health,value:{...before,hp:after}}],events:[{event:healed,payload:{...input,before:before.hp,after,maxHp:before.maxHp}}],result:after-before.hp};
   }}));
+  const heal=defineEffect<ResourceAmount,number>({effect:EffectKind.Special,suppressed:0},b=>{const result=b.local<number>();return sequence(b.assign(result,call(healBody,b.input)),b.return(result));});
   const commitLoss=m.atom({input:hpLossSchema,output:z.object({entity:entityId,amount,lost:amount}),reads:[health],writes:[health],emits:[hpLost],run(r,input){
     const before=r.component(input.entity,health),after=Math.max(0,before.hp-input.amount);
     return{writes:input.amount>0?[{entity:input.entity,component:health,value:{...before,hp:after}}]:[],events:input.amount>0?[{event:hpLost,payload:{...input,before:before.hp,after,maxHp:before.maxHp}}]:[],result:{entity:input.entity,amount:input.amount,lost:before.hp-after}};
@@ -71,29 +74,29 @@ export const resources=defineRules({requires:[],build(m){
     const before=r.component(input.entity,block),after=before+input.amount;
     return{writes:input.amount>0?[{entity:input.entity,component:block,value:after}]:[],events:input.amount>0?[{event:blockGained,payload:{...input,before,after}}]:[],result:input.amount};
   }}));
-  const consumeBlock=m.atom({input:resourceAmountSchema,output:amount,reads:[block],writes:[block],emits:[],run(r,input){
-    const before=r.component(input.entity,block),taken=Math.min(before,input.amount);return{writes:[{entity:input.entity,component:block,value:before-taken}],events:[],result:taken};
+  const consumeBlock=m.atom({input:resourceAmountSchema,output:amount,reads:[block],writes:[block],emits:[changed],run(r,input){
+    const before=r.component(input.entity,block),taken=Math.min(before,input.amount);return{writes:[{entity:input.entity,component:block,value:before-taken}],events:[{event:changed,payload:{entity:input.entity,resource:'block' as const,before,after:before-taken}}],result:taken};
   }});
   const gainEnergy=m.atom({input:resourceAmountSchema,output:amount,reads:[energy],writes:[energy],emits:[energyGained],run(r,input){
     const before=r.component(input.entity,energy),after=before+input.amount;return{writes:[{entity:input.entity,component:energy,value:after}],events:[{event:energyGained,payload:{...input,before,after}}],result:input.amount};
   }});
-  const useEnergy=m.atom({input:resourceAmountSchema,output:amount,reads:[energy],writes:[energy],emits:[],run(r,input){
-    const before=r.component(input.entity,energy);if(input.amount>before)throw Error('Insufficient energy');return{writes:[{entity:input.entity,component:energy,value:before-input.amount}],events:[],result:input.amount};
+  const useEnergy=m.atom({input:resourceAmountSchema,output:amount,reads:[energy],writes:[energy],emits:[changed],run(r,input){
+    const before=r.component(input.entity,energy);if(input.amount>before)throw Error('Insufficient energy');return{writes:[{entity:input.entity,component:energy,value:before-input.amount}],events:[{event:changed,payload:{entity:input.entity,resource:'energy' as const,before,after:before-input.amount}}],result:input.amount};
   }});
-  const rechargeEnergy=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[],writes:[energy],emits:[],run(_r,input){return{writes:[{entity:input.entity,component:energy,value:input.amount}],events:[],result:undefined};}});
+  const rechargeEnergy=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[energy],writes:[energy],emits:[changed],run(r,input){const before=r.component(input.entity,energy);return{writes:[{entity:input.entity,component:energy,value:input.amount}],events:[{event:changed,payload:{entity:input.entity,resource:'energy' as const,before,after:input.amount}}],result:undefined};}});
   const gainGold=through(beforeGoldGain,m.atom({input:resourceAmountSchema,output:amount,reads:[gold],writes:[gold],emits:[goldGained],run(r,input){
     const before=r.component(input.entity,gold),after=((before+input.amount)<<16)>>16;
     return{writes:[{entity:input.entity,component:gold,value:after}],events:[{event:goldGained,payload:{...input,before,after}}],result:input.amount};
   }}));
-  const increaseMaxHp=m.atom({input:resourceAmountSchema,output:amount,reads:[health],writes:[health],emits:[],run(r,input){
-    const before=r.component(input.entity,health);return{writes:[{entity:input.entity,component:health,value:{...before,maxHp:before.maxHp+input.amount}}],events:[],result:input.amount};
+  const increaseMaxHp=m.atom({input:resourceAmountSchema,output:amount,reads:[health],writes:[health],emits:[changed],run(r,input){
+    const before=r.component(input.entity,health),after=before.maxHp+input.amount;return{writes:[{entity:input.entity,component:health,value:{...before,maxHp:after}}],events:[{event:changed,payload:{entity:input.entity,resource:'maxHp' as const,before:before.maxHp,after}}],result:input.amount};
   }});
   const raiseMaxHp=defineEffect<ResourceAmount,void>(b=>sequence(call(increaseMaxHp,b.input),call(heal,b.input)));
-  const loseMaxHp=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[health],writes:[health],emits:[],run(r,i){const s=r.component(i.entity,health),maxHp=s.maxHp-i.amount;return{writes:[{entity:i.entity,component:health,value:{maxHp,hp:Math.min(s.hp,maxHp)}}],events:[],result:undefined};}});
-  const spendGold=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[gold],writes:[gold],emits:[],run(r,i){return{writes:[{entity:i.entity,component:gold,value:Math.max(0,r.component(i.entity,gold)-i.amount)}],events:[],result:undefined};}});
-  const setHealth=m.atom({input:z.object({entity:entityId,hp:z.int32().nonnegative(),maxHp:z.int32().positive()}),output:z.undefined(),reads:[],writes:[health],emits:[],run(_r,i){if(i.hp>i.maxHp)throw Error('Health exceeds maximum');return{writes:[{entity:i.entity,component:health,value:{hp:i.hp,maxHp:i.maxHp}}],events:[],result:undefined};}});
-  const limitHp=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[health],writes:[health],emits:[],run(r,i){const s=r.component(i.entity,health);return{writes:[{entity:i.entity,component:health,value:{...s,hp:Math.min(s.hp,i.amount)}}],events:[],result:undefined};}});
-  return{exports:{actor,current,vitality,defense,stamina,wealth,side,heal,loseHp,loseHpDetailed,gainBlock,consumeBlock,gainEnergy,useEnergy,rechargeEnergy,gainGold,spendGold,setHealth,limitHp,increaseMaxHp,raiseMaxHp,loseMaxHp,stages,
+  const loseMaxHp=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[health],writes:[health],emits:[changed],run(r,i){const s=r.component(i.entity,health),maxHp=s.maxHp-i.amount,hp=Math.min(s.hp,maxHp);return{writes:[{entity:i.entity,component:health,value:{maxHp,hp}}],events:[{event:changed,payload:{entity:i.entity,resource:'maxHp' as const,before:s.maxHp,after:maxHp}},{event:changed,payload:{entity:i.entity,resource:'hp' as const,before:s.hp,after:hp}}],result:undefined};}});
+  const spendGold=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[gold],writes:[gold],emits:[changed],run(r,i){const before=r.component(i.entity,gold),after=Math.max(0,before-i.amount);return{writes:[{entity:i.entity,component:gold,value:after}],events:[{event:changed,payload:{entity:i.entity,resource:'gold' as const,before,after}}],result:undefined};}});
+  const setHealth=m.atom({input:z.object({entity:entityId,hp:z.int32().nonnegative(),maxHp:z.int32().positive()}),output:z.undefined(),reads:[health],writes:[health],emits:[changed],run(r,i){if(i.hp>i.maxHp)throw Error('Health exceeds maximum');const before=r.component(i.entity,health);return{writes:[{entity:i.entity,component:health,value:{hp:i.hp,maxHp:i.maxHp}}],events:[{event:changed,payload:{entity:i.entity,resource:'hp' as const,before:before.hp,after:i.hp}},{event:changed,payload:{entity:i.entity,resource:'maxHp' as const,before:before.maxHp,after:i.maxHp}}],result:undefined};}});
+  const limitHp=m.atom({input:resourceAmountSchema,output:z.undefined(),reads:[health],writes:[health],emits:[changed],run(r,i){const s=r.component(i.entity,health),hp=Math.min(s.hp,i.amount);return{writes:[{entity:i.entity,component:health,value:{...s,hp}}],events:[{event:changed,payload:{entity:i.entity,resource:'hp' as const,before:s.hp,after:hp}}],result:undefined};}});
+  return{exports:{changed:changed.public,actor,current,vitality,defense,stamina,wealth,side,heal,loseHp,loseHpDetailed,gainBlock,consumeBlock,gainEnergy,useEnergy,rechargeEnergy,gainGold,spendGold,setHealth,limitHp,increaseMaxHp,raiseMaxHp,loseMaxHp,stages,
     beforeHeal:beforeHeal.public,beforeHpLoss:beforeHpLoss.public,beforeBlockGain:beforeBlockGain.public,beforeGoldGain:beforeGoldGain.public,
     healed:healed.public,hpLost:hpLost.public,wouldDie:wouldDie.public,blockGained:blockGained.public,energyGained:energyGained.public,goldGained:goldGained.public}};
 }});

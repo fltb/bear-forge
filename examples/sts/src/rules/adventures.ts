@@ -3,7 +3,7 @@ import {z} from 'zod';
 import * as parts from './adventures.schemas.ts';
 import {componentPart,projectFields} from './component-parts.ts';
 import {adventureHistory} from './adventure-history.ts';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
 import {resources} from './resources.ts';
 import {permanentDecks} from './permanent-decks.ts';
 import {cardInstances} from './card-instances.ts';
@@ -21,6 +21,11 @@ type RelicId=string;
 const {defineRules,defineComponent,defineEvent,defineQuery,defineEffect,defineEntity,sequence,call,query,spawnEntity}=rules;
 export const emptyAdventureRewards=():AdventureRewards=>({gold:[],cards:[],relics:[],potions:[],emeraldKey:false,sapphireKey:false});
 export const adventures=defineRules({requires:[resources,permanentDecks,potions,random,relics],build(m){
+  const menu=m.own(defineComponent({schema:z.object({enabled:z.boolean(),options:z.record(z.string(),z.string())}),initial:()=>({enabled:false,options:{}})}));
+  const detailsEnabled=defineQuery({input:entityId,output:z.boolean(),reads:[menu],base:(r,id)=>r.component(id,menu).enabled});
+  const optionDetails=defineQuery({input:entityId,output:z.record(z.string(),z.string()).nullable(),reads:[menu],base:(r,id)=>{const value=r.component(id,menu);return value.enabled&&Object.keys(value.options).length?value.options:null;}});
+  const enableDetails=m.atom({input:entityId,output:z.undefined(),reads:[menu],writes:[menu],emits:[],run(r,entity){return{writes:[{entity,component:menu,value:{...r.component(entity,menu),enabled:true}}],events:[],result:undefined};}});
+  const setOptionDetails=m.atom({input:z.object({run:entityId,options:z.record(z.string(),z.string())}),output:z.undefined(),reads:[menu],writes:[menu],emits:[],run(r,i){return{writes:[{entity:i.run,component:menu,value:{...r.component(i.run,menu),options:i.options}}],events:[],result:undefined};}});
   const settlement={},afterSettlement={},combatStages={settlement,afterSettlement};
   const combatFinished=m.own(defineEvent({payload:z.object({run:entityId,battle:entityId,actor:entityId,outcome:z.union([z.literal(1),z.literal(2)])}),dispatch:'immediate',order:{phases:[{phase:settlement,before:[afterSettlement]},{phase:afterSettlement}],default:settlement}}));
   const notifyCombatFinished=m.atom({input:z.object({run:entityId,battle:entityId,actor:entityId,outcome:z.union([z.literal(1),z.literal(2)])}),output:z.undefined(),reads:[],writes:[],emits:[combatFinished],run(_r,payload){return{writes:[],events:[{event:combatFinished,payload}],result:undefined};}});
@@ -48,6 +53,12 @@ export const adventures=defineRules({requires:[resources,permanentDecks,potions,
     if(new Set(value.cards.map(c=>c.id)).size!==value.cards.length||new Set(value.relics.map(c=>c.id)).size!==value.relics.length)throw Error('Duplicate catalog identity');
     for(const c of value.cards)if(rules.entityConfiguration(cardInstances.exports.kind,c.definition).id!==c.id)throw Error('Card catalog identity mismatch');
     for(const c of value.relics)if(rules.entityConfiguration(relics.exports.kind,c.definition).id!==c.id)throw Error('Relic catalog identity mismatch');
+    const pools=value.cardPools;
+    if(pools.rarity.length!==3||pools.typeRarity.length!==3||pools.typeRarity.some(row=>row.length!==3)||pools.combat.length!==5)throw Error('Invalid character pool dimensions');
+    const ids=new Set(value.cards.map(c=>c.id));
+    for(const pool of [...pools.rarity,...pools.typeRarity.flat(),pools.random,pools.transform,...pools.combat,pools.startingBasics]){
+      if(pool.some(id=>!ids.has(id)))throw Error('Character pool references an unregistered card');
+    }
     return value;
   });
   const validate=defineQuery({input:adventureSetupSchema,output:adventureSetupSchema,dependencies:[forActor,resources.exports.current,permanentDecks.exports.current,random.exports.current,cardInstances.exports.definitionMetadata],kinds:[cardInstances.exports.kind,relics.exports.kind],base:(r,i)=>{
@@ -65,7 +76,7 @@ export const adventures=defineRules({requires:[resources,permanentDecks,potions,
     const {start,initial}=v.get(input),{catalog}=v.get(catalogValue),lookupCard=(id:CardId)=>{const found=catalog.cards.find(c=>c.id===id);if(!found)throw Error('Missing initial card definition: '+id);return found.definition;},lookupRelic=(id:RelicId)=>{const found=catalog.relics.find(c=>c.id===id);if(!found)throw Error('Missing initial relic definition: '+id);return found.definition;};
     return{...start,catalog,scope:v.input.scope,potions:v.get(belt),ascension:20,act:1,floor:0,x:-1,y:-1,screen:'EVENT_SCREEN',outcome:1 as const,room:'INVALID' as const,lastRoom:'INVALID' as const,event:initial.event,eventData:0,hasContinuation:false,keys:{red:false,green:false,blue:false},relicPools:Object.fromEntries(relicTiers.map(key=>[key,start.relicPools[key].map(lookupRelic)])) as AdventureState['relicPools'],colorlessPool:initial.colorlessPool.map(lookupCard),eventList:[...initial.eventList],shrineList:[...initial.shrineList],oneTimeEvents:[...initial.oneTimeEvents],monsterOffset:0,eliteOffset:0,cardRarityFactor:5,potionChance:0,monsterChance:Math.fround(.1),shopChance:Math.fround(.03),treasureChance:Math.fround(.02),shopRemoveCount:0,selection:{type:0,count:0,cards:[],selected:[],transformStream:start.streams.card},rewards:emptyAdventureRewards(),history:[],published:0,stolenGold:0,speedrunPace:false,skipBattles:false,noteForYourself:{definition:lookupCard(initial.note),upgraded:false,misc:0},bossRelics:[],chest:null};
   })}));});
-  const kind:rules.EntityKind<AdventureCatalog,AdventureSetup>=m.kind({config:configurationSchema,setup:adventureSetupSchema,components:[bindings.component,position.component,plan.component,economy.component,pools.component,selection.component,rewards.component,history.component],initialize});
+  const kind:rules.EntityKind<AdventureCatalog,AdventureSetup>=m.kind({config:configurationSchema,setup:adventureSetupSchema,components:[menu,bindings.component,position.component,plan.component,economy.component,pools.component,selection.component,rewards.component,history.component],initialize});
   const catalog:rules.Query<number,{catalog:AdventureCatalog}>=defineQuery({input:entityId,output:parts.adventureCatalogSchema,kinds:[kind],base:(r,id)=>({catalog:r.configuration(id,kind)})});
   const card=defineQuery({input:z.object({run:entityId,id:typedValue<CardId>()}),output:cardDefinitionSchema,kinds:[kind],base:(r,i)=>{
     const config=r.configuration(i.run,kind);let entries=cardIndex.get(config);if(!entries){entries=new Map(config.cards.map(c=>[c.id,c.definition]));cardIndex.set(config,entries);}
@@ -75,6 +86,7 @@ export const adventures=defineRules({requires:[resources,permanentDecks,potions,
     const config=r.configuration(i.run,kind);let entries=relicIndex.get(config);if(!entries){entries=new Map(config.relics.map(c=>[c.id,c.definition]));relicIndex.set(config,entries);}
     const definition=entries.get(i.id);if(!definition)throw Error('Relic definition is not installed: '+i.id);return definition;
   }});
+  const cardPools=defineQuery({input:entityId,output:parts.characterCardPoolsSchema,kinds:[kind],base:(r,id)=>r.configuration(id,kind).cardPools});
   const current=defineQuery({input:entityId,output:adventureStateSchema,dependencies:[bindings.current,position.current,plan.current,economy.current,pools.current,selection.current,rewards.current,history.current,catalog],base:(r,id)=>({...r.query(bindings.current,id),...r.query(position.current,id),...r.query(plan.current,id),...r.query(economy.current,id),...r.query(pools.current,id),...r.query(selection.current,id),...r.query(rewards.current,id),...r.query(history.current,id),...r.query(catalog,id)})});
   const hasRelic=defineQuery({input:z.object({run:entityId,id:typedValue<RelicId>()}),output:z.boolean(),dependencies:[bindings.current,relic,relics.exports.find],base:(r,i)=>r.query(relics.exports.find,{actor:r.query(bindings.current,i.run).actor,definition:r.query(relic,i)})!==null});
   const setScene=position.change(z.object({run:entityId,screen:z.string(),continuation:z.boolean()}),z.undefined(),(s,i)=>({state:{...s,screen:i.screen,hasContinuation:i.continuation},result:undefined}));
@@ -110,5 +122,5 @@ export const adventures=defineRules({requires:[resources,permanentDecks,potions,
   const setTransformStream=selection.change(z.object({run:entityId,stream:entityId}),z.undefined(),(s,i)=>({state:{...s,selection:{...s.selection,transformStream:i.stream}},result:undefined}));
   const takeRelic=pools.change(z.object({run:entityId,tier:z.enum(relicTiers),front:z.boolean()}),relicDefinitionSchema,(s,i)=>{const pool=s.relicPools[i.tier];if(!pool.length)throw Error('Pinned source relic pool exhausted');const definition=i.front?pool[0]!:pool.at(-1)!;return{state:{...s,relicPools:{...s.relicPools,[i.tier]:i.front?pool.slice(1):pool.slice(0,-1)}},result:definition};});
   const {record,published}=history;
-  return{exports:{bindings:bindings.current,position:position.current,plan:plan.current,economy:economy.current,pools:pools.current,selection:selection.current,rewards:rewards.current,history:history.current,historyCursor:history.cursor,pendingHistory:history.pending,catalog,status,location,market,rewardScene,selectionContext,historyStatus,publication,privateProjection,notifyCombatFinished,combatFinished:combatFinished.public,combatStages,kind,current,instances,prepareRequest,requesting:requesting.public,entered:entered.public,notifyEntered,forActor,card,relic,hasRelic,setScene,setRarity,countShopRemove,setKeys,setOutcome,setStolenGold,setPotionChance,arrive,setRoom,setEventData,setColorlessPool,removeEvent,setRoomChances,setBossRelics,setChest,incrementFloor,beginAct,takeEncounter,setRewards,removeReward,beginSelection,acceptSelection,setTransformStream,takeRelic,record,published}};
+  return{exports:{detailsEnabled,optionDetails,setOptionDetails,enableDetails,cardPools,bindings:bindings.current,position:position.current,plan:plan.current,economy:economy.current,pools:pools.current,selection:selection.current,rewards:rewards.current,history:history.current,historyCursor:history.cursor,pendingHistory:history.pending,catalog,status,location,market,rewardScene,selectionContext,historyStatus,publication,privateProjection,notifyCombatFinished,combatFinished:combatFinished.public,combatStages,kind,current,instances,prepareRequest,requesting:requesting.public,entered:entered.public,notifyEntered,forActor,card,relic,hasRelic,setScene,setRarity,countShopRemove,setKeys,setOutcome,setStolenGold,setPotionChance,arrive,setRoom,setEventData,setColorlessPool,removeEvent,setRoomChances,setBossRelics,setChest,incrementFloor,beginAct,takeEncounter,setRewards,removeReward,beginSelection,acceptSelection,setTransformStream,takeRelic,record,published}};
 }});

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {volibearTraining} from './training.ts';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {cardInstances} from '../../../../rules/card-instances.ts';
 import {cardUseSchema} from '../../../../rules/card-instances.schemas.ts';

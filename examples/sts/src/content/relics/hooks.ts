@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 /** A shared third-layer utility; all registration state is still inside the current Context. */
 export function registerRelicAbilities(...abilities:rules.Ability[]):rules.Effect<rules.EntityLifecycle,void>{
   return rules.defineEffect(b=>rules.sequence(...abilities.map(ability=>rules.install({ability,source:b.read(v=>v.input.entity),owner:b.read(v=>{

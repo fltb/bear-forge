@@ -1,4 +1,4 @@
-import type {rules} from '@bear-forge/card-engine';
+import type {rules} from './execution.ts';
 export type CardVariant={cost:number;damage:number;innate:boolean;ethereal:boolean;exhaust:boolean;retain:boolean;target:boolean};
 export type CardMetadata={name:string;type:number;color:number;rarity:number;strike:boolean;variants:readonly [CardVariant,CardVariant]};
 export type CardMutable={specialData:number;cost:number;costForTurn:number;upgraded:boolean;freeToPlayOnce:boolean;retain:boolean};

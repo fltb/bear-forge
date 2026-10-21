@@ -1,6 +1,6 @@
 import { typedValue } from '../../rules/value.schemas.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 import {adventures} from "../../rules/adventures.ts";
 import {shops} from "../../rules/shops.ts";
 import {random} from "../../rules/random.ts";
@@ -10,7 +10,7 @@ import {permanentDecks} from "../../rules/permanent-decks.ts";
 import {cardInstances} from "../../rules/card-instances.ts";
 import {relics,type RelicDefinition} from "../../rules/relics.ts";
 import {adventureDraws} from "../rewards/draws.ts";
-import {ironcladTypeRarity,relicBasePrices,potionRarities} from "../../pools.ts";
+import {relicBasePrices,potionRarities} from "../../pools.ts";
 import {roundAway} from "../../numbers.ts";
 import type {CardPreview,RelicTier} from "../../rules/adventures.types.ts";
 import type {AdventureChoiceExports} from "../../rules/adventure-choices.ts";
@@ -25,7 +25,7 @@ export function createMerchant(ui:rules.RuleModule<AdventureChoiceExports>,acqui
   const definition=defineEntity(shops.exports.kind,undefined);
   const rarity=defineEffect<number,number>(b=>{const roll=b.local<number>();return sequence(b.assign(roll,call(random.exports.int,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input).streams.card),start:0,end:99})),b.return(b.read(v=>{const n=v.get(roll)+v.query(adventures.exports.economy,v.input).cardRarityFactor;return n<9?2:n<46?1:0;})));});
   const tier=defineEffect<number,RelicTier>(b=>{const roll=b.local<number>();return sequence(b.assign(roll,call(random.exports.int,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input).streams.merchant),start:0,end:99})),b.return(b.read(v=>v.get(roll)<48?'common':v.get(roll)<82?'uncommon':'rare')));});
-  const typedCard=defineEffect<{run:number;type:number;rarity:number},CardPreview>(b=>{const index=b.local<number>();return sequence(b.assign(index,call(random.exports.int,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input.run).streams.card),start:0,end:b.read(v=>ironcladTypeRarity[v.input.type as 0|1|2]![v.input.rarity as 0|1|2]!.length-1)})),b.return({definition:query(adventures.exports.card,b.read(v=>({run:v.input.run,id:ironcladTypeRarity[v.input.type as 0|1|2]![v.input.rarity as 0|1|2]![v.get(index)]!}))),upgraded:false,misc:0}));});
+  const typedCard=defineEffect<{run:number;type:number;rarity:number},CardPreview>(b=>{const index=b.local<number>();return sequence(b.assign(index,call(random.exports.int,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input.run).streams.card),start:0,end:b.read(v=>v.query(adventures.exports.cardPools,v.input.run).typeRarity[v.input.type]![v.input.rarity as 0|1|2]!.length-1)})),b.return({definition:query(adventures.exports.card,b.read(v=>({run:v.input.run,id:v.query(adventures.exports.cardPools,v.input.run).typeRarity[v.input.type]![v.input.rarity as 0|1|2]![v.get(index)]!}))),upgraded:false,misc:0}));});
   const factor=defineQuery({input:z.number(),output:z.number(),dependencies:[adventures.exports.hasRelic],base:(r,run)=>f((r.query(adventures.exports.hasRelic,{run,id:'THE_COURIER'})?.8:1)*(r.query(adventures.exports.hasRelic,{run,id:'MEMBERSHIP_CARD'})?.5:1))});
   const newPrice=defineEffect<number,number>(b=>{const roll=b.local<number>();return sequence(b.assign(roll,call(random.exports.floatRange,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input).streams.merchant),start:.95,end:1.05})),b.return(b.read(v=>roundAway(v.get(roll)))));});
   const newCardPrice=defineEffect<{run:number;rarity:number;colorless:boolean},number>(b=>{const roll=b.local<number>();return sequence(b.assign(roll,call(random.exports.floatRange,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input.run).streams.merchant),start:.9,end:1.1})),b.return(b.read(v=>{let price=f([50,75,150][v.input.rarity]!*v.get(roll));if(v.input.colorless)price=f(price*f(1.2));if(v.query(adventures.exports.hasRelic,{run:v.input.run,id:'THE_COURIER'})){price=f(price*f(.8));price=f(price*f(.5));}return Math.trunc(price);})));});

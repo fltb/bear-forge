@@ -1,7 +1,9 @@
+import {cardTargets} from '../../../../rules/card-targets.ts';
+import {cardEffects} from '../../../../rules/card-effects.ts';
 import { typedValue } from '../../../../rules/value.schemas.ts';
 import {pileCards} from "../../../cards/statuses/definitions.ts";
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from "../../../../rules/battles.ts";
 import {cardInstances} from "../../../../rules/card-instances.ts";
 import {cardPiles} from "../../../../rules/card-piles.ts";
@@ -18,7 +20,7 @@ import type {CardUse} from "../../../../rules/card-instances.types.ts";
 import type {HitRequest} from "../../../../rules/damage.types.ts";
 import type {HpLost} from "../../../../rules/resources.types.ts";
 const {defineRules,defineEffect,defineQuery,sequence,forEach,when,call,query,enqueue,on,definitionOf}=rules;
-export const attackCards=defineRules({requires:[battles,pileCards,basicPowers],build(){
+export const attackCards=defineRules({requires:[cardTargets,cardEffects,battles,pileCards,basicPowers],build(){
   function hpLoss(amount:number){return defineEffect<CardUse,void>(b=>enqueue(defineEffect<CardUse,void>(b=>sequence(call(resources.exports.loseHp,{entity:b.read(v=>v.input.owner),amount,selfDamage:true}),call(battles.exports.checkOutcome,b.read(v=>v.input.battle)))),b.input,{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).scope),eligible:'captured'}));}
   function temporary(definition:typeof pileCards.exports.Wound,destination:0|1|2|3){return defineEffect<CardUse,void>(b=>enqueue(cardPiles.exports.create,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),definition,upgraded:false,specialData:0,destination,shuffle:destination===0,mutable:null},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
   const addAnger=defineEffect<CardUse,void>(b=>enqueue(cardPiles.exports.create,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),definition:definitionOf(cardInstances.exports.kind,b.read(v=>v.input.card)),upgraded:b.read(v=>v.input.state.upgraded),specialData:0,destination:2,shuffle:false,mutable:null},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));

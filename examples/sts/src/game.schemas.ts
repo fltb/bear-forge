@@ -1,9 +1,10 @@
 import {isolatedDataSchema} from '../../../packages/boundary/src/compiled-schema.ts';
 import {z} from 'zod';
 import {CombatPrivateSchema} from "./program/combat-state.ts";
-export const SetupSchema=z.strictObject({seed:z.string().regex(/^\d+$/).refine(v=>BigInt(v)<=0xffffffffffffffffn)});
+export const SetupSchema=z.strictObject({character:z.enum(['ironclad','volibear']).optional(),detailedEvents:z.boolean().optional(),seed:z.string().regex(/^\d+$/).refine(v=>BigInt(v)<=0xffffffffffffffffn)});
 export const ActionSchema=isolatedDataSchema(z.strictObject({bits:z.number().int().min(0).max(0xffffffff)}));
-export const EventSchema=isolatedDataSchema(z.strictObject({kind:z.enum(['game','battle']),bits:z.number().int().min(0).max(0xffffffff)}));
+export const ActionEventSchema=isolatedDataSchema(z.strictObject({kind:z.enum(['game','battle']),bits:z.number().int().min(0).max(0xffffffff)}));
+export const EventSchema=z.union([ActionEventSchema,isolatedDataSchema(z.strictObject({kind:z.literal('detail'),type:z.string(),data:z.record(z.string(),z.union([z.string(),z.number(),z.boolean(),z.null()]))}))]);
 const object=z.record(z.string(),z.json());
 const n=z.number(),i=z.number().int(),flag=z.boolean(),s=z.string();
 const CardSchema=z.strictObject({id:s,misc:i,upgraded:flag});
@@ -45,20 +46,22 @@ export const PublicGameSchema=GameViewSchema.pick({ascension:true,act:true,floor
   keys:true,relics:true,potions:true,deck:true,bottles:true,neow:true,rewards:true,bossRelics:true,chestSize:true}).extend({
   map:MapSchema.omit({burningEliteBuff:true}),select:GameViewSchema.shape.select.unwrap().omit({transformRng:true}).optional(),
   shop:z.strictObject({prices:z.array(i),removeCost:i,cards:z.array(CardSchema),potions:z.array(i),relics:z.array(i)}).optional(),
+  optionDetails:z.record(z.string(),z.string()).optional(),
 });
-const PublicBattleSchema=z.strictObject({turn:i,player:PlayerSchema,monsters:z.array(MonsterSchema.omit({id:true,miscInfo:true,halfDead:true,escaping:true,escapeNext:true})),
-  hand:z.array(CombatCardSchema),drawCount:i,discard:z.array(CombatCardSchema),exhaust:z.array(CombatCardSchema),draw:z.array(CombatCardSchema).optional(),select:BattleViewSchema.shape.select,
+const PublicBattleSchema=z.strictObject({intents:z.array(z.strictObject({index:i,name:s,attack:flag,baseDamage:i,attackDamage:i,hits:i})).optional(),pendingRepeats:i.optional(),pendingEngageDiscounts:i.optional(),costs:z.record(z.string(),i).optional(),effects:z.array(z.strictObject({actor:i,target:s,name:s,text:s,level:i,active:flag})).optional(),domain:z.strictObject({active:flag,untilTurn:i.nullable()}).optional(),cardGrowth:z.array(z.strictObject({uniqueId:i,permanentAttackBonus:i,nextAttackBonus:i,nextPlayDiscount:flag})).optional(),intentHidden:z.boolean().optional(),turn:i,player:PlayerSchema,monsters:z.array(MonsterSchema.omit({id:true,miscInfo:true,halfDead:true,escaping:true,escapeNext:true})),
+  hand:z.array(CombatCardSchema),drawCount:i,discard:z.array(CombatCardSchema),exhaust:z.array(CombatCardSchema),draw:z.array(CombatCardSchema).optional(),select:BattleViewSchema.shape.select.unwrap().extend({candidates:z.array(z.strictObject({index:i,card:CombatCardSchema})).optional(),skipIndex:i.optional()}).optional(),
 });
-export const FrameSchema=isolatedDataSchema(z.strictObject({game:PublicGameSchema,battle:PublicBattleSchema.nullable(),actions:z.array(ActionSchema),decisions:i.nonnegative(),heartDefeated:flag,history:z.array(EventSchema)}));
+export const FrameSchema=isolatedDataSchema(z.strictObject({game:PublicGameSchema,battle:PublicBattleSchema.nullable(),actions:z.array(ActionSchema),decisions:i.nonnegative(),heartDefeated:flag,history:z.array(ActionEventSchema)}));
 export const ObservationSchema=isolatedDataSchema(FrameSchema.pick({game:true,battle:true,history:true,heartDefeated:true}));
 export const ResultSchema=isolatedDataSchema(z.strictObject({outcome:z.enum(['death','victory']),heartDefeated:z.boolean(),act:z.number(),floor:z.number(),hp:z.number()}));
 export type Setup=z.infer<typeof SetupSchema>;
 export type Action=z.infer<typeof ActionSchema>;
 export type Frame=z.infer<typeof FrameSchema>;
-export type GameEvent=z.infer<typeof EventSchema>;
+export type GameEvent=z.infer<typeof ActionEventSchema>;
+export type StsEvent=z.infer<typeof EventSchema>;
 export type Observation=z.infer<typeof ObservationSchema>;
 export type Result=z.infer<typeof ResultSchema>;
-export type Ports={decision:{kind:'request';input:Frame;output:Action};event:{kind:'event';input:GameEvent[];output:null}};
+export type Ports={decision:{kind:'request';input:Frame;output:Action};event:{kind:'event';input:StsEvent[];output:null}};
 export const programSchemas={setup:SetupSchema,result:FrameSchema,ports:{
   decision:{kind:'request' as const,input:FrameSchema,output:ActionSchema},event:{kind:'event' as const,input:z.array(EventSchema),output:z.null()},
 }};

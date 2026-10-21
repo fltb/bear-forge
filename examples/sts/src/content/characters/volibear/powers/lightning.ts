@@ -1,5 +1,6 @@
+import {volibearCardDescriptions as descriptions} from '../cards/metadata.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {powers} from '../../../../rules/powers.ts';
 import {resources} from '../../../../rules/resources.ts';
 import {attributes} from '../../../../rules/attributes.ts';
@@ -22,7 +23,7 @@ export const volibearLightningPowers=rules.defineRules({requires:[lightning,powe
     })),
   });
   return {exports:{
-    GatheringThunder:rules.defineEntity(powers.exports.kind,{...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(surge)}),
-    ThunderAftershock:rules.defineEntity(powers.exports.kind,{...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(aftershock)}),
+    GatheringThunder:rules.defineEntity(powers.exports.kind,{display:{name:descriptions.U29.metadata.name,text:descriptions.U29.text},...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(surge)}),
+    ThunderAftershock:rules.defineEntity(powers.exports.kind,{display:{name:descriptions.U21.metadata.name,text:descriptions.U21.text},...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(aftershock)}),
   }};
 }});

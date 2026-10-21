@@ -1,6 +1,6 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {mkdir, readdir, rename, rm, stat} from 'node:fs/promises';
+import {mkdir, readdir, readFile, writeFile, rename, rm, stat} from 'node:fs/promises';
 import {dirname, resolve, relative} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -32,6 +32,34 @@ async function build(raw=false): Promise<string> {
   const compiler=process.env.CXX ?? 'clang++';
   const flags=['-std=c++17','-O2','-ffp-contract=off','-Wno-header-guard','-Wno-shift-count-overflow',
     '-Wno-switch','-I'+resolve(source,'include'),'-I'+resolve(source,'json/include')];
+  // The pinned upstream has Curiosity commented out. Compile an explicit
+  // corrected copy; keep the upstream checkout clean and all boundary assertions.
+  const battleSource=resolve(source,'src/combat/BattleContext.cpp');
+  const original=await readFile(battleSource,'utf8');
+  const missing=`//    auto &m = monsters.optionMap[2];
+//    if (m.hasStatusInternal<MS::CURIOSITY>()) {
+//        m.buff<MS::STRENGTH>(m.getStatus<MS::CURIOSITY>());
+//    }`;
+  if(original.split(missing).length!==2)throw Error('Pinned Curiosity correction no longer matches');
+  const corrected=original.replace(missing,`    if (item.triggerOnUse && !item.purgeOnUse) {
+        for (int i = 0; i < monsters.monsterCount; ++i) {
+            auto &m = monsters.arr[i];
+            if (m.isAlive() && m.hasStatus<MS::CURIOSITY>()) {
+                m.buff<MS::STRENGTH>(m.getStatus<MS::CURIOSITY>());
+            }
+        }
+    }`);
+  const correctedPath=resolve(directory,'BattleContext.cpp');
+  if(await readFile(correctedPath,'utf8').catch(()=>null)!==corrected)await writeFile(correctedPath,corrected);
+  // Upstream reward enumeration omits the gold index and duplicates reward 0.
+  // Correct the producer explicitly; do not weaken ordered legal-action assertions.
+  const actionSource=resolve(source,'src/sim/search/GameAction.cpp');
+  const originalActions=await readFile(actionSource,'utf8');
+  const missingIndex='actions.emplace_back(search::GameAction::RewardsActionType::GOLD);';
+  if(originalActions.split(missingIndex).length!==2)throw Error('Pinned reward index correction no longer matches');
+  const correctedActions=originalActions.replace(missingIndex,'actions.emplace_back(search::GameAction::RewardsActionType::GOLD, i);');
+  const correctedActionPath=resolve(directory,'GameAction.cpp');
+  if(await readFile(correctedActionPath,'utf8').catch(()=>null)!==correctedActions)await writeFile(correctedActionPath,correctedActions);
   const input=[...sources,adapter];
   const objects=input.map(p=>resolve(directory,'objects',p===adapter?(raw?'raw-benchmark.o':'reference.o'):relative(source,p).replaceAll('/','_')+'.o'));
   let position=0;
@@ -42,7 +70,7 @@ async function build(raw=false): Promise<string> {
       if(await modified(obj)>=Math.max(newestHeader,await modified(src),await modified(fileURLToPath(import.meta.url))))continue;
       const temporary=`${obj}.${process.pid}.tmp`;
       try {
-        await exec(compiler,[...flags,'-c',src,'-o',temporary],{maxBuffer:4*1024*1024});
+        await exec(compiler,[...flags,'-c',src===battleSource?correctedPath:src===actionSource?correctedActionPath:src,'-o',temporary],{maxBuffer:4*1024*1024});
         await rename(temporary,obj);
       }
       catch(e) { throw Error(`STS reference compile failed for ${src}\n${String((e as {stderr?:string}).stderr ?? e)}`); }

@@ -1,4 +1,7 @@
-import {rules} from '@bear-forge/card-engine';
+import {xCost} from '../../../../rules/x-cost.ts';
+import {cardTargets} from '../../../../rules/card-targets.ts';
+import {cardEffects} from '../../../../rules/card-effects.ts';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from "../../../../rules/battles.ts";
 import {cardInstances} from "../../../../rules/card-instances.ts";
 import {cardPiles} from "../../../../rules/card-piles.ts";
@@ -8,14 +11,13 @@ import {attributes} from "../../../../rules/attributes.ts";
 import {damage} from "../../../../rules/damage.ts";
 import {powers} from "../../../../rules/powers.ts";
 import {random} from "../../../../rules/random.ts";
-import {adventures} from "../../../../rules/adventures.ts";
 import {basicPowers} from "../../../powers/attributes.ts";
 import {actionQueue} from "../../../../rules/combat-actions.ts";
 import {concreteCard,composePrograms,targetAttack,cardAmount,type CardAmount} from "../../../cards/shared/programs.ts";
 import type {CardUse,CardState} from "../../../../rules/card-instances.types.ts";
 import type {HitRequest} from "../../../../rules/damage.types.ts";
 const {defineRules,defineEffect,sequence,when,forEach,call,query,enqueue}=rules;
-export const advancedAttacks=defineRules({requires:[battles,basicPowers,adventures],build(){
+export const advancedAttacks=defineRules({requires:[xCost,cardTargets,cardEffects,battles,basicPowers],build(){
   const queue=(effect:rules.Effect<CardUse,void>)=>defineEffect<CardUse,void>(b=>enqueue(effect,b.input,{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));
   const hand=(v:rules.ReadView<CardUse>)=>v.query(zones.exports.members,v.query(cardPiles.exports.current,v.query(battles.exports.current,v.input.battle).piles).hand);
   const addSpecial=defineEffect<{use:CardUse;amount:number;permanent:boolean},void>(b=>{const next=b.local<CardState>();return sequence(
@@ -43,7 +45,7 @@ export const advancedAttacks=defineRules({requires:[battles,basicPowers,adventur
   const whirlwind=defineEffect<CardUse,void>(b=>{const energy=b.local<number>();return sequence(b.assign(energy,b.read(v=>v.input.ignoreEnergyTotal?v.input.energyOnUse:Math.min(v.input.energyOnUse,v.query(resources.exports.stamina,v.input.owner).energy))),call(battles.exports.setEnergyOnUse,{battle:b.read(v=>v.input.battle),play:b.read(v=>v.input.play),value:energy}),enqueue(defineEffect<{use:CardUse;energy:number},void>(b=>{const matrix=b.local<HitRequest[]>(),count=b.local<number>();return sequence(
     when(b.read(v=>!(v.input.use.freeToPlay||v.input.use.state.freeToPlayOnce)),call(resources.exports.useEnergy,{entity:b.read(v=>v.input.use.owner),amount:b.read(v=>v.query(resources.exports.stamina,v.input.use.owner).energy)})),
     b.assign(matrix,b.read(v=>v.query(battles.exports.targets,v.input.use.battle).map(target=>({battle:v.input.use.battle,source:v.input.use.owner,target,amount:Math.min(65535,v.query(attributes.exports.attackAmount,{source:v.input.use.owner,target,base:v.input.use.state.upgraded?8:5,card:v.input.use.card})),attack:true,selfDamage:false})))),
-    b.assign(count,b.read(v=>{const run=v.query(adventures.exports.forActor,v.input.use.owner);return v.input.energy+(run!==null&&v.query(adventures.exports.hasRelic,{run,id:'CHEMICAL_X'})?2:0);})),
+    b.assign(count,b.read(v=>v.query(xCost.exports.iterations,{...v.input.use,energyOnUse:v.input.energy}))),
     forEach(b.read(v=>Array.from({length:v.get(count)},(_,index)=>index)),()=>sequence(forEach(matrix,hit=>call(damage.exports.hit,hit)),call(battles.exports.checkOutcome,b.read(v=>v.input.use.battle)),when(b.read(v=>v.query(battles.exports.status,v.input.use.battle).outcome!==0),b.return(undefined)))),
   );}),{use:b.input,energy},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));});
   return{exports:{Dropkick:concreteCard('DROPKICK',dropkick),

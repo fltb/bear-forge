@@ -1,4 +1,6 @@
-import {rules} from '@bear-forge/card-engine';
+import {cardTargets} from '../../../../rules/card-targets.ts';
+import {cardEffects} from '../../../../rules/card-effects.ts';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from "../../../../rules/battles.ts";
 import {cardPiles} from "../../../../rules/card-piles.ts";
 import {damage} from "../../../../rules/damage.ts";
@@ -12,7 +14,7 @@ import type {CardUse} from "../../../../rules/card-instances.types.ts";
 import type {HitResult} from "../../../../rules/damage.types.ts";
 
 const {defineRules,defineEffect,sequence,when,forEach,call,query,enqueue}=rules;
-export const groupCards=defineRules({requires:[battles,random,combatPowers],build(){
+export const groupCards=defineRules({requires:[cardTargets,cardEffects,battles,random,combatPowers],build(){
   const boomerangHit=defineEffect<CardUse,void>(b=>{const targets=b.local<readonly number[]>(),index=b.local<number>();return sequence(
     b.assign(targets,query(battles.exports.targets,b.read(v=>v.input.battle))),when(b.read(v=>v.get(targets).length===0),b.return(undefined)),
     b.assign(index,call(random.exports.int,{stream:b.read(v=>v.query(cardPiles.exports.bindings,v.query(battles.exports.status,v.input.battle).piles).cardRng),start:0,end:b.read(v=>v.get(targets).length-1)})),

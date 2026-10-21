@@ -1,6 +1,7 @@
 import { typedValue } from './value.schemas.ts';
 import {z} from 'zod';
-import {rules,ruleModules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
+import {ruleModules} from '@bear-forge/card-engine';
 import {battles} from './battles.ts';
 import {enemies} from './enemies.ts';
 import {resources} from './resources.ts';
@@ -12,6 +13,7 @@ import {entityId,resourceAmountSchema} from './resources.schemas.ts';
 import {turnSetupSchema,turnStateSchema,turnActorSchema} from './turns.schemas.ts';
 import type {TurnSetup,TurnActor} from './turns.types.ts';
 import type {CardConfig} from './card-instances.types.ts';
+import type {EnemyAction} from './enemies.types.ts';
 const queuedCountForActionQueue=ruleModules.queueSize(actionQueue);
 const {defineRules,defineComponent,defineEvent,defineCheckpoint,defineQuery,defineEffect,defineEntity,sequence,when,whileDo,forEach,call,query,spawnEntity,enqueue,install,on}=rules;
 
@@ -37,6 +39,15 @@ export const turns=defineRules({requires:[enemies],build(m){
   /** Seek within the ordered enemy opportunity slots; omitted slots stay empty. */
   const seekEnemy=m.atom({input:z.object({controller:entityId,cursor:z.int32().nonnegative()}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){const s=r.component(i.controller,state);if(s===null||s.phase!==3||i.cursor<s.cursor)throw Error('Enemy cursor must advance within its phase');return{writes:[{entity:i.controller,component:state,value:{...s,cursor:i.cursor}}],events:[],result:undefined};}});
   const nextEnemy=defineQuery({input:entityId,output:entityId.nullable(),dependencies:[current,enemies.exports.current],base:(r,id)=>{const s=r.query(current,id);return s.enemies.map((enemy,index)=>({enemy,slot:r.query(enemies.exports.current,enemy).slot??index})).filter(e=>e.slot>=s.cursor).sort((a,b)=>a.slot-b.slot)[0]?.enemy??null;}});
+  // Preserve the normal phase's cursor transition after staging, before child
+  // actions run. An early action in the player phase does not advance it.
+  const advanceStaged=on(enemies.exports.staged,{
+    condition:defineQuery({input:typedValue<rules.ReactionContext<EnemyAction>>(),output:z.boolean(),dependencies:[current],base:(r,c)=>{const s=r.query(current,c.source);return s.battle===c.event.battle&&s.phase===3;}}),
+    effect:defineEffect<rules.ReactionContext<EnemyAction>,void>(b=>call(seekEnemy,{controller:b.read(v=>v.input.source),cursor:b.read(v=>{
+      const s=v.query(current,v.input.source),enemy=v.query(enemies.exports.current,v.input.event.enemy);
+      return Math.max(s.cursor,(enemy.slot??s.enemies.indexOf(v.input.event.enemy))+1);
+    })})),
+  });
   function announce(e:typeof playerEndRelics){return m.atom({input:turnActorSchema,output:z.undefined(),reads:[],writes:[],emits:[e],run(_r,payload){return{writes:[],events:[{event:e,payload}],result:undefined};}});}
   const endRelics=announce(playerEndRelics),endPreCards=announce(playerEndPreCards),endPowers=announce(playerEndPowers),startEnemy=announce(enemyStart),endEnemy=announce(enemyEnd),endPlayerRound=announce(playerRoundEnd),endEnemyRound=announce(enemyRoundEnd),startRelics=announce(playerStartRelics),startPowers=announce(playerStartPowers),postRelics=announce(playerPostDrawRelics),postPowers=announce(playerPostDrawPowers),recharged=announce(afterRecharge),announceIdle=announce(idle);
   const piles=defineQuery({input:entityId,output:entityId,dependencies:[current,battles.exports.current,battles.exports.status],base:(r,id)=>r.query(battles.exports.status,r.query(current,id).battle).piles});
@@ -51,7 +62,7 @@ export const turns=defineRules({requires:[enemies],build(m){
   const retainedDefinition=defineEntity(zones.exports.kind,{capacity:null});
   const initialize=defineEffect<rules.EntityLifecycle<TurnSetup>,void>(b=>{const s=b.local<TurnSetup>(),retained=b.local<number>();return sequence(
     b.assign(s,query(validate,b.read(v=>v.input.setup))),b.assign(retained,spawnEntity({definition:retainedDefinition,owner:b.read(v=>v.input.entity),scope:b.read(v=>v.input.scope)})),call(begin,b.read(v=>({...v.get(s),entity:v.input.entity,extent:v.get(s).extent??v.get(s).enemies.length,scope:v.input.scope,retained:v.get(retained),phase:0 as const,cursor:0,skipEnemies:false}))),
-    install({ability:endCards,source:b.read(v=>v.input.entity),owner:b.read(v=>v.get(s).battle),environment:{},lifetime:b.read(v=>v.input.scope)}),install({ability:readyPlay,source:b.read(v=>v.input.entity),owner:b.read(v=>v.get(s).battle),environment:{},lifetime:b.read(v=>v.input.scope)}),
+    install({ability:endCards,source:b.read(v=>v.input.entity),owner:b.read(v=>v.get(s).battle),environment:{},lifetime:b.read(v=>v.input.scope)}),install({ability:readyPlay,source:b.read(v=>v.input.entity),owner:b.read(v=>v.get(s).battle),environment:{},lifetime:b.read(v=>v.input.scope)}),install({ability:advanceStaged,source:b.read(v=>v.input.entity),owner:b.read(v=>v.get(s).battle),environment:{},lifetime:b.read(v=>v.input.scope)}),
   );});
   const kind=m.kind({config:z.undefined(),setup:turnSetupSchema,components:[state],initialize});
   const move=defineEffect<{card:number;from:number;to:number},void>(b=>{const moved=b.local<boolean>();return sequence(b.assign(moved,call(zones.exports.move,{entity:b.read(v=>v.input.card),from:b.read(v=>v.input.from),to:b.read(v=>v.input.to),index:b.read(v=>v.query(zones.exports.members,v.input.to).length)})),when(b.read(v=>!v.get(moved)),b.return(b.read(()=>{throw Error('Required turn movement was canceled');}))));});
@@ -93,7 +104,7 @@ export const turns=defineRules({requires:[enemies],build(m){
     when(b.read(v=>v.query(current,v.input).phase===0),sequence(call(announceIdle,query(actor,b.input)),when(b.read(v=>v.get(queuedCountForActionQueue)===0&&v.query(battles.exports.opportunities,v.query(current,v.input).battle).queue.length===0),b.return(undefined)))),
     when(b.read(v=>v.query(current,v.input).phase===1),call(onEnding,b.input),when(b.read(v=>v.query(current,v.input).phase===3),
       when(b.read(v=>!v.query(current,v.input).skipEnemies&&v.query(nextEnemy,v.input)!==null),sequence(
-        b.assign(enemy,b.read(v=>v.query(nextEnemy,v.input)!)),call(seekEnemy,{controller:b.input,cursor:b.read(v=>{const s=v.query(current,v.input);return v.query(enemies.exports.current,v.get(enemy)).slot??s.enemies.indexOf(v.get(enemy));})}),call(enemies.exports.takeTurn,enemy),call(seekEnemy,{controller:b.input,cursor:b.read(v=>v.query(current,v.input).cursor+1)}),
+        b.assign(enemy,b.read(v=>v.query(nextEnemy,v.input)!)),call(seekEnemy,{controller:b.input,cursor:b.read(v=>{const s=v.query(current,v.input);return v.query(enemies.exports.current,v.get(enemy)).slot??s.enemies.indexOf(v.get(enemy));})}),call(enemies.exports.takeTurn,enemy),call(seekEnemy,{controller:b.input,cursor:b.read(v=>{const s=v.query(current,v.input),e=v.query(enemies.exports.current,v.get(enemy));return Math.max(s.cursor,(e.slot??s.enemies.indexOf(v.get(enemy)))+1);})}),
       ),sequence(call(seekEnemy,{controller:b.input,cursor:b.read(v=>{const s=v.query(current,v.input);return Math.max(s.cursor,s.extent);})}),call(afterEnemies,b.input))),when(b.read(v=>v.query(current,v.input).phase!==0),b.return(b.read(()=>{throw Error('Turn actions failed to advance their phase');}))))),
   ));});
   const inScope=defineQuery({input:z.int32().nonnegative(),output:z.array(entityId),reads:[state],base:(r,scope)=>r.entities(state).filter(id=>r.component(id,state)?.scope===scope)});

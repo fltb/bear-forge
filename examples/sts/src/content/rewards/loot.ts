@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 import {adventures,emptyAdventureRewards} from "../../rules/adventures.ts";
 import {random} from "../../rules/random.ts";
 import {relics,type RelicDefinition} from "../../rules/relics.ts";

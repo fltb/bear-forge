@@ -12,7 +12,8 @@ export const cardDefinitionSchema=typedValue<PermanentCardDefinition>(),relicDef
 export const streamNames=['ai','cardRandom','card','event','mathUtil','merchant','misc','monsterHp','monster','neow','potion','relic','shuffle','treasure'] as const;
 export const relicTiers=['common','uncommon','rare','shop','boss'] as const;
 export const streamsSchema=z.object(Object.fromEntries(streamNames.map(key=>[key,entityId])) as Record<typeof streamNames[number],typeof entityId>);
-export const catalogSchema=z.object({cards:z.array(z.object({id:typedValue<CardId>(),definition:cardDefinitionSchema})),relics:z.array(z.object({id:typedValue<RelicId>(),definition:relicDefinitionSchema}))});
+export const characterCardPoolsSchema=z.object({color:z.number(),rarity:z.array(z.array(z.string())),typeRarity:z.array(z.array(z.array(z.string()))),random:z.array(z.string()),transform:z.array(z.string()),combat:z.array(z.array(z.string())),startingBasics:z.array(z.string())});
+export const catalogSchema=z.object({starterRelic:relicDefinitionSchema.nullable(),cardPools:characterCardPoolsSchema,cards:z.array(z.object({id:typedValue<CardId>(),definition:cardDefinitionSchema})),relics:z.array(z.object({id:typedValue<RelicId>(),definition:relicDefinitionSchema}))});
 const roomSchema=z.enum(['SHOP','REST','EVENT','ELITE','MONSTER','TREASURE','BOSS','BOSS_TREASURE','NONE','INVALID']);
 const adventureMapSchema=MapSchema.extend({nodes:z.array(MapSchema.shape.nodes.element.extend({room:roomSchema}))});
 const relicIds=z.array(typedValue<RelicId>());

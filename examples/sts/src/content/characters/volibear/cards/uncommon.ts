@@ -1,4 +1,6 @@
-import {rules} from '@bear-forge/card-engine';
+import {volibearRepeat} from '../mechanics/repeat.ts';
+import {volibearConduction} from '../powers/conduction.ts';
+import {rules} from '../../../../rules/execution.ts';
 import {z} from 'zod';
 import {registerCardAbilities} from '../../../cards/shared/lifecycle.ts';
 import {attributes} from '../../../../rules/attributes.ts';
@@ -8,18 +10,19 @@ import {powers} from '../../../../rules/powers.ts';
 import {basicPowers} from '../../../powers/attributes.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
 import {volibearCardDescriptions as cards} from './metadata.ts';
-import {volibearCardPrograms,card,attack,block,compose,queued} from './programs.ts';
+import {volibearCardPrograms,card,attack,block,compose,queued,draw,thunder} from './programs.ts';
 import {volibearLightningPowers} from '../powers/lightning.ts';
 import {volibearStanding} from '../powers/standing.ts';
 import {volibearStrength} from '../mechanics/strength.ts';
 import {volibearPreparation} from '../mechanics/preparation.ts';
 import {volibearPlayCounts} from '../mechanics/play-counts.ts';
 import {volibearFury} from '../powers/fury.ts';
+import {volibearPrey} from '../powers/prey.ts';
 import {volibearEngagePreparation} from '../mechanics/engage-preparation.ts';
 import {cardAmount,type CardAmount} from '../../../cards/shared/programs.ts';
 import type {PowerDefinition} from '../../../../rules/powers.types.ts';
 
-export const volibearUncommonCards=rules.defineRules({requires:[volibearCardPrograms,basicPowers,volibearLightningPowers,volibearStanding,volibearStrength,volibearPreparation,volibearPlayCounts,volibearFury,volibearEngagePreparation],build(){
+export const volibearUncommonCards=rules.defineRules({requires:[volibearRepeat,volibearConduction,volibearCardPrograms,basicPowers,volibearLightningPowers,volibearStanding,volibearStrength,volibearPreparation,volibearPlayCounts,volibearFury,volibearEngagePreparation,volibearPrey],build(){
   const mountainDiscount=rules.modify(battles.exports.cost,{
     condition:rules.defineQuery({input:z.custom<rules.ModifierContext<CardUse,number>>(),output:z.boolean(),base:(_r,c)=>c.input.card===c.source&&c.value>=0}),
     dependencies:[volibearPlayCounts.exports.beforeTarget],
@@ -53,6 +56,8 @@ export const volibearUncommonCards=rules.defineRules({requires:[volibearCardProg
     );
   });
   return {exports:{
+    StormReturns:card(cards.U11,queued(volibearRepeat.exports.prepare)),
+    StormConduction:card(cards.U02,compose(thunder(6),queued(deploy(volibearConduction.exports.StormConduction,1)))),
     Standing:card(cards.U03,queued(deploy(volibearStanding.exports.Standing,1))),
     MountainLift:card(cards.U05,attack(v=>v.get(rules.query(resources.exports.current,v.input.owner)).block,1,false,false)),
     SavageBite:card(cards.U06,attack([7,9],3)),
@@ -64,6 +69,7 @@ export const volibearUncommonCards=rules.defineRules({requires:[volibearCardProg
     Unstoppable:card(cards.U20,unstoppable),
     ThunderAftershock:card(cards.U21,queued(deploy(volibearLightningPowers.exports.ThunderAftershock))),
     WindRoar:card(cards.U23,compose(queued(weak),block([7,10]))),
+    PreyStillStands:card(cards.U25,compose(queued(deploy(volibearPrey.exports.PreyStillStands,[1,2])),draw(1))),
     GrowingFury:card(cards.U26,compose(queued(deploy(volibearFury.exports.GrowingFury,[1,2])),queued(deploy(basicPowers.exports.Strength,1)))),
     GatheringThunder:card(cards.U29,queued(deploy(volibearLightningPowers.exports.GatheringThunder))),
   }};

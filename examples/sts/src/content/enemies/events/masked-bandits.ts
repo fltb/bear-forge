@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {enemies} from "../../../rules/enemies.ts";
 import {basicPowers} from "../../powers/attributes.ts";
 import {enemyUtilities,enemyDefinition,enemyAttack,enemyBlock,enemyPower,enemyProgram} from "../shared/programs.ts";

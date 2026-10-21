@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {damage} from '../../../../rules/damage.ts';
 import {entityId} from '../../../../rules/resources.schemas.ts';
@@ -19,7 +19,7 @@ export const lightning=rules.defineRules({requires:[battles,damage],build(m){
   const announce=m.atom({input:receipt,output:z.undefined(),reads:[],writes:[],emits:[settled],run(_r,payload){
     return {writes:[],events:[{event:settled,payload}],result:undefined};
   }});
-  const strike=rules.defineEffect<Lightning,void>(b=>{
+  const resolve=rules.defineEffect<Lightning,void>(b=>{
     const targets=b.local<number[]>(),value=b.local<number>();
     return rules.sequence(
       b.assign(targets,b.read(v=>v.get(rules.query(battles.exports.targets,v.input.battle)).filter(id=>id!==v.input.exclude))),
@@ -29,8 +29,10 @@ export const lightning=rules.defineRules({requires:[battles,damage],build(m){
         battle:b.read(v=>v.input.battle),source:b.read(v=>v.input.owner),target,amount:value,attack:false,selfDamage:false,
       })),
       rules.call(announce,b.read(v=>({...v.input,amount:v.get(value),targets:v.get(targets)}))),
-      rules.call(battles.exports.checkOutcome,b.read(v=>v.input.battle)),
     );
   });
-  return {exports:{amount,strike,settled:settled.public}};
+  const strike=rules.defineEffect<Lightning,void>(b=>rules.sequence(
+    rules.call(resolve,b.input),rules.call(battles.exports.checkOutcome,b.read(v=>v.input.battle)),
+  ));
+  return {exports:{amount,resolve,strike,settled:settled.public}};
 }});

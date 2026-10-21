@@ -10,6 +10,7 @@ import type {Command,Effect,Input,Value} from './rules.types.ts';
 import type {QueueOptions,RuleQueue,RuleTask,ScheduleOptions,RuntimeEffectReference} from './rules-tasks.types.ts';
 import type {LoweringContext} from './rules-internal.ts';
 import type {Query} from './rules-query.types.ts';
+import type {RuleDeque} from './rules-deque.ts';
 export type {QueueOptions,RuleQueue,ScheduleOptions,SchedulePoint} from './rules-tasks.types.ts';
 function command<I,O>(effect:Effect<I,O>,input:Input<I>):Command<O>{const node=handle<Command<O>>();statements.set(node,{kind:'call',definition:effect,input});return node;}
 function queueReference(queue:RuleQueue):void{
@@ -92,6 +93,84 @@ export function drainQueue(queue:RuleQueue):Command<void>{
   const one=drainOneEffect(queue),effect=handle<Effect<void,void>>();
   definitions.set(effect,{kind:'compiled',lower(link){return[card.repeat(()=>true,[card.invoke(link.ensure(one),undefined,'more'),card.branch(s=>s.locals.more===false,[card.return()])])];}});
   return command(effect,undefined);
+}
+/** Detached work has an explicit phase so restore can still reject orphaned
+ * pending tasks. Queue order remains in the existing Context continuation. */
+function suspendQueue(state:ReturnType<typeof stateOf>,index:number):RuleDeque{
+  const parent=state.queues[index]??createDeque();
+  for(let id=parent.first;id!==null;id=parent.links[id]!.next){
+    const task=state.tasks[id];if(task)task.state='staged';
+  }
+  state.queues[index]=createDeque();return parent;
+}
+function restoreQueue(state:ReturnType<typeof stateOf>,index:number,parent:RuleDeque):void{
+  state.queues[index]=parent;
+  for(let id=parent.first;id!==null;){
+    const next=parent.links[id]!.next,task=state.tasks[id];
+    if(!task)removeDeque(parent,id);else task.state='pending';
+    id=next;
+  }
+}
+/** A nested causal task group uses the same queue and take/invoke/finish path.
+ * The caller's pending continuation is suspended in its Context frame. Tasks
+ * enqueued by the body and its immediate responses finish before it resumes.
+ * Future scheduled work is not awaited. No host closure holds mutable state.
+ */
+export function runTaskGroup<I,O>(queue:RuleQueue,target:Effect<I,O>,input:Input<I>,continueWhile?:Effect<I,boolean>):Command<O>{
+  queueReference(queue);
+  const one=drainOneEffect(queue),effect=handle<Effect<I,O>>();
+  definitions.set(effect,{kind:'compiled',lower(link){
+    const index=link.register(queue),body=link.ensure(target),guard=continueWhile?link.ensure(continueWhile):null;
+    return[
+      card.operation(s=>{return suspendQueue(stateOf(s.state),index);},'parentQueue'),
+      card.invoke(body,s=>s.input,'result'),
+      card.operation(()=>true,'more'),
+      card.repeat(s=>s.locals.more,[
+        ...(guard?[card.invoke(guard,s=>s.input,'allowed')]:[card.operation(()=>true,'allowed')]),
+        card.branch(s=>s.locals.allowed,[card.invoke(link.ensure(one),undefined,'more')],[card.operation(()=>false,'more')]),
+      ]),
+      card.operation(s=>{
+        const state=stateOf(s.state),pending=state.queues[index]!;
+        // A false domain guard cancels only this group's remaining work.
+        while(pending.first!==null){const id=pending.first;removeDeque(pending,id);removeTask(state,id);}
+        restoreQueue(state,index,s.locals.parentQueue);
+      }),
+      card.return(s=>s.locals.result),
+    ];
+  }});
+  return command(effect,input);
+}
+export type StagedTaskGroup<O>={result:O;tasks:number[]};
+/** Run the immediate body now, retaining its pending tasks by identity. This
+ * preserves staging/payment order while deferring causal completion. */
+export function stageTaskGroup<I,O>(queue:RuleQueue,target:Effect<I,O>,input:Input<I>):Command<StagedTaskGroup<O>>{
+  queueReference(queue);const effect=handle<Effect<I,StagedTaskGroup<O>>>();
+  definitions.set(effect,{kind:'compiled',lower(link){const index=link.register(queue);return[
+    card.operation(s=>{return suspendQueue(stateOf(s.state),index);},'parentQueue'),
+    card.invoke(link.ensure(target),s=>s.input,'result'),
+    card.operation(s=>{
+      const state=stateOf(s.state),pending=state.queues[index]!,tasks:number[]=[];
+      while(pending.first!==null){const id=takeDeque(pending)!,task=state.tasks[id];if(task){task.state='staged';tasks.push(id);}}
+      restoreQueue(state,index,s.locals.parentQueue);
+      return{result:s.locals.result,tasks};
+    },'staged'),card.return(s=>s.locals.staged),
+  ];}});return command(effect,input);
+}
+/** Resume only those pending identities plus their descendants, using the same
+ * drainOne path as all other task groups. Canceled lifetimes stay canceled. */
+export function resumeTaskGroup<I>(queue:RuleQueue,tasks:Input<number[]>,input:Input<I>,continueWhile?:Effect<I,boolean>):Command<void>{
+  queueReference(queue);const activate=handle<Effect<{tasks:number[];input:I},void>>();
+  definitions.set(activate,{kind:'compiled',lower(link){const index=link.register(queue);return[card.operation(s=>{
+    const state=stateOf(s.state),pending=state.queues[index]??=createDeque();
+    for(const id of s.input.tasks){const task=state.tasks[id];if(!task)continue;
+      if(task.queue!==index||task.state!=='staged')throw Error('Invalid staged task group');
+      task.state='pending';appendDeque(pending,id);
+    }
+  }),card.return()];}});
+  let guard:Effect<{tasks:number[];input:I},boolean>|undefined;
+  const guardBody=continueWhile;
+  if(guardBody){const guardEffect=handle<Effect<{tasks:number[];input:I},boolean>>();guard=guardEffect;definitions.set(guardEffect,{kind:'compiled',lower(link){return[card.invoke(link.ensure(guardBody),s=>s.input.input,'allowed'),card.return(s=>s.locals.allowed)];}});}
+  return runTaskGroup(queue,activate,{tasks,input},guard);
 }
 export function captureScheduled(event:number,payload:unknown,world:unknown,bindings:ModuleBindings,overlay?:ComponentOverlay):number[]{
   const state=stateOf(world);return (state.indexes.tasksByEvent[event]??[]).filter(id=>{

@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 import {battles} from '../../rules/battles.ts';
 import {damage} from '../../rules/damage.ts';
 const {defineRules,defineEffect,sequence,forEach,call,query}=rules;

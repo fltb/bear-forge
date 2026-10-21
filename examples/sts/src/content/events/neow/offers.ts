@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {random} from "../../../rules/random.ts";
 import type {NeowOption} from "../../../neow.types.ts";
 const {defineRules,defineEffect,sequence,call}=rules;

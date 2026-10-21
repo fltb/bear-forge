@@ -6,7 +6,7 @@ import {createGameBinder} from '@bear-forge/game-host';
 import type {Outcome} from '@bear-forge/contracts/instance';
 import {cardDefinition} from '../src/card.ts';
 import {contract,observe} from '../src/contract.ts';
-import {type GameEvent} from '../src/game.schemas.ts';
+import {type StsEvent} from '../src/game.schemas.ts';
 import {publishReference} from './reference/publication.ts';
 import {ReferenceClient} from './reference/client.ts';
 import type {Trace} from './reference/play.ts';
@@ -23,7 +23,7 @@ for(const controlled of [false,true])test(`production BaseGame completes normal 
   const run=async()=>{const at=performance.now();try{return unwrap(await game.run());}finally{runMs+=performance.now()-at;}};
   try {
     let reference=await ref.call({op:'start',seed:trace.seed}),next=0;
-    const events:GameEvent[]=[];await run();
+    const events:StsEvent[]=[];await run();
     unwrap(await game.bind({player:'0',onRequest:async()=>({kind:'reply',value:{bits:next}}),onEvent:async e=>{events.push(e.event);return {kind:'reply',value:null};}}));
     for(let i=0;i<=trace.actions.length;i++) {
       const state=unwrap(await game.inspect());if(i===trace.actions.length){assert.equal(state.kind,'ended',JSON.stringify(state));if(state.kind!=='ended')throw Error('A20 Heart run did not end');assert.equal(state.result.outcome,'victory');assert.equal(state.result.heartDefeated,true);assert.equal(state.result.hp,reference.game.hp);assert.deepEqual(events,trace.actions);break;}assert.equal(state.kind,'request');if(state.kind!=='request')throw Error('Expected a request');

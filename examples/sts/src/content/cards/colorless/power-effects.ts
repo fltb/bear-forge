@@ -2,7 +2,7 @@ import { typedValue } from '../../../rules/value.schemas.ts';
 import {areaDamage} from '../../shared/area-damage.ts';
 import {combatPrivate,observeCounter} from "../../../program/combat-state.ts";
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {powers} from "../../../rules/powers.ts";
 import {battles} from "../../../rules/battles.ts";
 import {turns} from "../../../rules/turns.ts";

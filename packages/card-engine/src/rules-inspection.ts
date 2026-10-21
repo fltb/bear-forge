@@ -18,7 +18,12 @@ export function inspectRuleQuery<I,O>(definition:CardDefinition<any,any,any,any>
   const bindings=linkedQueries.get(definition);if(!bindings)throw Error('Definition has no linked rule queries');
   return detachRuleValue<O>(evaluateQuery(query,input,state,bindings));
 }
-export function inspectRuleQueue(definition:object,state:unknown,queue:RuleQueue):number{
+/** Diagnostic task count. Suspended group work is optional; scheduler queueSize
+ * continues to report only immediately drainable entries. Running and future
+ * scheduled tasks are excluded in either view. */
+export function inspectRuleQueue(definition:object,state:unknown,queue:RuleQueue,options:{includeStaged?:boolean}={}):number{
   const bindings=linkedQueries.get(definition),index=bindings?.indices.get(queue);if(index===undefined)throw Error('Queue is not linked');
-  return stateOf(state).queues[index]?.size??0;
+  const current=stateOf(state);
+  if(options.includeStaged)return Object.values(current.tasks).filter(task=>task.queue===index&&(task.state==='pending'||task.state==='staged')).length;
+  return current.queues[index]?.size??0;
 }

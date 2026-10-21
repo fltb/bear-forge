@@ -1,16 +1,15 @@
-import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {resources} from '../../../../rules/resources.ts';
-import {cardUseSchema} from '../../../../rules/card-instances.schemas.ts';
+import {xCost} from '../../../../rules/x-cost.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
 import {volibearCardDescriptions as cards} from './metadata.ts';
 import {volibearCardPrograms,card,attack,thunder,compose} from './programs.ts';
 
-export const volibearXCards=rules.defineRules({requires:[volibearCardPrograms,resources,battles],build(){
+export const volibearXCards=rules.defineRules({requires:[xCost,volibearCardPrograms,resources,battles],build(){
   // Relic/content modifiers target this typed query. Payment stays the captured
   // X value; bonus iterations do not spend extra energy.
-  const iterations=rules.defineQuery({input:cardUseSchema,output:z.number().int().nonnegative(),base:(_r,use)=>use.energyOnUse});
+  const iterations=xCost.exports.iterations;
   const wave=compose(attack([5,7]),thunder(3));
   const trample=rules.defineEffect<CardUse,void>(b=>{
     const paid=b.local<number>(),use=b.local<CardUse>(),count=b.local<number>();

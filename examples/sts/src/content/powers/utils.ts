@@ -1,8 +1,9 @@
 import { typedValue } from '../../rules/value.schemas.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 import {resources} from "../../rules/resources.ts";
 import {powers} from "../../rules/powers.ts";
+import {EffectKind} from '../../rules/effect-policy.ts';
 import {powerChangeSchema,powerMutableSchema,powerMergeSchema,powerReductionSchema,powerStateSchema,polaritySchema} from "../../rules/powers.schemas.ts";
 import type {PowerConfig,PowerLifecycle} from "../../rules/powers.types.ts";
 const {defineQuery,defineEffect,install}=rules;
@@ -31,8 +32,18 @@ export function counterPolicies(options:CounterOptions):Pick<PowerConfig,'admit'
     polarity:defineQuery({input:powerStateSchema,output:polaritySchema,base:(_r,state)=>options.harmful?-1:options.scalar&&state.level<0?-1:1}),
   };
 }
-export function attachAbilities(...abilities:rules.Ability[]):rules.Effect<PowerLifecycle,void>{
-  return defineEffect(b=>rules.sequence(...abilities.map(ability=>install({ability,source:b.read(v=>v.input.entity),owner:b.read(v=>v.input.setup.actor),environment:{},lifetime:b.read(v=>v.input.scope)}))));
+export type PowerAbility={ability:rules.Ability;effect:EffectKind|null};
+/** null marks lifecycle bookkeeping which continues while contributions pause. */
+export function effectAbility(ability:rules.Ability,effect:EffectKind|null):PowerAbility{return{ability,effect};}
+export function attachAbilities(...abilities:(rules.Ability|PowerAbility)[]):rules.Effect<PowerLifecycle,void>{
+  const guarded=abilities.map(item=>{
+    const spec='ability' in item?item:{ability:item,effect:EffectKind.Special};
+    if(spec.effect===null)return spec.ability;
+    const effect=spec.effect;
+    const enabled=defineQuery({input:typedValue<{source:number;owner:number;environment:{}}>(),output:z.boolean(),dependencies:[powers.exports.contributes],base:(r,c)=>r.query(powers.exports.contributes,{entity:c.source,effect})});
+    return rules.guardAbility(spec.ability,enabled);
+  });
+  return defineEffect(b=>rules.sequence(...guarded.map(ability=>install({ability,source:b.read(v=>v.input.entity),owner:b.read(v=>v.input.setup.actor),environment:{},lifetime:b.read(v=>v.input.scope)}))));
 }
 export function scalarBonus(target:rules.Query<number,number>):rules.Ability{
   const condition=defineQuery({input:typedValue<rules.ModifierContext<number,number>>(),output:z.boolean(),base:(_r,c)=>c.input===c.owner});

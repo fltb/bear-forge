@@ -1,6 +1,9 @@
+import {EffectKind} from './effect-policy.ts';
+import {fromSource,OriginKind} from './effect-trace.ts';
 import {componentPart} from './component-parts.ts';
 import {z} from 'zod';
-import {rules,ruleModules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
+import {ruleModules} from '@bear-forge/card-engine';
 import {resources} from './resources.ts';
 import {random} from './random.ts';
 import {zones} from './zones.ts';
@@ -36,6 +39,10 @@ export const battles=defineRules({requires:[cardPiles,powers,attributes,damage],
   m.lifecycle(combatActionScope,{});
   const state=m.own(defineComponent({schema:battleStatusSchema.nullable(),initial:()=>null}));
   const opportunities=componentPart(m,battleOpportunitiesSchema),plays=opportunities.component;
+  const completionSchema=z.object({use:cardUseSchema,remaining:z.int32().nonnegative()}).nullable();
+  const completion=m.own(defineComponent({schema:completionSchema,initial:()=>null}));
+  const pendingCompletion=defineQuery({input:entityId,output:completionSchema,reads:[completion],base:(r,id)=>r.component(id,completion)});
+  const setCompletion=m.atom({input:z.object({battle:entityId,value:completionSchema}),output:z.undefined(),reads:[],writes:[completion],emits:[],run:(_r,i)=>({writes:[{entity:i.battle,component:completion,value:i.value}],events:[],result:undefined})});
   const power={},relic={},enemy={},after={},stages={power,relic,enemy,after};
   const order={phases:[{phase:power,before:[relic]},{phase:relic,before:[enemy]},{phase:enemy,before:[after]},{phase:after}],default:power};
   const using=m.own(defineEvent({payload:cardUseSchema,dispatch:'immediate',order})),used=m.own(defineEvent({payload:cardUseSchema,dispatch:'immediate',order}));
@@ -105,11 +112,15 @@ export const battles=defineRules({requires:[cardPiles,powers,attributes,damage],
       call(setPiles,{battle:b.read(v=>v.input.entity),piles}),call(cardPiles.exports.initializeDeck,{piles,masters:b.read(v=>v.get(setup).masters),bottled:b.read(v=>v.get(setup).bottled),drawPerTurn:b.read(v=>v.get(setup).drawPerTurn)}),
     );
   });
-  const kind=m.kind({config:z.undefined(),setup:battleSetupSchema,components:[state,plays],initialize});
+  const kind=m.kind({config:z.undefined(),setup:battleSetupSchema,components:[state,plays,completion],initialize});
   const queued=defineQuery({input:queueCardSchema,output:cardPlaySchema,dependencies:[current,cardInstances.exports.current,resources.exports.current,resources.exports.stamina],base:(r,i)=>{
     const board=r.query(current,i.battle),physical=r.query(cardInstances.exports.current,i.card),snapshot=i.state??physical;
     if(snapshot.mode!==1||snapshot.mode!==physical.mode||snapshot.master!==physical.master||snapshot.uniqueId!==physical.uniqueId)throw Error('Queued card identity does not match its physical instance');
     return {...playOptions(i.options),id:board.nextPlay,card:i.card,state:snapshot,target:i.target,energyOnUse:i.energyOnUse??r.query(resources.exports.stamina,board.actor).energy,vanished:false};
+  }});
+  const previewPayment=defineQuery({input:queueCardSchema,output:z.int32().nonnegative(),dependencies:[queued,status,payment],base:(r,i)=>{
+    const board=r.query(status,i.battle),p=r.query(queued,i);
+    return r.query(payment,{battle:i.battle,play:p.id,card:p.card,owner:board.actor,target:p.target,state:p.state,energyOnUse:p.energyOnUse,autoplay:p.autoplay,freeToPlay:p.freeToPlay,ignoreEnergyTotal:p.ignoreEnergyTotal,purgeOnUse:p.purgeOnUse,triggerOnUse:p.triggerOnUse,regretCardCount:p.regretCardCount});
   }});
   const queueCommit=m.atom({input:z.object({battle:entityId,item:cardOpportunitySchema,front:z.boolean(),afterFirst:z.boolean().default(false)}),output:entityId,reads:[state,plays],writes:[plays],emits:[],run(r,i){const before=r.component(i.battle,plays),status=r.component(i.battle,state);if(before===null||status===null||status.outcome!==0||before.queue.length>=10||before.nextPlay>=Number.MAX_SAFE_INTEGER)throw Error('Cannot queue another card opportunity');return{writes:[{entity:i.battle,component:plays,value:{...before,queue:i.afterFirst&&before.queue.length>0?[before.queue[0]!,i.item,...before.queue.slice(1)]:i.front?[i.item,...before.queue]:[...before.queue,i.item],nextPlay:before.nextPlay+1}}],events:[],result:before.nextPlay};}});
   const queueCard=defineEffect<QueueCard,number>(b=>{const result=b.local<number>();return sequence(b.assign(result,call(queueCommit,{battle:b.read(v=>v.input.battle),item:{kind:0,play:query(queued,b.input)},front:b.read(v=>v.input.front??false),afterFirst:b.read(v=>v.input.afterFirst??false)})),b.return(result));});
@@ -141,7 +152,7 @@ export const battles=defineRules({requires:[cardPiles,powers,attributes,damage],
     return{...before,target:use.target,state:use.state,energyOnUse:use.energyOnUse,autoplay:use.autoplay,freeToPlay:use.freeToPlay,ignoreEnergyTotal:use.ignoreEnergyTotal,purgeOnUse:use.purgeOnUse,triggerOnUse:use.triggerOnUse,regretCardCount:use.regretCardCount};
   })}));});
   const disposition=defineQuery({input:z.object({battle:entityId,play:entityId}),output:cardDestinationSchema,dependencies:[active,cardInstances.exports.metadata],base:(r,i)=>{const p=r.query(active,i);return{...i,destination:r.query(cardInstances.exports.metadata,p.card).type===2?3 as const:p.exhaustOnUse?1 as const:0 as const};}});
-  const afterCard=defineEffect<{battle:number;play:number},void>(b=>{
+  const disposeCard=defineEffect<{battle:number;play:number},void>(b=>{
     const use=b.local<CardUse>(),play=b.local<CardPlay>(),selected=b.local<rules.ReplacementResult<CardDestination>>(),destination=b.local<CardDestination>();return sequence(
       b.assign(use,query(context,b.input)),call(announceAfter,use),b.assign(play,query(active,b.input)),when(b.read(v=>v.get(play).purgeOnUse),b.return(undefined)),
       call(setActive,{battle:b.read(v=>v.input.battle),play:b.read(v=>({...v.get(play),state:{...v.get(play).state,freeToPlayOnce:false}}))}),b.assign(play,query(active,b.input)),
@@ -151,9 +162,9 @@ export const battles=defineRules({requires:[cardPiles,powers,attributes,damage],
       when(b.read(v=>v.get(destination).destination===3),call(setActive,{battle:b.read(v=>v.input.battle),play:b.read(v=>({...v.get(play),vanished:true}))}),
         when(b.read(v=>v.get(destination).destination===1),call(cardPiles.exports.exhaust,{piles:b.read(v=>v.query(status,v.input.battle).piles),card:b.read(v=>v.get(play).card)}),
           call(moveRequired,b.read(v=>{const p=v.query(cardPiles.exports.bindings,v.query(status,v.input.battle).piles),to=v.get(destination).destination===2?p.draw:p.discard;return{card:v.get(play).card,from:null,to,index:v.query(zones.exports.members,to).length};})))),
-      call(announceFinished,query(context,b.input)),
     );
   });
+  const afterCard=defineEffect<{battle:number;play:number},void>(b=>sequence(call(disposeCard,b.input),call(announceFinished,query(context,b.input))));
   const noTrigger=defineEffect<CardUse,void>(b=>b.return(undefined));
   const afterNoTrigger=defineEffect<{battle:number;play:number},void>(b=>call(moveRequired,b.read(v=>{const use=v.query(context,v.input),p=v.query(cardPiles.exports.bindings,v.query(status,v.input.battle).piles);return{card:use.card,from:null,to:p.discard,index:v.query(zones.exports.members,p.discard).length};})));
   const adoptCleanup=m.atom({input:z.object({battle:entityId,play:cardPlaySchema}),output:z.undefined(),reads:[plays],writes:[plays],emits:[],run(r,i){const s=r.component(i.battle,plays);if(s===null||!i.play.autoplay||i.play.purgeOnUse)throw Error('Only canceled autoplay opportunities require cleanup');return{writes:[{entity:i.battle,component:plays,value:{...s,current:{...i.play,triggerOnUse:false},currentIsEndTurn:false}}],events:[],result:undefined};}});
@@ -163,12 +174,29 @@ export const battles=defineRules({requires:[cardPiles,powers,attributes,damage],
   ));
   const earlyEndCommit=m.atom({input:entityId,output:z.undefined(),reads:[state,plays],writes:[state,plays],emits:[],run(r,entity){const s=r.component(entity,state),p=r.component(entity,plays);if(s===null||p===null||s.outcome!==0)throw Error('Cannot end a terminal battle turn');return{writes:[{entity,component:state,value:{...s,endTurnQueued:true}},{entity,component:plays,value:{...p,queue:[{kind:1 as const,id:p.nextPlay}],nextPlay:p.nextPlay+1}}],events:[],result:undefined};}});
   /** Drain queued opportunities through their normal cleanup, then claim the turn boundary. */
-  const endTurnEarly=defineEffect<number,void>(b=>sequence(
+  const endTurnEarly=defineEffect<number,void>({effect:EffectKind.Special},b=>sequence(
     forEach(b.read(v=>v.query(opportunities.current,v.input).queue.flatMap(item=>item.kind===0&&item.play.autoplay&&!item.play.purgeOnUse?[item.play]:[])),play=>enqueue(cleanupCanceledAutoplay,{battle:b.input,play},{queue:actionQueue,lifetime:b.read(v=>v.query(status,v.input).scope),eligible:'captured'})),
     call(earlyEndCommit,b.input),
   ));
-  const perform=defineEffect<{battle:number;play:number},void>(b=>{
-    const use=b.local<CardUse>(),checked=b.local<rules.ReplacementResult<CardUse>>(),play=b.local<CardPlay>(),roll=b.local<number>();return sequence(
+  const effectRepetitions=defineQuery({input:cardUseSchema,output:z.number().int().nonnegative(),base:()=>0});
+  const stageUse=defineEffect<CardUse,void>(b=>call(entityEffect(cardInstances.exports.kind,b.read(v=>v.input.card),c=>c.use),b.input));
+  // Called only by the outer scheduler after drainOne has returned and the
+  // shared FIFO is empty. It never drains a caller's queue or moves cleanup.
+  const completeEffectBody=defineEffect<number,boolean>(b=>{
+    const pending=b.local<z.infer<typeof completionSchema>>();return sequence(
+      b.assign(pending,query(pendingCompletion,b.input)),when(b.read(v=>v.get(pending)===null),b.return(false)),
+      when(b.read(v=>v.query(status,v.input).outcome===0&&v.get(pending)!.remaining>0),sequence(
+        call(setCompletion,{battle:b.input,value:b.read(v=>({...v.get(pending)!,remaining:v.get(pending)!.remaining-1}))}),
+        call(stageUse,b.read(v=>({...v.get(pending)!.use,freeToPlay:true,ignoreEnergyTotal:true}))),
+      ),sequence(
+        call(setCompletion,{battle:b.input,value:null}),
+        when(b.read(v=>v.query(status,v.input).outcome!==2),call(announceFinished,b.read(v=>v.query(context,{battle:v.input,play:v.get(pending)!.use.play})))),
+      )),b.return(true),
+    );
+  });
+  const completeEffect=fromSource(completeEffectBody,v=>{const use=v.query(pendingCompletion,v.input)?.use;return{source:use?.card??null,owner:use?.owner??null,registration:null,kind:OriginKind.Card,action:use?.play??null};});
+  const performBody=defineEffect<{battle:number;play:number},void>(b=>{
+    const use=b.local<CardUse>(),checked=b.local<rules.ReplacementResult<CardUse>>(),play=b.local<CardPlay>(),roll=b.local<number>(),repetitions=b.local<number>();return sequence(
       b.assign(play,query(active,b.input)),when(b.read(v=>v.get(play).randomTarget),sequence(
         when(b.read(v=>v.query(targets,v.input.battle).length===0),b.return(undefined)),b.assign(roll,call(random.exports.int,{stream:b.read(v=>v.query(cardPiles.exports.bindings,v.query(status,v.input.battle).piles).cardRng),start:0,end:b.read(v=>v.query(targets,v.input.battle).length-1)})),
         call(setActive,{battle:b.read(v=>v.input.battle),play:b.read(v=>({...v.get(play),target:v.query(targets,v.input.battle)[v.get(roll)]!}))}),
@@ -180,18 +208,24 @@ export const battles=defineRules({requires:[cardPiles,powers,attributes,damage],
         call(applyUse,b.read(v=>({...v.get(use),state:{...v.get(use).state,freeToPlayOnce:v.query(freeToPlay,v.get(use))}}))),b.assign(use,query(context,b.input)),b.assign(play,query(active,b.input)),
         call(setActive,{battle:b.read(v=>v.input.battle),play:b.read(v=>({...v.get(play),exhaustOnUse:v.get(play).exhaustOnUse||v.query(initialExhaust,v.get(use))}))}),
         call(markStarted,b.read(v=>({...v.get(use),requiresTarget:v.query(cardInstances.exports.metadata,v.get(use).card).variants[v.get(use).state.upgraded?1:0].target}))),
-        call(entityEffect(cardInstances.exports.kind,b.read(v=>v.get(use).card),c=>c.use),use),b.assign(use,query(context,b.input)),call(markUsed,b.read(v=>({...v.get(use),type:v.query(cardInstances.exports.metadata,v.get(use).card).type}))),
+        b.assign(repetitions,query(effectRepetitions,use)),
+        call(stageUse,use),b.assign(use,query(context,b.input)),
+call(markUsed,b.read(v=>({...v.get(use),type:v.query(cardInstances.exports.metadata,v.get(use).card).type}))),
         b.assign(play,query(active,b.input)),b.assign(use,query(context,b.input)),call(setActive,{battle:b.read(v=>v.input.battle),play:b.read(v=>({...v.get(play),exhaustOnUse:v.get(play).exhaustOnUse||v.query(exhaustAfterUse,v.get(use))}))}),
-        enqueue(afterCard,b.input,{queue:actionQueue,source:b.read(v=>v.get(use).card),lifetime:b.read(v=>v.query(status,v.input.battle).scope),eligible:'captured'}),call(announceOther,query(context,b.input)),
+        enqueue(disposeCard,b.input,{queue:actionQueue,source:b.read(v=>v.get(use).card),lifetime:b.read(v=>v.query(status,v.input.battle).scope),eligible:'captured'}),
+        call(announceOther,query(context,b.input)),
+        call(setCompletion,{battle:b.read(v=>v.input.battle),value:{use,remaining:repetitions}}),
         when(b.read(v=>!v.get(use).purgeOnUse),sequence(call(leaveHand,b.input),call(resources.exports.useEnergy,{entity:b.read(v=>v.get(use).owner),amount:query(payment,query(context,b.input))}))),
       )),b.assign(use,query(context,b.input)),when(b.read(v=>!v.get(use).triggerOnUse),sequence(
-        call(entityEffect(cardInstances.exports.kind,b.read(v=>v.get(use).card),c=>c.endTurn??noTrigger),use),call(leaveHand,b.input),
+        when(query(cardInstances.exports.effectsEnabled,b.read(v=>v.get(use).card)),call(entityEffect(cardInstances.exports.kind,b.read(v=>v.get(use).card),c=>c.endTurn??noTrigger),use)),call(leaveHand,b.input),
         enqueue(afterNoTrigger,b.input,{queue:actionQueue,source:b.read(v=>v.get(use).card),lifetime:b.read(v=>v.query(status,v.input.battle).actionScope),eligible:'captured'}),
       )),
     );
   });
-  const playNext=defineEffect<number,boolean>(b=>{const opportunity=b.local<CardOpportunity|null>();return sequence(
+  const perform=fromSource(performBody,v=>{const use=v.query(context,v.input);return{source:use.card,owner:use.owner,registration:null,kind:OriginKind.Card,action:use.play};});
+  const playNext=defineEffect<number,boolean>(b=>{const opportunity=b.local<CardOpportunity|null>(),completed=b.local<boolean>();return sequence(
     when(b.read(v=>v.get(queuedCountForActionQueue)>0),b.return(b.read(()=>{throw Error('Actions must finish before the next card opportunity');}))),
+    b.assign(completed,call(completeEffect,b.input)),when(completed,b.return(true)),
     when(b.read(v=>v.query(status,v.input).outcome!==0),b.return(false)),b.assign(opportunity,call(pop,b.input)),when(b.read(v=>v.get(opportunity)===null),b.return(false)),
     when(b.read(v=>v.get(opportunity)!.kind===1),call(announceEnd,b.input),call(perform,b.read(v=>{const item=v.get(opportunity);if(!item||item.kind!==0)throw Error('Not a card opportunity');return{battle:v.input,play:item.play.id};}))),b.return(true),
   );});
@@ -212,6 +246,6 @@ export const battles=defineRules({requires:[cardPiles,powers,attributes,damage],
   }});
   const advanceTurn=m.atom({input:entityId,output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,entity){const s=r.component(entity,state);if(s===null)throw Error('Missing battle');return{writes:[{entity,component:state,value:{...s,turn:s.turn+1}}],events:[],result:undefined};}});
   const resetTurn=m.atom({input:z.object({battle:entityId,turn:z.int32().positive()}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){const before=r.component(i.battle,state);if(before===null)throw Error('Missing battle');return{writes:[{entity:i.battle,component:state,value:{...before,turn:i.turn,cardsPlayed:0,attacksPlayed:0,skillsPlayed:0,endTurnQueued:false}}],events:[],result:undefined};}});
-  return{exports:{kind,current,status,opportunities:opportunities.current,forActor,presentForActor,forRegistry,start,announceOpeningQueued,active,context,targetable,targets,victoryTargets,victoryDeferred,recoveredGold,rewardEligible,freeToPlay,waivedPayment,cost,intrinsic,canUse,canQueue,playAllowed,canContinue,payment,initialExhaust,exhaustAfterUse,expectedOutcome,checkOutcome,hit,queueCard,queueFromHand,endTurn,consumeEndTurn,clearCardQueue,close,playNext,settle,setExhaust,setPlayState,setEnergyOnUse,setEnemies,advanceTurn,resetTurn,
+  return{exports:{previewPayment,effectRepetitions,kind,current,status,opportunities:opportunities.current,forActor,presentForActor,forRegistry,start,announceOpeningQueued,active,context,targetable,targets,victoryTargets,victoryDeferred,recoveredGold,rewardEligible,freeToPlay,waivedPayment,cost,intrinsic,canUse,canQueue,playAllowed,canContinue,payment,initialExhaust,exhaustAfterUse,expectedOutcome,checkOutcome,hit,queueCard,queueFromHand,endTurn,consumeEndTurn,clearCardQueue,close,playNext,settle,setExhaust,setPlayState,setEnergyOnUse,setEnemies,advanceTurn,resetTurn,
     endTurnEarly,beforePlay:beforePlay.public,disposing:disposing.public,using:using.public,used:used.public,otherCardPlayed:otherCardPlayed.public,afterUse:afterUse.public,finished:finished.public,endTurnCards:endTurnCards.public,exiting:exiting.public,started:started.public,openingQueued:openingQueued.public,stages}};
 }});

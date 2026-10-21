@@ -1,7 +1,8 @@
+import {typedValue} from './value.schemas.ts';
 import {componentPart,projectFields} from './component-parts.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
-import type {ruleModules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
+import {ruleModules} from '@bear-forge/card-engine';
 import {zones} from './zones.ts';
 import {random} from './random.ts';
 import {resources} from './resources.ts';
@@ -11,11 +12,13 @@ import {entityId} from './resources.schemas.ts';
 import {cardPilesSetupSchema,cardPilesStateSchema,pileCardSchema,cardDiscardSchema,pileBindingsSchema,pileCountersSchema,pileMembershipSchema} from './card-piles.schemas.ts';
 import type {CardPilesSetup,CardPilesState,PileCard,CardDiscard} from './card-piles.types.ts';
 import type {CardConfig,CardSetup,CardMutable} from './card-instances.types.ts';
-const {defineRules,defineComponent,defineEvent,defineQuery,defineEffect,sequence,when,call,query,forEach,enqueue}=rules;
+const {defineRules,defineComponent,defineEvent,defineQuery,defineEffect,sequence,when,whileDo,call,query,forEach,enqueue}=rules;
 
 /** Ordered card movement and draw continuations. Named card, power and relic behavior is content. */
 export const cardPiles=defineRules({requires:[zones,random,resources,cardInstances],build(m){
   const bindings=componentPart(m,pileBindingsSchema),counters=componentPart(m,pileCountersSchema),membership=componentPart(m,pileMembershipSchema);
+  const shuffleState=m.own(defineComponent({schema:z.object({epoch:z.number().int().nonnegative(),announced:z.number().int()}),initial:()=>({epoch:0,announced:-1})}));
+  const shuffleEpoch=defineQuery({input:entityId,output:z.number().int().nonnegative(),reads:[shuffleState],base:(r,id)=>r.component(id,shuffleState).epoch});
   const pickBindings=projectFields(pileBindingsSchema),pickCounters=projectFields(pileCountersSchema),pickMembership=projectFields(pileMembershipSchema);
   const relic={},power={},card={},after={},stages={relic,power,card,after};
   const order={phases:[{phase:relic,before:[power]},{phase:power,before:[card]},{phase:card,before:[after]},{phase:after}],default:power};
@@ -36,13 +39,13 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
   }});
   const initializeState=m.atom({input:z.object({entity:entityId,value:cardPilesStateSchema}),output:z.undefined(),reads:[],writes:[bindings.component,counters.component,membership.component],emits:[],run(_r,i){return{writes:[{entity:i.entity,component:bindings.component,value:pickBindings(i.value)},{entity:i.entity,component:counters.component,value:pickCounters(i.value)},{entity:i.entity,component:membership.component,value:pickMembership(i.value)}],events:[],result:undefined};}});
   const initialize=defineEffect<rules.EntityLifecycle<CardPilesSetup>,void>(b=>call(initializeState,{entity:b.read(v=>v.input.entity),value:query(validated,b.read(v=>({...v.input.setup,scope:v.input.scope,drawn:0,discarded:0,initialized:false,nextUniqueId:0,registered:[],auxiliary:[]})))}));
-  const kind=m.kind({config:z.undefined(),setup:cardPilesSetupSchema,components:[bindings.component,counters.component,membership.component],initialize});
+  const kind=m.kind({config:z.undefined(),setup:cardPilesSetupSchema,components:[bindings.component,counters.component,membership.component,shuffleState],initialize});
   const canDraw=defineQuery({input:entityId,output:z.boolean(),base:()=>true});
   function announce<T>(schema:rules.Schema<T>,event:ruleModules.Owned<rules.RuleEvent<T>>):rules.Effect<T,void>{
     return m.atom({input:schema,output:z.undefined(),reads:[],writes:[],emits:[event],run(_r,payload){return{writes:[],events:[{event,payload}],result:undefined};}});
   }
   const announceDrawing=announce(pileCardSchema,drawing),announceDrawn=announce(pileCardSchema,drawn),announceEntering=announce(pileCardSchema,enteringHand),announceShuffle=announce(entityId,shuffling),announceExhausting=announce(pileCardSchema,exhausting),announceExhausted=announce(pileCardSchema,exhausted);
-  const addDrawn=m.atom({input:z.object({piles:entityId,count:z.int32().nonnegative()}),output:z.undefined(),reads:[counters.component],writes:[counters.component],emits:[],run(r,i){const value=r.component(i.piles,counters.component);if(value===null)throw Error('Uninitialized card piles');return{writes:[{entity:i.piles,component:counters.component,value:{...value,drawn:(value.drawn+i.count)|0}}],events:[],result:undefined};}});
+  const adjustDrawn=m.atom({input:z.object({piles:entityId,count:z.int32()}),output:z.undefined(),reads:[counters.component],writes:[counters.component],emits:[],run(r,i){const value=r.component(i.piles,counters.component);if(value===null)throw Error('Uninitialized card piles');return{writes:[{entity:i.piles,component:counters.component,value:{...value,drawn:(value.drawn+i.count)|0}}],events:[],result:undefined};}});
   const countDiscard=m.atom({input:cardDiscardSchema,output:z.undefined(),reads:[counters.component],writes:[counters.component],emits:[discarded],run(r,i){const value=r.component(i.piles,counters.component);if(value===null)throw Error('Uninitialized card piles');return{writes:[{entity:i.piles,component:counters.component,value:{...value,discarded:(value.discarded+Number(i.endTurn))|0}}],events:[{event:discarded,payload:i}],result:undefined};}});
   const resetDiscardCount=m.atom({input:entityId,output:z.undefined(),reads:[counters.component],writes:[counters.component],emits:[],run(r,entity){const value=r.component(entity,counters.component);if(value===null)throw Error('Uninitialized card piles');return{writes:[{entity,component:counters.component,value:{...value,discarded:0}}],events:[],result:undefined};}});
   const setActionScope=m.atom({input:z.object({piles:entityId,scope:z.int32().nonnegative()}),output:z.undefined(),reads:[bindings.component],writes:[bindings.component],emits:[],run(r,i){const value=r.component(i.piles,bindings.component);if(value===null)throw Error('Uninitialized card piles');return{writes:[{entity:i.piles,component:bindings.component,value:{...value,actionScope:i.scope}}],events:[],result:undefined};}});
@@ -72,11 +75,28 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
     b.assign(p,query(current,b.read(v=>v.input.piles))),call(detach,b.input),call(announceExhausting,b.input),call(requireDetached,b.read(v=>v.input.card)),
     call(requireMove,{entity:b.read(v=>v.input.card),from:null,to:b.read(v=>v.get(p).exhaust),index:b.read(v=>v.query(zones.exports.members,v.get(p).exhaust).length)}),call(unregister,b.input),call(announceExhausted,b.input),
   );});
+  const ownerAlive=defineEffect<PileCard,boolean>(b=>b.return(b.read(v=>v.query(resources.exports.vitality,v.query(bindings.current,v.input.piles).actor).hp>0)));
+  const exhaustWithoutOwnEffects=defineEffect<PileCard,void>(b=>{const enabled=b.local<boolean>();return sequence(
+    b.assign(enabled,query(cardInstances.exports.effectsEnabled,b.read(v=>v.input.card))),
+    call(cardInstances.exports.suppressEffects,{entity:b.read(v=>v.input.card),suppressed:true}),
+    ruleModules.runTaskGroup(actionQueue,exhaust,b.input,ownerAlive),
+    call(cardInstances.exports.suppressEffects,{entity:b.read(v=>v.input.card),suppressed:b.read(v=>!v.get(enabled))}),
+  );});
+  // Nested draw continuations share one pending discard-shuffle opportunity.
+  // The announcement is claimed once; stale queued fulfillments become no-ops.
+  const reserveShuffle=m.atom({input:entityId,output:z.number().int().nonnegative(),reads:[shuffleState],writes:[shuffleState],emits:[shuffling],run(r,piles){
+    const before=r.component(piles,shuffleState),fresh=before.announced!==before.epoch;
+    return{writes:fresh?[{entity:piles,component:shuffleState,value:{...before,announced:before.epoch}}]:[],events:fresh?[{event:shuffling,payload:piles}]:[],result:before.epoch};
+  }});
+  const finishShuffle=m.atom({input:entityId,output:z.undefined(),reads:[shuffleState],writes:[shuffleState],emits:[],run(r,piles){
+    const before=r.component(piles,shuffleState);return{writes:[{entity:piles,component:shuffleState,value:{...before,epoch:before.epoch+1}}],events:[],result:undefined};
+  }});
   const shuffleDiscard=defineEffect<number,void>(b=>{const p=b.local<CardPilesState>(),order=b.local<readonly number[]>();return sequence(
     b.assign(p,query(current,b.input)),b.assign(order,random.exports.shuffle({stream:b.read(v=>v.get(p).shuffleRng),items:query(zones.exports.members,b.read(v=>v.get(p).discard))})),
     call(zones.exports.reorder,{zone:b.read(v=>v.get(p).discard),order:b.read(v=>[...v.get(order)])}),
-    forEach(order,card=>call(requireMove,{entity:card,from:b.read(v=>v.get(p).discard),to:b.read(v=>v.get(p).draw),index:b.read(v=>v.query(zones.exports.members,v.get(p).draw).length)})),
+    forEach(order,card=>call(requireMove,{entity:card,from:b.read(v=>v.get(p).discard),to:b.read(v=>v.get(p).draw),index:b.read(v=>v.query(zones.exports.members,v.get(p).draw).length)})),call(finishShuffle,b.input),
   );});
+  const fulfillShuffle=defineEffect<{piles:number;epoch:number},void>(b=>when(b.read(v=>v.query(shuffleEpoch,v.input.piles)===v.input.epoch),call(shuffleDiscard,b.read(v=>v.input.piles))));
   const shuffleDraw=defineEffect<number,void>(b=>{const p=b.local<CardPilesState>(),order=b.local<readonly number[]>();return sequence(
     b.assign(p,query(current,b.input)),b.assign(order,random.exports.shuffle({stream:b.read(v=>v.get(p).shuffleRng),items:query(zones.exports.members,b.read(v=>v.get(p).draw))})),call(zones.exports.reorder,{zone:b.read(v=>v.get(p).draw),order:b.read(v=>[...v.get(order)])}),
   );});
@@ -85,22 +105,50 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
     const blocked=input.count<=0||!r.query(canDraw,input.piles)||hand>=10||available+r.query(zones.exports.members,p.discard).length===0;
     return{piles:p,amount:blocked?0:Math.min(10-hand,input.count),available};
   }});
-  const draw:rules.Effect<{piles:number;count:number},void>=defineEffect(b=>{
-    const p=b.local<CardPilesState>(),amount=b.local<number>(),available=b.local<number>(),picked=b.local<number>(),plan=b.local<{piles:CardPilesState;amount:number;available:number}>();
-    return sequence(b.assign(plan,query(drawPlan,b.input)),b.assign(p,b.read(v=>v.get(plan).piles)),b.assign(amount,b.read(v=>v.get(plan).amount)),b.assign(available,b.read(v=>v.get(plan).available)),
+  // Explicit observer identity follows only this draw operation, including its
+  // shuffle continuation. Draws triggered by other listeners start without it.
+  const drawPolicy=defineQuery({input:pileCardSchema,output:z.object({exhaust:z.boolean(),ownEffects:z.boolean(),replacementDraws:z.int32().nonnegative()}),base:()=>({exhaust:false,ownEffects:true,replacementDraws:0})});
+  const drawObserverKind=m.kind({config:z.object({observed:typedValue<rules.Effect<{observer:number;piles:number;card:number},void>>()}),components:[]});
+  const drawBatch:rules.Effect<{piles:number;count:number;observer:number|null},void>=defineEffect(b=>{
+    const p=b.local<CardPilesState>(),amount=b.local<number>(),available=b.local<number>(),picked=b.local<number>(),reservation=b.local<number>(),enabled=b.local<boolean>(),policy=b.local<{exhaust:boolean;ownEffects:boolean;replacementDraws:number}>(),plan=b.local<{piles:CardPilesState;amount:number;available:number}>();
+    return sequence(b.assign(plan,query(drawPlan,{piles:b.read(v=>v.input.piles),count:b.read(v=>v.input.count)})),b.assign(p,b.read(v=>v.get(plan).piles)),b.assign(amount,b.read(v=>v.get(plan).amount)),b.assign(available,b.read(v=>v.get(plan).available)),
       when(b.read(v=>v.get(amount)===0),b.return(undefined)),
       when(b.read(v=>v.get(available)<v.get(amount)),sequence(
-        enqueue(draw,{piles:b.read(v=>v.input.piles),count:b.read(v=>v.get(amount)-v.get(available))},{queue:actionQueue,position:'front',source:b.read(v=>v.input.piles),lifetime:b.read(v=>v.get(p).actionScope)}),
-        call(announceShuffle,b.read(v=>v.input.piles)),enqueue(shuffleDiscard,b.read(v=>v.input.piles),{queue:actionQueue,position:'front',source:b.read(v=>v.input.piles),lifetime:b.read(v=>v.get(p).actionScope)}),
-        when(b.read(v=>v.get(available)>0),call(draw,{piles:b.read(v=>v.input.piles),count:available})),b.return(undefined),
-      )),call(addDrawn,{piles:b.read(v=>v.input.piles),count:amount}),
-      forEach(b.read(v=>Array.from({length:v.get(amount)},(_,i)=>i)),()=>sequence(
+        enqueue(drawBatch,{observer:b.read(v=>v.input.observer),piles:b.read(v=>v.input.piles),count:b.read(v=>v.get(amount)-v.get(available))},{queue:actionQueue,position:'front',source:b.read(v=>v.input.piles),lifetime:b.read(v=>v.get(p).actionScope)}),
+        b.assign(reservation,call(reserveShuffle,b.read(v=>v.input.piles))),enqueue(fulfillShuffle,{piles:b.read(v=>v.input.piles),epoch:reservation},{queue:actionQueue,position:'front',source:b.read(v=>v.input.piles),lifetime:b.read(v=>v.get(p).actionScope)}),
+        when(b.read(v=>v.get(available)>0),call(drawBatch,{observer:b.read(v=>v.input.observer),piles:b.read(v=>v.input.piles),count:available})),b.return(undefined),
+      )),
+      // Publish this available batch before drawing hooks, as in the normal
+      // draw contract. Replacement draws reserve their own independent batch.
+      call(adjustDrawn,{piles:b.read(v=>v.input.piles),count:amount}),
+      whileDo(b.read(v=>v.get(amount)>0),sequence(
+        when(b.read(v=>!v.query(canDraw,v.input.piles)||v.query(zones.exports.members,v.get(p).hand).length>=10||v.query(resources.exports.vitality,v.get(p).actor).hp<=0),b.return(undefined)),
+        // An intercepted draw may consume additional cards through its replacement
+        // or external exhaust responses. Replan the remaining original slots.
+        when(b.read(v=>v.query(zones.exports.members,v.get(p).draw).length===0),sequence(
+          call(adjustDrawn,{piles:b.read(v=>v.input.piles),count:b.read(v=>-v.get(amount))}),
+          call(drawBatch,{piles:b.read(v=>v.input.piles),count:amount,observer:b.read(v=>v.input.observer)}),b.return(undefined),
+        )),
         b.assign(picked,b.read(v=>{const cards=v.query(zones.exports.members,v.get(p).draw),last=cards.at(-1);if(last===undefined)throw Error('A draw hook emptied the active draw batch');return last;})),
-        call(requireMove,{entity:picked,from:b.read(v=>v.get(p).draw),to:null,index:0}),call(announceDrawing,{piles:b.read(v=>v.input.piles),card:picked}),
-        call(requireDetached,picked),call(moveToHand,{piles:b.read(v=>v.input.piles),card:picked}),call(announceDrawn,{piles:b.read(v=>v.input.piles),card:picked}),
+        b.assign(policy,query(drawPolicy,{piles:b.read(v=>v.input.piles),card:picked})),
+        b.assign(enabled,query(cardInstances.exports.effectsEnabled,picked)),
+        when(b.read(v=>!v.get(policy).ownEffects),call(cardInstances.exports.suppressEffects,{entity:picked,suppressed:true})),
+        when(b.read(v=>v.get(policy).exhaust),
+          ruleModules.runTaskGroup(actionQueue,exhaust,{piles:b.read(v=>v.input.piles),card:picked},ownerAlive),
+          sequence(
+            call(requireMove,{entity:picked,from:b.read(v=>v.get(p).draw),to:null,index:0}),call(announceDrawing,{piles:b.read(v=>v.input.piles),card:picked}),
+            call(requireDetached,picked),call(moveToHand,{piles:b.read(v=>v.input.piles),card:picked}),
+            when(b.read(v=>v.input.observer!==null),call(rules.entityEffect(drawObserverKind,b.read(v=>v.input.observer!),c=>c.observed),{observer:b.read(v=>v.input.observer!),piles:b.read(v=>v.input.piles),card:picked})),
+            call(announceDrawn,{piles:b.read(v=>v.input.piles),card:picked}),
+          )),
+        when(b.read(v=>!v.get(policy).ownEffects),call(cardInstances.exports.suppressEffects,{entity:picked,suppressed:b.read(v=>!v.get(enabled))})),
+        when(b.read(v=>v.get(policy).replacementDraws>0),ruleModules.runTaskGroup(actionQueue,drawBatch,{piles:b.read(v=>v.input.piles),count:b.read(v=>v.get(policy).replacementDraws),observer:null})),
+        b.assign(amount,b.read(v=>v.get(amount)-1)),
       )),
     );
   });
+  const draw=defineEffect<{piles:number;count:number},void>(b=>call(drawBatch,{piles:b.read(v=>v.input.piles),count:b.read(v=>v.input.count),observer:null}));
+  const drawObserved=defineEffect<{piles:number;count:number;observer:number},void>(b=>call(drawBatch,b.input));
   const discardHand=defineEffect<{piles:number;endTurn:boolean},void>(b=>forEach(b.read(v=>[...v.query(zones.exports.members,v.query(bindings.current,v.input.piles).hand)].reverse()),card=>call(discard,{piles:b.read(v=>v.input.piles),card,endTurn:b.read(v=>v.input.endTurn)})));
   const deckPlan=defineQuery({input:z.object({piles:entityId,masters:z.array(entityId).max(96).readonly(),bottled:z.array(entityId).max(3).readonly(),drawPerTurn:z.int32().nonnegative()}).strict(),output:z.object({piles:cardPilesStateSchema,innate:z.array(z.boolean())}),dependencies:[current,zones.exports.members,cardInstances.exports.current,cardInstances.exports.variant],base:(r,input)=>{
     const p=r.query(current,input.piles);
@@ -135,6 +183,6 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
   );});
   const inScope=defineQuery({input:z.int32().nonnegative(),output:z.array(entityId),reads:[bindings.component],base:(r,scope)=>r.entities(bindings.component).filter(id=>r.component(id,bindings.component)?.scope===scope)});
   m.lifecycle(combatScope,{dispose:defineEffect<rules.ScopeLifecycle,void>(b=>forEach(query(inScope,b.read(v=>v.input.scope)),id=>forEach(b.read(v=>{const p=v.query(current,v.get(id));return[p.hand,p.draw,p.discard,p.exhaust,...p.auxiliary];}),zone=>forEach(query(zones.exports.members,zone),entity=>call(requireMove,{entity,from:zone,to:null,index:0})))))});
-  return{exports:{bindings:bindings.current,counters:counters.current,membership:membership.current,kind,current,allocateIdentity:nextId,attachZone,register,unregister,announceShuffle,canDraw,initializeDeck,create,draw,moveToHand,discard,discardHand,exhaust,shuffleDiscard,shuffleDraw,resetTurnCosts,resetDiscardCount,setActionScope,
+  return{exports:{drawPolicy,drawObserverKind,drawObserved,exhaustWithoutOwnEffects,bindings:bindings.current,counters:counters.current,membership:membership.current,kind,current,allocateIdentity:nextId,attachZone,register,unregister,announceShuffle,canDraw,initializeDeck,create,draw,moveToHand,discard,discardHand,exhaust,shuffleDiscard,shuffleDraw,resetTurnCosts,resetDiscardCount,setActionScope,
     drawing:drawing.public,drawn:drawn.public,enteringHand:enteringHand.public,shuffling:shuffling.public,exhausting:exhausting.public,exhausted:exhausted.public,discarded:discarded.public,stages}};
 }});

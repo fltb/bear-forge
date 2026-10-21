@@ -1,6 +1,6 @@
 import { typedValue } from './value.schemas.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
 import {zones} from './zones.ts';
 import {entityId} from './resources.schemas.ts';
 import {cardMutableSchema,cardStateSchema,cardSetupSchema,cardChangeSchema,cardEvaluationSchema,metadataSchema,variantSchema,combatCardSchema,int8,int16} from './card-instances.schemas.ts';
@@ -11,6 +11,9 @@ export const CardMode={Permanent:0,Combat:1} as const;
 
 /** Card instance storage and lifetime. Every specific card effect and upgrade policy is content. */
 export const cardInstances=defineRules({requires:[zones],build(m){
+  const suppressed=m.own(defineComponent({schema:z.boolean(),initial:()=>false}));
+  const effectsEnabled=defineQuery({input:entityId,output:z.boolean(),reads:[suppressed],base:(r,id)=>!r.component(id,suppressed)});
+  const suppressEffects=m.atom({input:z.object({entity:entityId,suppressed:z.boolean()}),output:z.undefined(),reads:[],writes:[suppressed],emits:[],run(_r,i){return{writes:[{entity:i.entity,component:suppressed,value:i.suppressed}],events:[],result:undefined};}});
   const state=m.own(defineComponent({schema:cardStateSchema,initial:()=>({mode:0 as const,master:null,uniqueId:-1,specialData:0,cost:0,costForTurn:0,upgraded:false,freeToPlayOnce:false,retain:false})}));
   const changed=m.own(defineEvent({payload:cardChangeSchema,dispatch:'immediate'}));
   const upgraded=m.own(defineEvent({payload:cardChangeSchema,dispatch:'immediate'}));
@@ -37,7 +40,7 @@ export const cardInstances=defineRules({requires:[zones],build(m){
     returned:typedValue<NonNullable<CardConfig['returned']>>().optional(),canTransform:typedValue<NonNullable<CardConfig['canTransform']>>().optional(),canUse:typedValue<NonNullable<CardConfig['canUse']>>().optional(),endTurn:typedValue<NonNullable<CardConfig['endTurn']>>().optional(),
     upgradeCount:typedValue<NonNullable<CardConfig['upgradeCount']>>().optional(),
     created:typedValue<NonNullable<CardConfig['created']>>().optional(),removed:typedValue<NonNullable<CardConfig['removed']>>().optional(),
-  }).strict(),setup:cardSetupSchema,components:[state,zones.exports.member],initialize,dispose});
+  }).strict(),setup:cardSetupSchema,components:[state,suppressed,zones.exports.member],initialize,dispose});
   const initial=defineQuery({input:z.object({entity:entityId,setup:cardSetupSchema}),output:cardStateSchema,kinds:[kind],base:(r,input)=>{
     const config=r.configuration(input.entity,kind),setup=input.setup;
     if(setup.master!==null&&r.configuration(setup.master,kind)!==config)throw Error('Card master definition does not match');
@@ -106,5 +109,5 @@ export const cardInstances=defineRules({requires:[zones],build(m){
   function copyIntoCombat(input:{master:rules.Input<number>;uniqueId:rules.Input<number>;owner:rules.Input<number>;scope:rules.Input<number>}):rules.Command<number>{
     return spawnEntity({kind,definition:definitionOf(kind,input.master),owner:input.owner,scope:input.scope,setup:query(copySetup,{master:input.master,uniqueId:input.uniqueId})});
   }
-  return{exports:{kind,current,sameDefinition,matchesDefinition,hasCombatCopies,metadata,definitionMetadata,variant,combatView,permanentView,setCombatIdentity,setCostForCombat,setCostForTurn,overrideTurnCost,updateCost,upgradeBaseCost,resetTurn,setFlags,setSpecialData,setMutable,canUpgrade,canTransform,upgradeCount,upgrade,upgradeDetailed,copyIntoCombat,changed:changed.public,upgraded:upgraded.public,beforeUpgrade:beforeUpgrade.public}};
+  return{exports:{effectsEnabled,suppressEffects,kind,current,sameDefinition,matchesDefinition,hasCombatCopies,metadata,definitionMetadata,variant,combatView,permanentView,setCombatIdentity,setCostForCombat,setCostForTurn,overrideTurnCost,updateCost,upgradeBaseCost,resetTurn,setFlags,setSpecialData,setMutable,canUpgrade,canTransform,upgradeCount,upgrade,upgradeDetailed,copyIntoCombat,changed:changed.public,upgraded:upgraded.public,beforeUpgrade:beforeUpgrade.public}};
 }});

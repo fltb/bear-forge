@@ -1,7 +1,8 @@
 import { typedValue } from '../rules/value.schemas.ts';
 import {emeraldElites} from "../content/enemies/shared/burning-elite.ts";
 import {z} from 'zod';
-import {rules,ruleModules} from '@bear-forge/card-engine';
+import {rules} from '../rules/execution.ts';
+import {ruleModules} from '@bear-forge/card-engine';
 import {adventures} from "../rules/adventures.ts";
 import {encounters,type EncounterDefinition} from "../rules/encounters.ts";
 import {enemies} from "../rules/enemies.ts";

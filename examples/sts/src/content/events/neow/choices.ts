@@ -1,4 +1,5 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
+import {neowHpLimit,neowMaxHpAfterLoss} from './descriptions.ts';
 import {adventures,emptyAdventureRewards} from "../../../rules/adventures.ts";
 import {permanentDecks} from "../../../rules/permanent-decks.ts";
 import {resources} from "../../../rules/resources.ts";
@@ -21,10 +22,10 @@ export function createNeowChoices(ui:rules.RuleModule<AdventureChoiceExports>,ac
     when(b.read(v=>v.input.option.drawback===4),sequence(call(curse,b.read(v=>v.input.run)),call(adventures.exports.setScene,{run:b.read(v=>v.input.run),screen:'MAP_SCREEN',continuation:true})),call(toMap,b.read(v=>v.input.run))),
   ));
   const drawback=defineEffect<{run:number;option:NeowOption},void>(b=>{const starter=b.local<number|null>();return sequence(
-    when(b.read(v=>v.input.option.drawback===2),call(resources.exports.loseMaxHp,b.read(v=>{const entity=v.query(adventures.exports.bindings,v.input.run).actor,p=v.query(resources.exports.vitality,entity);return{entity,amount:p.maxHp-Math.trunc(Math.fround(Math.fround(.9)*Math.fround(p.maxHp)))};}))),
+    when(b.read(v=>v.input.option.drawback===2),call(resources.exports.loseMaxHp,b.read(v=>{const entity=v.query(adventures.exports.bindings,v.input.run).actor,p=v.query(resources.exports.vitality,entity);return{entity,amount:p.maxHp-neowMaxHpAfterLoss(p.maxHp)};}))),
     when(b.read(v=>v.input.option.drawback===3),call(resources.exports.spendGold,b.read(v=>{const entity=v.query(adventures.exports.bindings,v.input.run).actor;return{entity,amount:v.query(resources.exports.wealth,entity).gold};}))),
-    when(b.read(v=>v.input.option.drawback===5),call(resources.exports.limitHp,b.read(v=>{const entity=v.query(adventures.exports.bindings,v.input.run).actor;return{entity,amount:Math.trunc(v.query(resources.exports.vitality,entity).hp/10)*7};}))),
-    when(b.read(v=>v.input.option.drawback===6),sequence(b.assign(starter,query(relics.exports.find,{actor:b.read(v=>v.query(adventures.exports.bindings,v.input.run).actor),definition:query(adventures.exports.relic,{run:b.read(v=>v.input.run),id:'BURNING_BLOOD'})})),when(b.read(v=>v.get(starter)!==null),despawnEntity({entity:b.read(v=>v.get(starter)!),reason:{replaced:true}})))),
+    when(b.read(v=>v.input.option.drawback===5),call(resources.exports.limitHp,b.read(v=>{const entity=v.query(adventures.exports.bindings,v.input.run).actor;return{entity,amount:neowHpLimit(v.query(resources.exports.vitality,entity).hp)};}))),
+    when(b.read(v=>v.input.option.drawback===6&&v.query(adventures.exports.catalog,v.input.run).catalog.starterRelic!==null),sequence(b.assign(starter,query(relics.exports.find,{actor:b.read(v=>v.query(adventures.exports.bindings,v.input.run).actor),definition:b.read(v=>v.query(adventures.exports.catalog,v.input.run).catalog.starterRelic!)})),when(b.read(v=>v.get(starter)!==null),despawnEntity({entity:b.read(v=>v.get(starter)!),reason:{replaced:true}})))),
   );});
   const choose=defineEffect<number,void>(b=>{
     const index=b.local<number>(),option=b.local<NeowOption>(),cards=b.local<CardPreview[]>(),card=b.local<CardPreview>(),reward=b.local<AdventureRewards>(),potion=b.local<number>(),relic=b.local<RelicDefinition>();

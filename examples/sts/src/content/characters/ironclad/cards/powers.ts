@@ -1,13 +1,14 @@
+import {cardTargets} from '../../../../rules/card-targets.ts';
 import {ironcladDrawPowers} from "../powers/draw.ts";
 import {ironcladAdditionalPowers} from "../powers/combust.ts";
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from "../../../../rules/battles.ts";
 import {powers} from "../../../../rules/powers.ts";
 import {basicPowers} from "../../../powers/attributes.ts";
 import {ironcladPowers} from "../powers/definitions.ts";
 import {concreteCard,composePrograms,cardPower} from "../../../cards/shared/programs.ts";
 import type {CardUse} from "../../../../rules/card-instances.types.ts";
-export const powerCards=rules.defineRules({requires:[ironcladPowers,ironcladDrawPowers,ironcladAdditionalPowers],build(){
+export const powerCards=rules.defineRules({requires:[cardTargets,ironcladPowers,ironcladDrawPowers,ironcladAdditionalPowers],build(){
   const berserk=rules.defineEffect<CardUse,void>(b=>rules.sequence(rules.call(powers.exports.apply,{registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),actor:b.read(v=>v.input.owner),definition:ironcladPowers.exports.Berserk,amount:1,source:b.read(v=>v.input.owner),debuff:false,scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope)}),rules.call(cardPower(basicPowers.exports.PlayerVulnerable,[2,1],false,true),b.input)));
   return{exports:{Combust:concreteCard('COMBUST',cardPower(ironcladAdditionalPowers.exports.Combust,[5,7])),
     Berserk:concreteCard('BERSERK',berserk),

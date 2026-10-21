@@ -12,7 +12,8 @@ import {drawPowers} from "../src/content/powers/draw.ts";
 import {createSelectionCards} from "../src/content/characters/ironclad/cards/deck-order.ts";
 import {createColorlessSelectionCards} from "../src/content/cards/colorless/thinking-ahead.ts";
 import {z} from 'zod';
-import {rules,ruleModules,linkRules} from '@bear-forge/card-engine';
+import {rules} from '../src/rules/execution.ts';
+import {ruleModules,linkRules} from '@bear-forge/card-engine';
 import {battles} from '../src/rules/battles.ts';
 import {permanentDecks} from '../src/rules/permanent-decks.ts';
 

@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {volibearCardDescriptions as cards} from './metadata.ts';
 import {volibearCardPrograms,card,attack,block,compose} from './programs.ts';
 

@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {cardUseSchema} from '../../../../rules/card-instances.schemas.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
@@ -55,5 +55,6 @@ export const volibearNextPlayDiscount=rules.defineRules({requires:[battles],buil
       rules.spawnEntity({definition,setup:input,owner:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).actor),scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope)}),
     );
   });
-  return {exports:{grant}};
+  const pending=rules.defineQuery({input:z.object({battle:z.int32(),card:z.int32()}),output:z.boolean(),dependencies:[find,battles.exports.status],base:(r,i)=>r.query(find,{...i,turn:r.query(battles.exports.status,i.battle).turn})!==null});
+  return {exports:{pending,grant}};
 }});

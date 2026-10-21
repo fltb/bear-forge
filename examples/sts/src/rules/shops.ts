@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
 import {adventures} from './adventures.ts';
 import {entityId} from './resources.schemas.ts';
 import {previewSchema,relicDefinitionSchema} from './adventures.schemas.ts';

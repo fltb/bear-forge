@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 import {encounters} from "../../rules/encounters.ts";
 import {cultist} from "./exordium/cultist.ts";
 import {exordiumEnemies} from "./exordium/enemies.ts";

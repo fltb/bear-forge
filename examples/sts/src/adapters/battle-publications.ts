@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {projectFields} from '../rules/component-parts.ts';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../rules/execution.ts';
 import {PublicGameSchema,GameViewSchema} from "../game.schemas.ts";
 import {battles} from "../rules/battles.ts";
 import {adventures} from "../rules/adventures.ts";

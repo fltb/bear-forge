@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
 
@@ -33,13 +33,13 @@ export const volibearEngagePreparation=rules.defineRules({requires:[battles],bui
       const s=r.component(c.source,state);return s.battle===c.event.battle&&s.play===c.event.play;
     }}),effect:rules.defineEffect<rules.ReactionContext<CardUse>,void>(b=>rules.despawnEntity({entity:b.read(v=>v.input.source),reason:{engageDiscountSpent:true}})),
   });
-  const kind=m.kind({config:z.undefined(),setup,components:[state],initialize:rules.defineEffect<rules.EntityLifecycle<z.infer<typeof setup>>,void>(b=>rules.sequence(
+  const kind=m.kind({config:z.undefined(),setup,components:[],initialize:rules.defineEffect<rules.EntityLifecycle<z.infer<typeof setup>>,void>(b=>rules.sequence(
     rules.updateLocalComponent(b.read(v=>v.input.entity),state,b.read(v=>({...v.input.setup,play:null}))),
     ...[discount,consume,finish].map(ability=>rules.install({ability,source:b.read(v=>v.input.entity),owner:b.read(v=>{
       if(v.input.owner===null)throw Error('Engage preparation requires an owner');return v.input.owner;
     }),environment:{},lifetime:b.read(v=>v.input.scope)})),
   ))});
-  const definition=rules.defineEntity(kind,undefined);
+  const definition=rules.defineEntity(kind,undefined,{components:[state]});
   const prepare=rules.defineEffect<CardUse,void>(b=>{
     const input=b.local<z.infer<typeof setup>>(),existing=b.local<number|null>();
     return rules.sequence(
@@ -48,5 +48,6 @@ export const volibearEngagePreparation=rules.defineRules({requires:[battles],bui
       rules.spawnEntity({definition,setup:input,owner:b.read(v=>v.input.owner),scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope)}),
     );
   });
-  return {exports:{eligible,declaresEngage,prepare}};
+  const pending=rules.defineQuery({input:z.int32(),output:z.int32(),reads:[state],dependencies:[battles.exports.status],base:(r,battle)=>r.entities(state).filter(id=>{const s=r.component(id,state);return s.battle===battle&&s.turn===r.query(battles.exports.status,battle).turn&&s.play===null;}).length});
+  return {exports:{pending,eligible,declaresEngage,prepare}};
 }});

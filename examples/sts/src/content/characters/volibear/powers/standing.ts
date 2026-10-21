@@ -1,5 +1,6 @@
+import {volibearCardDescriptions as descriptions} from '../cards/metadata.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {powers} from '../../../../rules/powers.ts';
 import {turns} from '../../../../rules/turns.ts';
@@ -24,7 +25,7 @@ export const volibearStanding=rules.defineRules({requires:[battles,powers,turns]
       kind:'change',value:b.read(v=>({...v.input.value,amount:Math.min(15,v.input.value.amount)})),
     })),
   });
-  const Standing=rules.defineEntity(powers.exports.kind,{
+  const Standing=rules.defineEntity(powers.exports.kind,{display:{name:descriptions.U03.metadata.name,text:descriptions.U03.text},
     ...counterPolicies({bits:32,flag:true}),
     attach:rules.defineEffect<PowerLifecycle,void>(b=>rules.sequence(
       rules.updateLocalComponent(b.read(v=>v.input.entity),deployedTurn,b.read(v=>{

@@ -1,6 +1,6 @@
 import { typedValue } from '../../../rules/value.schemas.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {powers} from "../../../rules/powers.ts";
 import {attributes} from "../../../rules/attributes.ts";
 import {damage} from "../../../rules/damage.ts";
@@ -8,7 +8,7 @@ import {battles} from "../../../rules/battles.ts";
 import {enemies} from "../../../rules/enemies.ts";
 import {turns} from "../../../rules/turns.ts";
 import {resources} from "../../../rules/resources.ts";
-import {counterPolicies,attachAbilities} from "../../powers/utils.ts";
+import {counterPolicies,attachAbilities,effectAbility} from "../../powers/utils.ts";
 import {ownsTurn} from "../../powers/turn-hooks.ts";
 import {actionQueue} from "../../../rules/combat-actions.ts";
 import {MS,moveId} from "../../../combat-identifiers.ts";
@@ -21,7 +21,7 @@ export const enemyDefensePowers=defineRules({requires:[powers,attributes,damage,
   const gain=defineEffect<rules.ReactionContext<HpDamageRequest>,void>(b=>enqueue(resources.exports.gainBlock,{entity:b.read(v=>v.input.owner),amount:query(powers.exports.level,b.read(v=>v.input.source))},{queue:actionQueue,source:b.read(v=>v.input.source),lifetime:b.read(v=>v.query(battles.exports.status,v.input.event.request.battle).actionScope),eligible:'captured'}));
   const malleable=on(damage.exports.blocked,{condition:struck,effect:defineEffect<rules.ReactionContext<HpDamageRequest>,void>(b=>sequence(call(gain,b.input),call(powers.exports.set,{entity:b.read(v=>v.input.source),next:b.read(v=>{const s=v.query(powers.exports.current,v.input.source);return{level:s.level+1,active:true,justApplied:s.justApplied};})})))});
   const malleableReset=on(turns.exports.enemyEnd,{condition:ownsTurn(),order:{phase:turns.exports.stages.content,priority:20},effect:defineEffect<rules.ReactionContext<TurnActor>,void>(b=>call(powers.exports.set,{entity:b.read(v=>v.input.source),next:{level:3,active:true,justApplied:false}}))});
-  const Malleable=defineEntity(powers.exports.kind,{presentation:{key:MS.MALLEABLE,flag:false,slot:0},...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(malleable,malleableReset)});
+  const Malleable=defineEntity(powers.exports.kind,{presentation:{key:MS.MALLEABLE,flag:false,slot:0},...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(malleable,effectAbility(malleableReset,null))});
   const plateHit=on(damage.exports.blocked,{condition:struck,effect:defineEffect<rules.ReactionContext<HpDamageRequest>,void>(b=>call(powers.exports.decrement,{entity:b.read(v=>v.input.source),amount:1}))});
   const plateEnd=on(turns.exports.enemyEnd,{condition:ownsTurn(),order:{phase:turns.exports.stages.content,priority:30},effect:defineEffect<rules.ReactionContext<TurnActor>,void>(b=>call(resources.exports.gainBlock,{entity:b.read(v=>v.input.owner),amount:query(powers.exports.level,b.read(v=>v.input.source))}))});
   const PlatedArmor=defineEntity(powers.exports.kind,{presentation:{key:MS.PLATED_ARMOR,flag:false},...counterPolicies({bits:8,zeroIsNoop:true,clearOnRemove:true}),attach:attachAbilities(plateHit,plateEnd)});
@@ -29,6 +29,6 @@ export const enemyDefensePowers=defineRules({requires:[powers,attributes,damage,
   const flightMaximum=defineComponent({schema:z.int32(),initial:()=>0});
   const flightReduce=on(damage.exports.blocked,{condition:struck,effect:defineEffect<rules.ReactionContext<HpDamageRequest>,void>(b=>sequence(when(b.read(v=>v.query(powers.exports.level,v.input.source)===1),call(enemies.exports.setMove,{enemy:b.read(v=>{const id=v.query(enemies.exports.forActor,v.input.owner);if(id===null)throw Error('Flight needs an enemy controller');return id;}),move:moveId.BYRD_STUNNED})),call(powers.exports.decrement,{entity:b.read(v=>v.input.source),amount:1})))});
   const flightReset=on(turns.exports.enemyStart,{condition:ownsTurn(),effect:defineEffect<rules.ReactionContext<TurnActor>,void>(b=>call(powers.exports.set,{entity:b.read(v=>v.input.source),next:{level:readComponent(b.read(v=>v.input.source),flightMaximum),active:true,justApplied:false}}))});
-  const Flight=defineEntity(powers.exports.kind,{presentation:{key:MS.FLIGHT,flag:false,slot:0},...counterPolicies({bits:32,zeroIsNoop:true}),attach:defineEffect<PowerLifecycle,void>(b=>sequence(updateLocalComponent(b.read(v=>v.input.entity),flightMaximum,b.read(v=>v.input.setup.amount)),call(attachAbilities(flightReduce,flightReset,modify(attributes.exports.playerAttack,{condition:defineQuery({input:typedValue<rules.ModifierContext<{source:number;target:number;base:number;card:number|null},number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.target===c.owner&&r.query(powers.exports.enabled,c.source)}),order:{phase:attributes.exports.stages.targetScale,priority:20},transform:(_r,c)=>Math.fround(c.value*.5)})),b.input)))},{components:[flightMaximum]});
+  const Flight=defineEntity(powers.exports.kind,{presentation:{key:MS.FLIGHT,flag:false,slot:0},...counterPolicies({bits:32,zeroIsNoop:true}),attach:defineEffect<PowerLifecycle,void>(b=>sequence(updateLocalComponent(b.read(v=>v.input.entity),flightMaximum,b.read(v=>v.input.setup.amount)),call(attachAbilities(flightReduce,effectAbility(flightReset,null),modify(attributes.exports.playerAttack,{condition:defineQuery({input:typedValue<rules.ModifierContext<{source:number;target:number;base:number;card:number|null},number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.target===c.owner&&r.query(powers.exports.enabled,c.source)}),order:{phase:attributes.exports.stages.targetScale,priority:20},transform:(_r,c)=>Math.fround(c.value*.5)})),b.input)))},{components:[flightMaximum]});
   return{exports:{Malleable,PlatedArmor,Barricade,Flight}};
 }});

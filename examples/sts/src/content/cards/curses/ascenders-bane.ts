@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {z} from 'zod';
 import {cardEvaluationSchema} from "../../../rules/card-instances.schemas.ts";
 import {battles} from "../../../rules/battles.ts";

@@ -1,5 +1,6 @@
+import {volibearCardDescriptions as descriptions} from '../cards/metadata.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {powers} from '../../../../rules/powers.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
@@ -19,7 +20,7 @@ export const volibearInscription=rules.defineRules({requires:[battles,powers,vol
       battle:b.read(v=>v.input.event.battle),card:b.read(v=>v.input.event.card),amount:b.read(v=>v.get(rules.query(powers.exports.level,v.input.source))),
     })),
   });
-  const ThunderInscription=rules.defineEntity(powers.exports.kind,{
+  const ThunderInscription=rules.defineEntity(powers.exports.kind,{display:{name:descriptions.R04.metadata.name,text:descriptions.R04.text},
     ...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(inscribe),
   });
   return {exports:{ThunderInscription}};

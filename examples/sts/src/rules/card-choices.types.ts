@@ -1,4 +1,4 @@
-import type {rules} from '@bear-forge/card-engine';
+import type {rules} from './execution.ts';
 export type CardChoicePlayer={battle:number;screen:number;skipIndex?:number|undefined;indices?:number[]|undefined};
 export type PendingCardChoice=CardChoicePlayer&{cards:number[];minimum?:number|undefined;maximum?:number|undefined;multiple?:boolean|undefined};
 export type CardChoiceInput=CardChoicePlayer&{cards:readonly number[]};

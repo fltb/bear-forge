@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../rules/execution.ts';
 import {adventures} from "../rules/adventures.ts";
 import {cardInstances} from "../rules/card-instances.ts";
 import {permanentDecks} from "../rules/permanent-decks.ts";

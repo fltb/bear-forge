@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {cardInstances} from '../../../../rules/card-instances.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
 import {standardUpgrade,upgradeOnce,registerCardAbilities} from '../../../cards/shared/lifecycle.ts';
@@ -26,15 +26,15 @@ export const volibearGrowthCards=rules.defineRules({requires:[volibearCardProgra
   ));
   const growBlock=rules.defineEffect<CardUse,void>(b=>rules.updateLocalComponent(b.read(v=>v.input.card),blockGrowth,n=>n+2));
   const copyGrowth=rules.on(volibearCopying.exports.copied,{
-    condition:rules.defineQuery({input:z.custom<rules.ReactionContext<CombatCopy>>(),output:z.boolean(),base:(_r,c)=>c.event.source===c.source}),
+    condition:rules.defineQuery({input:z.custom<rules.ReactionContext<CombatCopy>>(),output:z.boolean(),base:(_r,c)=>c.event.copy===c.source}),
     effect:rules.defineEffect<rules.ReactionContext<CombatCopy>,void>(b=>rules.updateLocalComponent(
-      b.read(v=>v.input.event.copy),blockGrowth,rules.readComponent(b.read(v=>v.input.source),blockGrowth),
+      b.read(v=>v.input.event.copy),blockGrowth,rules.readComponent(b.read(v=>v.input.event.source),blockGrowth),
     )),
   });
   const copyAttackGrowth=rules.on(volibearCopying.exports.copied,{
-    condition:rules.defineQuery({input:z.custom<rules.ReactionContext<CombatCopy>>(),output:z.boolean(),base:(_r,c)=>c.event.source===c.source}),
+    condition:rules.defineQuery({input:z.custom<rules.ReactionContext<CombatCopy>>(),output:z.boolean(),base:(_r,c)=>c.event.copy===c.source}),
     effect:rules.defineEffect<rules.ReactionContext<CombatCopy>,void>(b=>rules.updateLocalComponent(
-      b.read(v=>v.input.event.copy),attackGrowth,rules.readComponent(b.read(v=>v.input.source),attackGrowth),
+      b.read(v=>v.input.event.copy),attackGrowth,rules.readComponent(b.read(v=>v.input.event.source),attackGrowth),
     )),
   });
   const NeverLetGo=rules.defineEntity(cardInstances.exports.kind,{

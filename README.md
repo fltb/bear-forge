@@ -4,6 +4,8 @@
 
 完整介绍与审核入口：[项目介绍](docs/project-overview.md)。
 
+STS 手动逐步游玩与 JSONL 接口：[STS 交互入口](docs/sts-entry.md)。正式多 agent 卡组评审目前暂停，入口验收不计入正式对局。
+
 本机零新增训练卡组评估使用现有 Forge 游戏、规则策略和冻结模型：
 
 ```sh

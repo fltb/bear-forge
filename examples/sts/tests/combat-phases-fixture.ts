@@ -1,5 +1,6 @@
 import {z} from 'zod';
-import {rules,linkRules} from '@bear-forge/card-engine';
+import {rules} from '../src/rules/execution.ts';
+import {linkRules} from '@bear-forge/card-engine';
 import {combatContentRules} from './combat-content-fixture.ts';
 import {combatSessions} from '../src/rules/combat-sessions.ts';
 import {turns} from '../src/rules/turns.ts';

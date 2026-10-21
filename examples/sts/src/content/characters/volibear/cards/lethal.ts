@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {cardInstances} from '../../../../rules/card-instances.ts';
 import {resources} from '../../../../rules/resources.ts';
 import {enemies} from '../../../../rules/enemies.ts';

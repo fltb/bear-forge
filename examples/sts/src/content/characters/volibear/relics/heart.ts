@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {relics,type RelicDefinition} from '../../../../rules/relics.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {resources} from '../../../../rules/resources.ts';
@@ -30,14 +30,6 @@ export const volibearHearts=rules.defineRules({requires:[relics,lightning,battle
     ability,source:b.read(v=>v.input.entity),owner:b.read(v=>{if(v.input.owner===null)throw Error('A heart relic requires an actor');return v.input.owner;}),environment:{},lifetime:b.read(v=>v.input.scope),
   }))));
   const HuntersHeart=rules.defineEntity(relics.exports.kind,{id:'VOLIBEAR_HUNTERS_HEART',install:install(hunter)});
-  const ImmortalHeart:RelicDefinition=rules.defineEntity(relics.exports.kind,{id:'VOLIBEAR_IMMORTAL_HEART',install:rules.defineEffect<rules.EntityLifecycle,void>(b=>{
-    const previous=b.local<number|null>();
-    return rules.sequence(
-      b.assign(previous,rules.query(relics.exports.find,{actor:b.read(v=>v.input.owner),definition:HuntersHeart})),
-      rules.when(b.read(v=>v.get(previous)===null),b.return(b.read(()=>{throw Error('Immortal Heart must replace Hunters Heart');}))),
-      rules.despawnEntity({entity:b.read(v=>v.get(previous)!),reason:{replacedBy:ImmortalHeart}}),
-      rules.call(install(immortal),b.input),
-    );
-  })});
+  const ImmortalHeart:RelicDefinition=rules.defineEntity(relics.exports.kind,{id:'VOLIBEAR_IMMORTAL_HEART',replaces:HuntersHeart,install:install(immortal)});
   return {exports:{HuntersHeart,ImmortalHeart}};
 }});

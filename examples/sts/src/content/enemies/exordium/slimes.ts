@@ -1,14 +1,14 @@
+import {enemyCards} from '../shared/cards.ts';
 import { typedValue } from '../../../rules/value.schemas.ts';
 import {pileCards} from "../../cards/statuses/definitions.ts";
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {enemies} from "../../../rules/enemies.ts";
 import {battles} from "../../../rules/battles.ts";
 import {turns} from "../../../rules/turns.ts";
 import {resources} from "../../../rules/resources.ts";
 import {random} from "../../../rules/random.ts";
 import {powers} from "../../../rules/powers.ts";
-import {cardPiles} from "../../../rules/card-piles.ts";
 import {combatSessions} from "../../../rules/combat-sessions.ts";
 import {adventures} from "../../../rules/adventures.ts";
 import {enemyDeployment} from "../shared/deployment.ts";
@@ -21,7 +21,7 @@ import type {EnemyAction,EnemyRoll,EnemySetup,EnemyDefinition} from "../../../ru
 import type {HpLost} from "../../../rules/resources.types.ts";
 const {defineRules,defineQuery,defineEffect,defineEntity,sequence,when,forEach,call,query,on,install,enqueue}=rules;
 export const slimes=defineRules({requires:[enemyUtilities,enemies,enemyDeployment,basicPowers,pileCards,adventures],build(){
-  const slimeCards=(count:number,immediate=false)=>defineEffect<EnemyAction,void>(b=>forEach(Array.from({length:count},(_,i)=>i),()=>{const input={piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),definition:pileCards.exports.Slimed,upgraded:false,specialData:0,destination:2 as const,shuffle:false,mutable:null};return immediate?call(cardPiles.exports.create,input):enqueue(cardPiles.exports.create,input,{queue:actionQueue,source:b.read(v=>v.input.enemy),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'});}));
+  const slimeCards=(count:number,immediate=false)=>enemyCards(pileCards.exports.Slimed,count,2,false,!immediate);
   function threshold(splitMove:number){return on(resources.exports.hpLost,{condition:defineQuery({input:typedValue<rules.ReactionContext<HpLost>>(),output:z.boolean(),dependencies:[resources.exports.current,resources.exports.vitality],base:(r,c)=>c.event.entity===c.owner&&c.event.amount>0&&c.event.after>0&&c.event.after<=Math.trunc(r.query(resources.exports.vitality,c.owner).maxHp/2)}),effect:defineEffect<rules.ReactionContext<HpLost>,void>(b=>call(enemies.exports.replaceMove,{enemy:b.read(v=>v.input.source),move:splitMove}))});}
   function splitInto(definitions:readonly EnemyDefinition[],boss=false){return defineEffect<EnemyAction,void>(b=>{const extent=b.local<number>(),slot=b.local<number>(),hp=b.local<number>(),created=b.local<number>(),pool=b.local<EnemyDefinition[]>();return sequence(
     b.assign(extent,b.read(v=>{const session=v.query(combatSessions.exports.forBattle,v.input.battle);if(session===null)throw Error('Split needs a session');return boss?3:Math.min(v.query(combatSessions.exports.current,session).roster.length+1,4);})),b.assign(pool,[...definitions]),b.assign(slot,b.read(v=>v.query(enemies.exports.current,v.input.enemy).slot??0)),b.assign(hp,b.read(v=>v.query(resources.exports.vitality,v.input.actor).hp)),

@@ -6,7 +6,7 @@ import {pileCards} from "../../cards/statuses/definitions.ts";
 import {PS} from "../../../combat-identifiers.ts";
 import {combatPrivate,observeCounter,type CombatPrivate} from "../../../program/combat-state.ts";
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {relics,type RelicDefinition} from "../../../rules/relics.ts";
 import {battles} from "../../../rules/battles.ts";
 import {turns} from "../../../rules/turns.ts";

@@ -19,6 +19,7 @@ export function argumentsOf(args: string[]) {
   return flags;
 }
 export async function main(args = process.argv.slice(2)) {
+  if(args[0]==='sts'){const {runSts}=await import('./sts.ts');await runSts(args.slice(1));return;}
   const [command, ...rest] = args,
     flags = argumentsOf(rest);
   const allowed: Record<string, string[]> = {

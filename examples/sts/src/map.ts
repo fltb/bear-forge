@@ -1,6 +1,6 @@
 // Literal algorithm port of sts_lightspeed 7476a819 src/game/Map.cpp.
 import {randomState,randomInt,nextInt,type RandomState} from './rng.ts';
-import type {rules} from '@bear-forge/card-engine';
+import type {rules} from './rules/execution.ts';
 import type {Room,MapNode,SpireMap} from './map.types.ts';
 const roomIds:Record<Room,number>={SHOP:0,REST:1,EVENT:2,ELITE:3,MONSTER:4,TREASURE:5,BOSS:6,BOSS_TREASURE:7,NONE:8,INVALID:9};
 const masks=Array.from({length:7},(_,i)=>0x0101010101010101n<<BigInt(i));

@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
 import {randomState,randomInt,randomFloat,randomLong,nextLong,randomLongRange,randomBoolean,setRandomCounter,javaShuffle,rngView} from '../rng.ts';
 import type {RandomState} from '../rng.ts';
 import {entityId} from './resources.schemas.ts';

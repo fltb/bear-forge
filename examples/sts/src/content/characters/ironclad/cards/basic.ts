@@ -1,6 +1,9 @@
+import {targetAttack,cardPower} from '../../../cards/shared/programs.ts';
+import {cardTargets} from '../../../../rules/card-targets.ts';
+import {cardEffects} from '../../../../rules/card-effects.ts';
 import {drawPowers} from "../../../powers/draw.ts";
 import {turnPowers} from "../powers/turn.ts";
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from "../../../../rules/battles.ts";
 import {cardInstances} from "../../../../rules/card-instances.ts";
 import {cardPiles} from "../../../../rules/card-piles.ts";
@@ -16,15 +19,11 @@ import {standardUpgrade,upgradeOnce} from "../../../cards/shared/lifecycle.ts";
 const {defineRules,defineEffect,defineEntity,sequence,query,enqueue}=rules;
 
 /** Concrete programs share typed authoring utilities, never a name-based action dispatcher. */
-export const basicCards=defineRules({requires:[battles,basicPowers,drawPowers,turnPowers],build(){
-  function attack(base:number,upgraded:number){return defineEffect<CardUse,void>(b=>enqueue(battles.exports.hit,b.read(v=>{
-    if(v.input.target===null)throw Error('Attack needs a target');return{battle:v.input.battle,source:v.input.owner,target:v.input.target,amount:v.query(attributes.exports.attackAmount,{source:v.input.owner,target:v.input.target,base:v.input.state.upgraded?upgraded:base,card:v.input.card}),attack:true,selfDamage:false};
-  }),{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
-  function block(base:number,upgraded:number,twice=false){return defineEffect<CardUse,void>(b=>enqueue(resources.exports.gainBlock,{entity:b.read(v=>v.input.owner),amount:b.read(v=>{const amount=v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:v.input.state.upgraded?upgraded:base});return twice?v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:amount}):amount;})},
+export const basicCards=defineRules({requires:[cardTargets,cardEffects,battles,basicPowers,drawPowers,turnPowers],build(){
+  function attack(base:number,upgraded:number){return targetAttack([base,upgraded]);}
+  function block(base:number,upgraded:number,twice=false){return defineEffect<CardUse,void>(b=>enqueue(cardEffects.exports.gainBlock,{use:b.input,amount:b.read(v=>{const amount=v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:v.input.state.upgraded?upgraded:base});return twice?v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:amount}):amount;})},
     {queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
-  function power(definition:PowerDefinition,base:number,upgraded:number,targeted=false,debuff=false){return defineEffect<CardUse,void>(b=>enqueue(powers.exports.apply,{definition,registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),
-    actor:b.read(v=>{if(targeted&&v.input.target===null)throw Error('Power needs a target');return targeted?v.input.target!:v.input.owner;}),amount:b.read(v=>v.input.state.upgraded?upgraded:base),source:b.read(v=>v.input.owner),debuff,scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope)},
-    {queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
+  function power(definition:PowerDefinition,base:number,upgraded:number,targeted=false,debuff=false){return cardPower(definition,[base,upgraded],targeted,debuff);}
   function draw(base:number,upgraded:number){return defineEffect<CardUse,void>(b=>enqueue(cardPiles.exports.draw,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),count:b.read(v=>v.input.state.upgraded?upgraded:base)},
     {queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
   const compose=(...effects:rules.Effect<CardUse,void>[])=>defineEffect<CardUse,void>(b=>sequence(...effects.map(effect=>rules.call(effect,b.input))));

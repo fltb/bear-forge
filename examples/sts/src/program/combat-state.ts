@@ -1,6 +1,6 @@
 import { typedValue } from '../rules/value.schemas.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../rules/execution.ts';
 
 /** Read-only observations of content-owned continuation data; never used to execute rules. */
 export const CombatPrivateSchema=z.strictObject({

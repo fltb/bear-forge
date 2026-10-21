@@ -1,5 +1,6 @@
 import {z} from 'zod';
-import {rules,type ruleModules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
+import {type ruleModules} from '@bear-forge/card-engine';
 import {entityId} from './resources.schemas.ts';
 import {adventureHistorySchema} from './adventures.schemas.ts';
 

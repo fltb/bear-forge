@@ -1,6 +1,6 @@
 import { typedValue } from './value.schemas.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
 import {entityId} from './resources.schemas.ts';
 export type ConsumableUse={battle:number;actor:number;target:number|null;multiplier:1|2};
 export type ConsumableConfig={targeted:boolean;allowed:rules.Query<ConsumableUse,boolean>;use:rules.Effect<ConsumableUse,void>};

@@ -1,5 +1,6 @@
+import {cardTargets} from '../../../rules/card-targets.ts';
 import {shackledPower} from "../../powers/shackled.ts";
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {battles} from "../../../rules/battles.ts";
 import {cardInstances} from "../../../rules/card-instances.ts";
 import {cardPiles} from "../../../rules/card-piles.ts";
@@ -15,7 +16,7 @@ import {concreteCard,composePrograms,cardBlock,cardDraw,cardPower,cardAmount,typ
 import type {CardUse} from "../../../rules/card-instances.types.ts";
 import type {PowerDefinition} from "../../../rules/powers.types.ts";
 const {defineRules,defineEffect,sequence,forEach,when,whileDo,call,query,enqueue}=rules;
-export const colorlessSkillCards=defineRules({requires:[shackledPower,battles,basicPowers,defensePowers],build(){
+export const colorlessSkillCards=defineRules({requires:[cardTargets,shackledPower,battles,basicPowers,defensePowers],build(){
   const queue=(effect:rules.Effect<CardUse,void>,retained=false)=>defineEffect<CardUse,void>(b=>enqueue(effect,b.input,{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>{const s=v.query(battles.exports.status,v.input.battle);return retained?s.scope:s.actionScope;}),eligible:'captured'}));
   const heal=(amount:CardAmount)=>defineEffect<CardUse,void>(b=>enqueue(resources.exports.heal,{entity:b.read(v=>v.input.owner),amount:b.read(v=>cardAmount(amount,v))},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).scope),eligible:'captured'}));
   const hpLoss=(amount:number)=>queue(defineEffect<CardUse,void>(b=>sequence(call(resources.exports.loseHp,{entity:b.read(v=>v.input.owner),amount,selfDamage:true}),call(battles.exports.checkOutcome,b.read(v=>v.input.battle)))),true);

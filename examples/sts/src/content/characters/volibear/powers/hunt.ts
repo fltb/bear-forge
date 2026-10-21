@@ -1,5 +1,6 @@
+import {volibearCardDescriptions as descriptions} from '../cards/metadata.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {powers} from '../../../../rules/powers.ts';
 import {cardInstances} from '../../../../rules/card-instances.ts';
@@ -35,7 +36,7 @@ export const volibearHunt=rules.defineRules({requires:[battles,powers,cardInstan
       return {turn,targets,last:{play:use.play,target,amount}};
     }))),
   });
-  const EndlessHunt=rules.defineEntity(powers.exports.kind,{
+  const EndlessHunt=rules.defineEntity(powers.exports.kind,{display:{name:descriptions.R14.metadata.name,text:descriptions.R14.text},
     ...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(discount,record),
   },{components:[ledger]});
   return {exports:{EndlessHunt}};

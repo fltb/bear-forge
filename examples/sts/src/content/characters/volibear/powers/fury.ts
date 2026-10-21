@@ -1,5 +1,6 @@
+import {volibearCardDescriptions as descriptions} from '../cards/metadata.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {powers} from '../../../../rules/powers.ts';
 import {actionQueue} from '../../../../rules/combat-actions.ts';
@@ -23,7 +24,7 @@ export const volibearFury=rules.defineRules({requires:[battles,powers,basicPower
       lifetime:b.read(v=>v.get(rules.query(battles.exports.current,v.input.event.use.battle)).actionScope),
     })),
   });
-  const GrowingFury=rules.defineEntity(powers.exports.kind,{
+  const GrowingFury=rules.defineEntity(powers.exports.kind,{display:{name:descriptions.U26.metadata.name,text:descriptions.U26.text},
     ...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(secondAttack),
   });
   return {exports:{GrowingFury}};

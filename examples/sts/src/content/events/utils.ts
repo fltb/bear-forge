@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 import {adventures} from "../../rules/adventures.ts";
 import {resources,HpLossOrigin} from "../../rules/resources.ts";
 const {defineRules,defineEffect,call,query}=rules;

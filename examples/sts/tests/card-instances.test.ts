@@ -2,7 +2,8 @@ import test from 'node:test';
 import type {AdventureCatalog} from '../src/rules/adventures.types.ts';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
-import {rules,linkRules} from '@bear-forge/card-engine';
+import {rules} from '../src/rules/execution.ts';
+import {linkRules} from '@bear-forge/card-engine';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {cardInstances,CardMode} from '../src/rules/card-instances.ts';
 import type {CardConfig,CardUse,CardSetup} from '../src/rules/card-instances.types.ts';
@@ -96,7 +97,7 @@ test('a custom card can combine private hooks and typed query policies for a two
     return{exports:{card:defineEntity(cardInstances.exports.kind,{id:'CUSTOM_TWO_STEP',metadata:cards.BASH,use:noop,canUpgrade,upgrade,created},{components:[used]})}};
   }});
   const entry=defineEffect<void,unknown>(b=>{const catalog=b.local<AdventureCatalog>(),entity=b.local<number>(),first=b.local<boolean>(),second=b.local<boolean>(),third=b.local<boolean>();return sequence(
-    b.assign(catalog,{cards:[{id:'CUSTOM_TWO_STEP',definition:custom.exports.card}],relics:[]}),b.assign(entity,spawnEntity({kind:cardInstances.exports.kind,definition:b.read(v=>v.get(catalog).cards[0]!.definition),owner:null,scope:0,setup:{mode:CardMode.Combat,master:null,uniqueId:4,upgraded:false,specialData:0}})),
+    b.assign(catalog,{starterRelic:null,cardPools:{color:0,rarity:[[],[],[]],typeRarity:[[[],[],[]],[[],[],[]],[[],[],[]]],random:[],transform:[],combat:[[],[],[],[],[]],startingBasics:[]},cards:[{id:'CUSTOM_TWO_STEP',definition:custom.exports.card}],relics:[]}),b.assign(entity,spawnEntity({kind:cardInstances.exports.kind,definition:b.read(v=>v.get(catalog).cards[0]!.definition),owner:null,scope:0,setup:{mode:CardMode.Combat,master:null,uniqueId:4,upgraded:false,specialData:0}})),
     b.assign(first,call(cardInstances.exports.upgrade,entity)),b.assign(second,call(cardInstances.exports.upgrade,entity)),b.assign(third,call(cardInstances.exports.upgrade,entity)),
     b.return({first,second,third,used:rules.readComponent(entity,used),card:query(cardInstances.exports.combatView,entity)}),
   );});

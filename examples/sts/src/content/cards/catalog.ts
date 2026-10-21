@@ -1,3 +1,4 @@
+import {ironcladCardPools} from '../characters/ironclad/pools.ts';
 import {basicCards} from "../characters/ironclad/cards/basic.ts";
 import {colorlessBasicCards} from "./colorless/basic.ts";
 import {curseBasicCards} from "./curses/ascenders-bane.ts";
@@ -20,7 +21,7 @@ import {colorlessPowerCards} from "./colorless/powers.ts";
 import type {createSelectionCards} from "../characters/ironclad/cards/deck-order.ts";
 import type {createColorlessSelectionCards} from "./colorless/thinking-ahead.ts";
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 import {cardInstances} from "../../rules/card-instances.ts";
 import {cardEvaluationSchema} from "../../rules/card-instances.schemas.ts";
 import type {CardUse} from "../../rules/card-instances.types.ts";
@@ -46,5 +47,5 @@ export function createCardCatalog(selection:ReturnType<typeof createSelectionCar
   Object.assign(implemented,{DEEP_BREATH:colorlessGenerated.exports.DeepBreath,DISCOVERY:colorlessGenerated.exports.Discovery,HAVOC:generated.exports.Havoc,INFERNAL_BLADE:generated.exports.InfernalBlade,JACK_OF_ALL_TRADES:colorlessGenerated.exports.JackOfAllTrades,CHRYSALIS:colorlessGenerated.exports.Chrysalis,METAMORPHOSIS:colorlessGenerated.exports.Metamorphosis,SPOT_WEAKNESS:generated.exports.SpotWeakness,TRANSMUTATION:colorlessGenerated.exports.Transmutation,VIOLENCE:colorlessGenerated.exports.Violence,DARK_SHACKLES:colorlessSkillCards.exports.DarkShackles});
   Object.assign(implemented,{COMBUST:powerCards.exports.Combust,THE_BOMB:colorlessPowerCards.exports.TheBomb,PANACHE:colorlessPowerCards.exports.Panache,MAYHEM:colorlessPowerCards.exports.Mayhem,MAGNETISM:colorlessPowerCards.exports.Magnetism,SADISTIC_NATURE:colorlessPowerCards.exports.SadisticNature,CLUMSY:curseCards.exports.Clumsy,DECAY:curseCards.exports.Decay,DOUBT:curseCards.exports.Doubt,SHAME:curseCards.exports.Shame,INJURY:curseCards.exports.Injury,NORMALITY:curseCards.exports.Normality,PAIN:curseCards.exports.Pain,PRIDE:curseCards.exports.Pride,WRITHE:curseCards.exports.Writhe});
   const definitions=(Object.keys(cards) as (keyof typeof cards)[]).map(id=>({id,definition:implemented[id]??rules.defineEntity(cardInstances.exports.kind,{id,metadata:cards[id],use:unsupported,canUpgrade:upgradeOnce(cards[id]),upgrade:standardUpgrade(cards[id])})}));
-  return{exports:{definitions}};
+  return{exports:{definitions,cardPools:ironcladCardPools}};
 }});}

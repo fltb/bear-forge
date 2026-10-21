@@ -1,5 +1,7 @@
+import {cardTargets} from '../../../../rules/card-targets.ts';
+import {cardEffects} from '../../../../rules/card-effects.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {attributes} from '../../../../rules/attributes.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {resources} from '../../../../rules/resources.ts';
@@ -22,9 +24,9 @@ const {defineRules,defineQuery,defineEffect,sequence,call,when,query,forEach,enq
  * Fixed per-segment growth is separate from dynamic damage (e.g. current block).
  * Single-target expansion never changes the original CardUse.target.
  */
-export const volibearCardPrograms=defineRules({requires:[battles,attributes,resources,lightning,volibearTraining],build(){
+export const volibearCardPrograms=defineRules({requires:[cardTargets,cardEffects,battles,attributes,resources,lightning,volibearTraining],build(){
   const fixedBonus=defineQuery({input:cardUseSchema,output:z.int32(),dependencies:[volibearTraining.exports.permanentBonus],base:(r,use)=>r.query(volibearTraining.exports.permanentBonus,use.card)});
-  const singleTargets=defineQuery({input:cardUseSchema,output:z.array(z.int32().nonnegative()),base:(_r,use)=>use.target===null?[]:[use.target]});
+  const singleTargets=cardTargets.exports.enemies;
   return {exports:{fixedBonus,singleTargets}};
 }});
 
@@ -69,10 +71,10 @@ export function attack(base:CardAmount,count:CardAmount=1,all=false,fixed=true,a
     b.read(v=>v.get(query(battles.exports.current,v.input.use.battle)).outcome===0&&v.get(query(attributes.exports.damageable,v.input.target))),
     afterHit?sequence(
       b.assign(hpBefore,b.read(v=>v.get(query(resources.exports.current,v.input.target)).hp)),
-      b.assign(result,call(damage.exports.hit,request)),
+      b.assign(result,call(cardEffects.exports.resolveHit,{use:b.read(v=>v.input.use),request,targeted:!all})),
       call(afterHit,{use:b.read(v=>v.input.use),target:b.read(v=>v.input.target),hpBefore,result}),
       call(battles.exports.checkOutcome,b.read(v=>v.input.use.battle)),
-    ):call(battles.exports.hit,request),
+    ):call(cardEffects.exports.hit,{use:b.read(v=>v.input.use),request,targeted:!all}),
     );
   });
   // Each segment is a queue task: front-queued retaliation resolves before the
@@ -86,8 +88,8 @@ export function attack(base:CardAmount,count:CardAmount=1,all=false,fixed=true,a
 }
 
 export function block(base:CardAmount):rules.Effect<CardUse,void>{
-  return queued(defineEffect<CardUse,void>(b=>call(resources.exports.gainBlock,{
-    entity:b.read(v=>v.input.owner),amount:b.read(v=>Math.max(0,v.get(query(attributes.exports.blockAmount,{actor:v.input.owner,base:cardAmount(base,v)})))),
+  return queued(defineEffect<CardUse,void>(b=>call(cardEffects.exports.gainBlock,{
+    use:b.input,amount:b.read(v=>Math.max(0,v.get(query(attributes.exports.blockAmount,{actor:v.input.owner,base:cardAmount(base,v)})))),
   })));
 }
 

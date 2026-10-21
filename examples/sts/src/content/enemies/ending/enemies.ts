@@ -1,6 +1,6 @@
 import {pileCards} from "../../cards/statuses/definitions.ts";
 import {actionQueue} from "../../../rules/combat-actions.ts";
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {enemies} from "../../../rules/enemies.ts";
 import {battles} from "../../../rules/battles.ts";
 import {powers} from "../../../rules/powers.ts";

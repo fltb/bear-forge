@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
 import type {ruleModules} from '@bear-forge/card-engine';
 import {entityId} from './resources.schemas.ts';
 import {zoneMoveSchema,zoneMovedSchema,zoneContentsSchema,zoneReorderSchema} from './zones.schemas.ts';

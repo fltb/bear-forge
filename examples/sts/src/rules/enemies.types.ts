@@ -1,4 +1,4 @@
-import type {rules} from '@bear-forge/card-engine';
+import type {rules} from './execution.ts';
 export type EnemySetup={actor:number;battle:number;aiRng:number;ascension:number;slot?:number|undefined;hpRng?:number|undefined;parameters?:number[]|undefined;deferInitialRoll?:boolean|undefined};
 export type EnemyHealth={minimum:number;maximum:number;draw:boolean;discard:{minimum:number;maximum:number}[];parameters:{minimum:number;maximum:number}[]};
 export type EnemyState=EnemySetup&{history:[number,number];opportunityTurn:number;claimed:boolean;prepared:boolean;escaped:boolean;halfDead:boolean};
@@ -15,3 +15,4 @@ export type EnemyConfig={
   initialize?:rules.Effect<rules.EntityLifecycle<EnemySetup>,void>|undefined;
 };
 export type EnemyDefinition=rules.EntityDefinition<EnemyConfig,EnemySetup>;
+export type EnemyActionReceipt={action:EnemyAction|null;performed:boolean;absorbed:number;blockSpent:number};

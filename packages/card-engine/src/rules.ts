@@ -34,7 +34,7 @@ export type { Component, RuleEvent, RuleModule, Schema } from './rules-module.ty
 export { defineQuery, query } from './rules-queries.ts';
 export type { Query, QuerySpec, QueryRead,EntityQuerySelection } from './rules-query.types.ts';
 
-export { on, install, uninstall, emit } from './rules-reactions.ts';
+export { on, guardAbility, install, uninstall, emit } from './rules-reactions.ts';
 export type { Ability, InstallSpec, ReactionContext, ReactionSpec } from './rules-reactions.types.ts';
 
 export { defineCheckpoint, replace, restrict } from './rules-checkpoints.ts';

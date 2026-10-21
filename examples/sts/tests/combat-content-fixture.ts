@@ -1,5 +1,7 @@
+import {startingRelics} from '../src/content/characters/ironclad/relics/burning-blood.ts';
 import {z} from 'zod';
-import {rules,linkRules} from '@bear-forge/card-engine';
+import {rules} from '../src/rules/execution.ts';
+import {linkRules} from '@bear-forge/card-engine';
 import {adventureProgram,adventureContent} from "../src/program/adventure.ts";
 import {adventureStart} from "../src/program/start.ts";
 import {combatProgram} from "../src/program/combat.ts";
@@ -21,7 +23,7 @@ const fixture=defineRules({requires:[adventureProgram],build(){
     const run=b.local<number>();
     const state=(v:rules.ReadView<CombatContentCase>)=>v.get(query(adventures.exports.current,v.get(run)));
     return sequence(
-      b.assign(run,call(adventureStart.exports.initialize,{setup:b.read(v=>({seed:v.input.seed})),definition:rules.defineEntity(adventures.exports.kind,{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),
+      b.assign(run,call(adventureStart.exports.initialize,{setup:b.read(v=>({seed:v.input.seed})),definition:rules.defineEntity(adventures.exports.kind,{starterRelic:startingRelics.exports.BurningBlood,cardPools:adventureContent.cards.exports.cardPools,cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),
       when(b.read(v=>v.input.durable),call(resources.exports.setHealth,{entity:b.read(v=>state(v).actor),hp:9990,maxHp:10000})),
       when(b.read(v=>v.input.potion===potionId.FAIRY_POTION||v.input.relics.includes('LIZARD_TAIL')),call(resources.exports.setHealth,{entity:b.read(v=>state(v).actor),hp:1,maxHp:80})),
       forEach(b.read(v=>v.input.relics),id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),

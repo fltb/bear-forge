@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../rules/execution.ts';
 import {random} from "../../rules/random.ts";
 import {encounterId as e} from "../../identifiers.ts";
 import type {MonsterPlan} from "../../encounters.types.ts";

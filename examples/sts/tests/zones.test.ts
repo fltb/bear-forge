@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
-import {rules,linkRules,CardProgram,CardMachine,plainCardStorage} from '@bear-forge/card-engine';
+import {rules} from '../src/rules/execution.ts';
+import {linkRules,CardProgram,CardMachine,plainCardStorage} from '@bear-forge/card-engine';
 import {portEffect} from '../../../packages/card-engine/src/rules-internal.ts';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {zones} from '../src/rules/zones.ts';
@@ -36,7 +37,7 @@ function fixture(steps:readonly Step[]){
       ]),
       // Queries borrow versions. Only public history delivery needs independent
       // writable arrays to satisfy this fixture's tree-shaped output schema.
-      b.return(b.read(v=>v.get(history).map(p=>({draw:[...p.draw],hand:[...p.hand],discard:[...p.discard],exhaust:[...p.exhaust]})))),
+      b.return(b.read(v=>{const logical=(id:number)=>{const index=v.get(cards).indexOf(id);if(index<0)throw Error('Unknown card identity');return index+1;};return v.get(history).map(p=>({draw:p.draw.map(logical),hand:p.hand.map(logical),discard:p.discard.map(logical),exhaust:p.exhaust.map(logical)}));})),
     );
   });
   return linkRules({id:'sts/zone-fixture-1',schemas:{setup:z.undefined(),result:z.array(stateSchema),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[views]});
@@ -66,13 +67,15 @@ test('a full destination cannot lose a source member, and reordering preserves t
       call(zones.exports.move,{entity:a,from:null,to:target,index:0}),call(zones.exports.move,{entity:c,from:null,to:source,index:0}),
       b.assign(legal,query(zones.exports.canMove,{entity:c,from:source,to:target,index:1})),
       call(zones.exports.move,{entity:a,from:target,to:source,index:1}),call(zones.exports.reorder,{zone:source,order:[a,c]}),
-      b.return({legal,source:query(zones.exports.members,source),target:query(zones.exports.members,target),locations:[query(zones.exports.location,a),query(zones.exports.location,c)]}),
+      b.return({identities:{a,c,source},legal,source:query(zones.exports.members,source),target:query(zones.exports.members,target),locations:[query(zones.exports.location,a),query(zones.exports.location,c)]}),
     );
   });
   const definition=linkRules({id:'sts/zone-boundaries-1',schemas:{setup:z.undefined(),result:z.unknown(),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[members]});
   for(const controlled of [false,true]){
     const loaded=unwrap(await createCardLoader({controlled}).load(definition)),instance=unwrap(await loaded.core.start(undefined));
-    const stop=unwrap(await instance.inspect());assert.deepEqual(stop.kind==='done'?stop.result:stop,{legal:false,source:[1,2],target:[],locations:[3,3]});
+    const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected completed move');
+    const result=stop.result as {identities:{a:number;c:number;source:number};legal:boolean;source:number[];target:number[];locations:number[]};
+    const {identities,...actual}=result;assert.deepEqual(actual,{legal:false,source:[identities.a,identities.c],target:[],locations:[identities.source,identities.source]});
     await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);
   }
 });

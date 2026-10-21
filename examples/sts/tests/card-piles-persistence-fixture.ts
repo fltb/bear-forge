@@ -1,5 +1,6 @@
 import {z} from 'zod';
-import {rules,ruleModules,linkRules} from '@bear-forge/card-engine';
+import {rules} from '../src/rules/execution.ts';
+import {ruleModules,linkRules} from '@bear-forge/card-engine';
 import {portEffect} from '../../../packages/card-engine/src/rules-internal.ts';
 import {cardPiles} from '../src/rules/card-piles.ts';
 import {cardInstances} from '../src/rules/card-instances.ts';

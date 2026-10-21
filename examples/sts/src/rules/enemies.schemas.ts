@@ -6,3 +6,4 @@ export const enemyStateSchema=enemySetupSchema.extend({history:z.tuple([z.int32(
 export const enemyIntentSchema=z.object({attack:z.boolean(),damage:z.int32().nonnegative(),hits:z.int32().nonnegative()}).strict();
 export const enemyActionSchema=z.object({enemy:entityId,actor:entityId,battle:entityId,turn:z.int32().positive(),move:z.int32(),attack:z.boolean()}).strict();
 export const enemyRollSchema=z.object({enemy:entityId,roll:z.int32().min(0).max(99)}).strict();
+export const enemyActionReceiptSchema=z.object({action:enemyActionSchema.nullable(),performed:z.boolean(),absorbed:z.int32().nonnegative(),blockSpent:z.int32().nonnegative()}).strict();

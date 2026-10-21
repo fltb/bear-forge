@@ -1,5 +1,6 @@
 import {z} from 'zod';
-import {rules,type ruleModules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
+import {type ruleModules} from '@bear-forge/card-engine';
 import {cardInstances} from './card-instances.ts';
 import {random} from './random.ts';
 import {resources} from './resources.ts';

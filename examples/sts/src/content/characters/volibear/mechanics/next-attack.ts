@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {cardInstances} from '../../../../rules/card-instances.ts';
 import type {CardUse,CardVariant} from '../../../../rules/card-instances.types.ts';
@@ -33,18 +33,19 @@ export const volibearNextAttack=rules.defineRules({requires:[battles,cardInstanc
     }}),
     effect:rules.defineEffect<rules.ReactionContext<CardUse>,void>(b=>rules.despawnEntity({entity:b.read(v=>v.input.source),reason:{attackBonusSpent:true}})),
   });
-  const kind=m.kind({config:z.undefined(),setup,components:[state],initialize:rules.defineEffect<rules.EntityLifecycle<z.infer<typeof setup>>,void>(b=>rules.sequence(
+  const kind=m.kind({config:z.undefined(),setup,components:[],initialize:rules.defineEffect<rules.EntityLifecycle<z.infer<typeof setup>>,void>(b=>rules.sequence(
     rules.updateLocalComponent(b.read(v=>v.input.entity),state,b.read(v=>({...v.input.setup,play:null}))),
     ...[boost,start,finish].map(ability=>rules.install({ability,source:b.read(v=>v.input.entity),owner:b.read(v=>{
       if(v.input.owner===null)throw Error('Next attack bonus requires an owner');return v.input.owner;
     }),environment:{},lifetime:b.read(v=>v.input.scope)})),
   ))});
-  const definition=rules.defineEntity(kind,undefined);
+  const definition=rules.defineEntity(kind,undefined,{components:[state]});
   const prepare=rules.defineEffect<z.infer<typeof setup>,void>(b=>rules.sequence(
     rules.install({ability:retainThisTurn,source:b.read(v=>v.input.card),owner:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).actor),
       environment:b.read(v=>({battle:v.input.battle,turn:v.get(rules.query(battles.exports.current,v.input.battle)).turn})),
       lifetime:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope)}),
     rules.spawnEntity({definition,setup:b.input,owner:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).actor),scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope)}),
   ));
-  return {exports:{prepare}};
+  const pendingBonus=rules.defineQuery({input:z.int32(),output:z.int32(),reads:[state],base:(r,card)=>r.entities(state).reduce((total,id)=>{const s=r.component(id,state);return total+(s.card===card&&s.play===null?s.amount:0);},0)});
+  return {exports:{pendingBonus,prepare}};
 }});

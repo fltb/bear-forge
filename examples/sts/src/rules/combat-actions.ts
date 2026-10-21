@@ -1,4 +1,4 @@
-import {rules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
 /** Static identity shared by combat modules; tasks and their lifetime remain in Context. */
 export const actionQueue:rules.RuleQueue={label:'sts-actions'};
 export const combatScope:rules.ScopeKind={label:'sts-combat'};

@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from './execution.ts';
 import {resources} from './resources.ts';
 import {entityId} from './resources.schemas.ts';
 import {attackValueSchema,blockValueSchema} from './attributes.schemas.ts';

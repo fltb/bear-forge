@@ -1,4 +1,5 @@
-import type {rules} from '@bear-forge/card-engine';
+import type {EffectKind} from './effect-policy.ts';
+import type {rules} from './execution.ts';
 export type PowerChange={amount:number;source:number|null;debuff:boolean;skipFirstDecay?:boolean|undefined};
 export type PowerMutable={level:number;active:boolean;justApplied:boolean};
 export type PowerState=PowerMutable&{registry:number;actor:number;phase:0|1|2};
@@ -10,6 +11,9 @@ export type PowerReduction={state:PowerState;amount:number};
 export type PowerMerged={entity:number;before:PowerState;after:PowerState;change:PowerChange};
 export type PowerPresentation={key:number;flag:boolean;slot?:0|1|undefined;side?:0|1|undefined};
 export type PowerConfig={
+  display?:{name:string;text:string}|undefined;
+  /** Semantic effect of granting this status; ordinary statuses are Special. */
+  grantEffect?:EffectKind|undefined;
   presentation?:PowerPresentation|undefined;
   admit?:rules.Query<{actor:number;change:PowerChange},boolean>|undefined;
   initial:rules.Query<PowerChange,PowerMutable>;

@@ -15,7 +15,7 @@ const schema=z.object({
   entities:z.record(key,z.object({components:z.record(key,z.unknown()),definition:reference,scope:id,owner:reference,phase:z.enum(['initializing','active','removing'])}).strict()),
   scopes:z.record(key,z.object({kind:reference,parent:reference,phase:z.enum(['initializing','active','ending','closed'])}).strict()),
   nextEntity:positive,nextScope:positive,sources:z.array(id),
-  tasks:z.record(key,z.object({id:positive,effect:z.object({program:z.string(),effect:id,source:reference,selector:reference}).strict(),input:z.unknown(),queue:id,source:reference,lifetime:id,eligible:z.enum(['captured','source-present']),state:z.enum(['scheduled','pending','running']),at:reference,condition:reference,position:z.enum(['front','back'])}).strict()),
+  tasks:z.record(key,z.object({id:positive,effect:z.object({program:z.string(),effect:id,source:reference,selector:reference}).strict(),input:z.unknown(),queue:id,source:reference,lifetime:id,eligible:z.enum(['captured','source-present']),state:z.enum(['scheduled','pending','staged','running']),at:reference,condition:reference,position:z.enum(['front','back'])}).strict()),
   queues:z.record(key,deque),nextTask:positive,
   outbox:z.record(key,z.object({id:positive,event:id,payload:z.unknown(),handlers:z.array(z.object({registration}).strict()),scheduled:z.array(positive)}).strict()),
   eventQueues:z.object({queued:deque,immediate:deque}).strict(),

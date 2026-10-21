@@ -1,4 +1,4 @@
-import type {rules} from '@bear-forge/card-engine';
+import type {rules} from './execution.ts';
 import type {CardConfig,CardSetup} from './card-instances.types.ts';
 export type PermanentCardDefinition=rules.EntityDefinition<CardConfig,CardSetup>;
 export type PermanentDeckSetup={actor:number};

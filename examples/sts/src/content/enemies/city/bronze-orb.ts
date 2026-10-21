@@ -1,6 +1,6 @@
 import { typedValue } from '../../../rules/value.schemas.ts';
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {enemies} from "../../../rules/enemies.ts";
 import {battles} from "../../../rules/battles.ts";
 import {powers} from "../../../rules/powers.ts";

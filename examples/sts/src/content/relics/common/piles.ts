@@ -1,7 +1,7 @@
 import { typedValue } from '../../../rules/value.schemas.ts';
 import {combatPrivate,observeCounter} from "../../../program/combat-state.ts";
 import {z} from 'zod';
-import {rules} from '@bear-forge/card-engine';
+import {rules} from '../../../rules/execution.ts';
 import {cardPiles} from "../../../rules/card-piles.ts";
 import {resources} from "../../../rules/resources.ts";
 import {relics} from "../../../rules/relics.ts";

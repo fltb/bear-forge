@@ -1,4 +1,6 @@
-import {rules} from '@bear-forge/card-engine';
+import {cardTargets} from '../../../rules/card-targets.ts';
+import {cardEffects} from '../../../rules/card-effects.ts';
+import {rules} from '../../../rules/execution.ts';
 import {battles} from "../../../rules/battles.ts";
 import {cardInstances} from "../../../rules/card-instances.ts";
 import {cardPiles} from "../../../rules/card-piles.ts";
@@ -19,13 +21,13 @@ export function concreteCard(id:keyof typeof cards,use:rules.Effect<CardUse,void
   return rules.defineEntity(cardInstances.exports.kind,{id,metadata:cards[id],use,canUpgrade:upgradeOnce(cards[id]),upgrade:standardUpgrade(cards[id]),...policies});
 }
 export function targetAttack(amount:CardAmount,count:CardAmount=1){return defineEffect<CardUse,void>(b=>{
-  const hit=b.local<{battle:number;source:number;target:number;amount:number;attack:boolean;selfDamage:boolean}>();
-  return sequence(b.assign(hit,b.read(v=>{if(v.input.target===null)throw Error('Attack needs a target');return{battle:v.input.battle,source:v.input.owner,target:v.input.target,amount:v.query(attributes.exports.attackAmount,{source:v.input.owner,target:v.input.target,base:cardAmount(amount,v),card:v.input.card}),attack:true,selfDamage:false};})),
-    forEach(b.read(v=>Array.from({length:cardAmount(count,v)},(_,i)=>i)),()=>enqueue(battles.exports.hit,hit,{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'})));
+  const hits=b.local<import('../../../rules/damage.types.ts').HitRequest[]>();
+  return sequence(b.assign(hits,b.read(v=>v.query(cardTargets.exports.enemies,v.input).map(target=>({battle:v.input.battle,source:v.input.owner,target,amount:v.query(attributes.exports.attackAmount,{source:v.input.owner,target,base:cardAmount(amount,v),card:v.input.card}),attack:true,selfDamage:false})))),
+    forEach(b.read(v=>Array.from({length:cardAmount(count,v)},(_,i)=>i)),()=>forEach(hits,request=>enqueue(cardEffects.exports.hit,{use:b.input,request,targeted:true},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}))));
 });}
-export function cardBlock(amount:CardAmount,twice=false){return defineEffect<CardUse,void>(b=>enqueue(resources.exports.gainBlock,{entity:b.read(v=>v.input.owner),amount:b.read(v=>{
+export function cardBlock(amount:CardAmount,twice=false){return defineEffect<CardUse,void>(b=>enqueue(cardEffects.exports.gainBlock,{use:b.input,amount:b.read(v=>{
   const first=v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:cardAmount(amount,v)});return twice?v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:first}):first;
 })},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
 export function cardDraw(amount:CardAmount){return defineEffect<CardUse,void>(b=>enqueue(cardPiles.exports.draw,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),count:b.read(v=>cardAmount(amount,v))},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
-export function cardPower(definition:PowerDefinition,amount:CardAmount,targeted=false,debuff=false){return defineEffect<CardUse,void>(b=>enqueue(powers.exports.apply,{definition,registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),actor:b.read(v=>{if(targeted&&v.input.target===null)throw Error('Power needs a target');return targeted?v.input.target!:v.input.owner;}),amount:b.read(v=>cardAmount(amount,v)),source:b.read(v=>v.input.owner),debuff,scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope)},
-  {queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
+export function cardPower(definition:PowerDefinition,amount:CardAmount,targeted=false,debuff=false){return defineEffect<CardUse,void>(b=>forEach(targeted?query(cardTargets.exports.enemies,b.input):b.read(v=>[v.input.owner]),actor=>enqueue(powers.exports.apply,{definition,registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),actor,amount:b.read(v=>cardAmount(amount,v)),source:b.read(v=>v.input.owner),debuff,scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope)},
+  {queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'})));}

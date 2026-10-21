@@ -1,5 +1,7 @@
+import {startingRelics} from '../src/content/characters/ironclad/relics/burning-blood.ts';
 import {z} from 'zod';
-import {rules,linkRules} from '@bear-forge/card-engine';
+import {rules} from '../src/rules/execution.ts';
+import {linkRules} from '@bear-forge/card-engine';
 import {adventureStart} from "../src/program/start.ts";
 import {adventureContent} from "../src/program/adventure.ts";
 import {adventureViews} from "../src/adapters/adventure-views.ts";
@@ -18,7 +20,7 @@ export function deckCaseFixture(steps:readonly DeckCaseStep[],owned:readonly Rel
     const run=b.local<number>(),history=b.local<GameView[]>();
     const cardAt=(index:number)=>b.read(v=>{const s=v.get(query(adventures.exports.current,v.get(run))),card=v.get(query(permanentDecks.exports.current,s.deck)).cards[index];if(card===undefined)throw Error('Invalid deck case index');return card;});
     return sequence(
-      b.assign(run,call(adventureStart.exports.initialize,{setup:b.input,definition:rules.defineEntity(adventures.exports.kind,{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),
+      b.assign(run,call(adventureStart.exports.initialize,{setup:b.input,definition:rules.defineEntity(adventures.exports.kind,{starterRelic:startingRelics.exports.BurningBlood,cardPools:adventureContent.cards.exports.cardPools,cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),
       forEach(owned,id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),b.assign(history,[query(adventureViews.exports.privateGame,run)]),
       ...steps.flatMap(step=>{
         const deck=b.read(v=>v.get(query(adventures.exports.current,v.get(run))).deck);
@@ -31,7 +33,7 @@ export function deckCaseFixture(steps:readonly DeckCaseStep[],owned:readonly Rel
 }
 export function shopCaseFixture(owned:readonly RelicId[]){
   const entry=defineEffect<Setup,GameView>(b=>{const run=b.local<number>();return sequence(
-    b.assign(run,call(adventureStart.exports.initialize,{setup:b.input,definition:rules.defineEntity(adventures.exports.kind,{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),forEach(owned,id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),
+    b.assign(run,call(adventureStart.exports.initialize,{setup:b.input,definition:rules.defineEntity(adventures.exports.kind,{starterRelic:startingRelics.exports.BurningBlood,cardPools:adventureContent.cards.exports.cardPools,cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),forEach(owned,id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),
     call(resources.exports.gainGold,{entity:b.read(v=>v.get(query(adventures.exports.current,v.get(run))).actor),amount:b.read(v=>10000-v.get(query(resources.exports.current,v.get(query(adventures.exports.current,v.get(run))).actor)).gold)}),call(adventures.exports.setRoom,{run,room:'SHOP',event:0}),call(adventures.exports.setScene,{run,screen:'SHOP_ROOM',continuation:true}),call(adventureContent.merchant.exports.open,run),b.return(query(adventureViews.exports.privateGame,run)),
   );});
   return linkRules<{},Setup,Ports,GameView>({id:'sts/adventure-shop-case',schemas:{...programSchemas,result:GameViewSchema},initialize:()=>({}),entry,definitions:[entry],modules:[adventureContent.cards,adventureStart,adventureContent.acquisition,adventureContent.merchant,adventureViews]});
@@ -39,7 +41,7 @@ export function shopCaseFixture(owned:readonly RelicId[]){
 
 export function eventSamplingFixture(owned:readonly RelicId[],lastShops:readonly boolean[]){
   const entry=defineEffect<Setup,{outcomes:{room:string;event:number}[];state:GameView}>(b=>{const run=b.local<number>(),outcomes=b.local<{room:string;event:number}[]>();return sequence(
-    b.assign(run,call(adventureStart.exports.initialize,{setup:b.input,definition:rules.defineEntity(adventures.exports.kind,{cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),forEach(owned,id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),b.assign(outcomes,[]),
+    b.assign(run,call(adventureStart.exports.initialize,{setup:b.input,definition:rules.defineEntity(adventures.exports.kind,{starterRelic:startingRelics.exports.BurningBlood,cardPools:adventureContent.cards.exports.cardPools,cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),forEach(owned,id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),b.assign(outcomes,[]),
     forEach(lastShops,lastRoomWasShop=>sequence(call(adventureContent.events.exports.sample,{run,lastRoomWasShop}),b.assign(outcomes,b.read(v=>{const s=v.get(query(adventures.exports.current,v.get(run)));return[...v.get(outcomes),{room:s.room,event:s.event}];})))),b.return({outcomes,state:query(adventureViews.exports.privateGame,run)}),
   );});
   return linkRules({id:'sts/adventure-event-sampling-case',schemas:{...programSchemas,result:z.object({outcomes:z.array(z.object({room:z.string(),event:z.int32()})),state:GameViewSchema})},initialize:()=>({}),entry,definitions:[entry],modules:[adventureContent.cards,adventureStart,adventureContent.acquisition,adventureContent.events,adventureViews]});

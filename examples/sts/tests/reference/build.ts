@@ -7,7 +7,6 @@ import {fileURLToPath} from 'node:url';
 const exec = promisify(execFile);
 export const revision = '3cea139e546bd8f8a21a2791e1c62b7266743d70';
 export const root = fileURLToPath(new URL('../../../../', import.meta.url));
-export const source = resolve(process.env.STS_REFERENCE_SOURCE ?? resolve(root, '../sts_lightspeed'));
 const directory = resolve(root, 'build/sts-reference');
 const bridge = fileURLToPath(new URL('./reference.cpp', import.meta.url));
 let building: Promise<string> | undefined;
@@ -17,6 +16,9 @@ async function files(path: string): Promise<string[]> {
 }
 async function modified(path: string) { try { return (await stat(path)).mtimeMs; } catch { return 0; } }
 async function build(): Promise<string> {
+  const configured=process.env.STS_REFERENCE_SOURCE?.trim();
+  if(!configured)throw Error('C++ comparison requires STS_REFERENCE_SOURCE pointing to the corrected local checkout; leave STS_COMPARE_CPP unset for TS-only acceptance');
+  const source=resolve(process.env.INIT_CWD??process.cwd(),configured);
   const adapter=bridge;
   const actual = (await exec('git',['rev-parse','HEAD'],{cwd:source})).stdout.trim();
   if (actual !== revision) throw Error(`STS reference must be ${revision}, found ${actual}`);

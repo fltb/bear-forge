@@ -24,8 +24,15 @@ export function assertSameState(expected:unknown,actual:unknown,context:string) 
   assert.equal(difference,null,`${context}: ${JSON.stringify(difference)}`);
 }
 
-/** One live BaseGame Context and one live C++ game. No action tape or replay. */
-export async function compareRun(seed:string,{differential=false,maxDecisions=20_000}:{differential?:boolean;maxDecisions?:number}={}) {
+/** Explicit opt-in; a source directory by itself never enables C++ execution. */
+export function cppComparisonEnabled(){
+  const value=process.env.STS_COMPARE_CPP;
+  if(value!==undefined&&value!=='0'&&value!=='1')throw Error('STS_COMPARE_CPP must be 0 or 1');
+  return value==='1';
+}
+
+/** One live BaseGame Context, optionally paired with C++. No tape or replay. */
+export async function compareRun(seed:string,{differential=false,compareCpp=false,maxDecisions=20_000}:{differential?:boolean;compareCpp?:boolean;maxDecisions?:number}={}) {
   const [{createCardLoader,memorySnapshotStore},{createGameBinder},{cardDefinition},{contract,observe},{ReferenceClient},{publishReference}]=await Promise.all([
     import('@bear-forge/runtime-card'),import('@bear-forge/game-host'),import('../../src/card.ts'),import('../../src/contract.ts'),import('./client.ts'),import('./publication.ts'),
   ]);
@@ -45,8 +52,11 @@ export async function compareRun(seed:string,{differential=false,maxDecisions=20
       if(pending===null)return{kind:'pause'};
       const value=pending;pending=null;return{kind:'reply',value};
     },onEvent:async()=>({kind:'reply',value:null})}));
-    reference=await ReferenceClient.create();
-    let source=await reference.call<import('./client.ts').ReferenceState|null>({op:'start',seed,resultOnly:!differential}),decisions=0;
+    let source:import('./client.ts').ReferenceState|null=null,decisions=0;
+    if(compareCpp||differential){
+      reference=await ReferenceClient.create();
+      source=await reference.call({op:'start',seed,resultOnly:!differential});
+    }
     unwrap(await active.run());
     for(;;){
       const status=unwrap(await active.inspect());
@@ -71,15 +81,22 @@ export async function compareRun(seed:string,{differential=false,maxDecisions=20
         }finally{unwrap(await loaded.persistence!.release(snapshot));}
       }
       if(status.kind==='ended'){
-        if(!differential)source=await reference.call({op:'inspect'});
-        assert.ok(source);
-        assert.notEqual(source.game.outcome,1,`seed=${seed}: C++ must also be terminal`);
-        const expected={outcome:source.game.outcome===0?'death':'victory',heartDefeated:source.heartDefeated,act:source.game.act,floor:source.game.floor,hp:source.game.hp};
-        assertSameState(expected,status.result,`seed=${seed} final result`);
         const actual=unwrap(await active.observe({player:'0'}));
-        assertSameState(observe(publishReference(source,[])).game,actual.game,`seed=${seed} final game`);
-        assert.equal(source.battle,null,`seed=${seed} final battle`);
-        assert.equal(source.decisions,decisions,`seed=${seed} final decision count`);
+        assert.ok(decisions>0,`seed=${seed}: a clean run must actually advance`);
+        assert.equal(actual.battle,null,`seed=${seed}: combat must have settled`);
+        assert.ok(actual.game.outcome===0||actual.game.outcome===2,`seed=${seed}: terminal rule outcome required`);
+        assert.equal(status.result.outcome==='death',actual.game.hp===0,`seed=${seed}: death must match HP`);
+        if(status.result.heartDefeated){assert.equal(status.result.outcome,'victory');assert.equal(status.result.act,4);}
+        if(reference){
+          if(!differential)source=await reference.call({op:'inspect'});
+          assert.ok(source);
+          assert.notEqual(source.game.outcome,1,`seed=${seed}: C++ must also be terminal`);
+          const expected={outcome:source.game.outcome===0?'death':'victory',heartDefeated:source.heartDefeated,act:source.game.act,floor:source.game.floor,hp:source.game.hp};
+          assertSameState(expected,status.result,`seed=${seed} final result`);
+          assertSameState(observe(publishReference(source,[])).game,actual.game,`seed=${seed} final game`);
+          assert.equal(source.battle,null,`seed=${seed} final battle`);
+          assert.equal(source.decisions,decisions,`seed=${seed} final decision count`);
+        }
         return {seed,decisions,result:status.result};
       }
       assert.equal(status.kind,'request',`seed=${seed}: expected input or terminal result`);
@@ -94,8 +111,10 @@ export async function compareRun(seed:string,{differential=false,maxDecisions=20
       const action=options.values[(decisions*17+offset)%options.values.length]!;
       pending=action;
       const advanced=unwrap(await active.run());assert.equal(advanced.accepted?.kind,'action');assert.equal(pending,null);
-      if(differential)source=await reference.call({op:'advance',bits:action.bits});
-      else await reference.call<null>({op:'advance',bits:action.bits,resultOnly:true});
+      if(reference){
+        if(differential)source=await reference.call({op:'advance',bits:action.bits});
+        else await reference.call<null>({op:'advance',bits:action.bits,resultOnly:true});
+      }
       decisions++;
     }
   }finally{

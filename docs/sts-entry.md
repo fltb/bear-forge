@@ -93,12 +93,13 @@ quit
 ```sh
 npm test -w @bear-forge/sts
 npm run test:run -w @bear-forge/sts
-STS_DIFF_SEED=130 STS_DIFF_MISMATCH='填写已观察到的具体结果差异' npm run test:differential -w @bear-forge/sts
+STS_COMPARE_CPP=1 STS_REFERENCE_SOURCE=/absolute/path/to/sts_lightspeed npm run test:run -w @bear-forge/sts
+STS_REFERENCE_SOURCE=/absolute/path/to/sts_lightspeed STS_DIFF_SEED=130 STS_DIFF_MISMATCH='填写已观察到的具体结果差异' npm run test:differential -w @bear-forge/sts
 ```
 
-这些命令的当前执行结果见plan.md；显式差分仅在普通终局比较出现具体不一致后启用。默认 test 顺序执行受控局部规则检查与唯一整局终局比较；显式差分另含定向跨语言场景，必须填写种子与已观察差异，不进入默认 test/check。整局两种模式共用既有测试比较工具，均复用正式BaseGame；TS和C++从干净新局持续推进，当次动作各执行一次，禁止动作带、前缀或记录重放。
+这些命令的当前执行结果见plan.md；显式差分仅在普通终局比较出现具体不一致后启用。默认test顺序执行受控局部规则检查与唯一整局终局检查，不需要C++源码或编译器。STS_COMPARE_CPP只接受0或1，默认关闭；设为1才运行TS/C++终局比较。仅提供源码路径不会开启C++比较；显式差分另含定向跨语言场景，必须填写种子与已观察差异，不进入默认 test/check。整局检查及可选比较共用既有测试工具，复用正式BaseGame；启用比较时两端从干净新局持续推进，当次动作各执行一次，禁止动作带、前缀或记录重放。C++只从STS_REFERENCE_SOURCE指定的本地修正版目录构建，仍校验固定提交和源码干净；路径缺失或构建失败直接报错，不静默退回TS单跑。
 
-常规整局关闭capture与指令记录，不保存中间观察、事件或检查点；C++中间推进只返回确认，终局才读取结果。普通死亡或胜利终局一致不等于成功碎心，决策上限不能当成完成。显式差分才检查当前边界的公开和私有状态，诊断快照立即释放，不用于重新执行。保存/恢复能力由局部Context测试覆盖。
+常规整局关闭capture与指令记录，不保存中间观察、事件或检查点；可选C++比较的中间推进只返回确认，终局才读取结果。普通死亡或胜利终局一致不等于成功碎心，决策上限不能当成完成。显式差分才检查当前边界的公开和私有状态，诊断快照立即释放，不用于重新执行。保存/恢复能力由局部Context测试覆盖。
 
 人工入口仍按评审要求记录真实对局；它不绑定自动选牌策略、不自动开下一局。通用card:run/card:replay对STS直接拒绝，旧reference:play/reference:replay和STS性能重复整局命令已删除。玩家评测继续停止。
 

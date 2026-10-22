@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
@@ -33,8 +35,8 @@ const definition=linkRules({id:'sts/persistent-battle-exit-1',schemas:{setup:Set
 const unwrap=<T>(r:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};
 test('battle exit applies persistent Burning Blood once, destroys combat copies and permits later permanent removal without HP/deck copying',async()=>{
   const reference=await ReferenceClient.create();
-  try{const expected=await reference.call({op:'battle-exit-case',seed:'130'});for(const controlled of [false,true]){const loaded=unwrap(await createCardLoader({controlled}).load(definition)),instance=unwrap(await loaded.core.start({seed:'130'}));
+  try{const expected=await reference.call({op:'battle-exit-case',seed:'130'});for(const controlled of [true]){const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(definition)),instance=unwrap(await loaded.core.start({seed:'130'}));
     try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error('Battle exit failed');assertSameState({before:true,after:false,...expected},stop.result,`persistent battle exit controlled=${controlled}`);}
-    finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+    finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
   }}finally{await reference.close();}
 });

@@ -29,7 +29,8 @@ export const colorlessSkillCards=defineRules({requires:[cardTargets,shackledPowe
     b.assign(hand,b.read(v=>v.query(zones.exports.members,v.query(cardPiles.exports.bindings,v.query(battles.exports.status,v.input.battle).piles).hand))),b.assign(turn,b.read(v=>v.get(hand).some(card=>v.query(cardInstances.exports.current,card).costForTurn>0))),when(b.read(v=>!v.get(turn)&&!v.get(hand).some(card=>v.query(cardInstances.exports.current,card).cost>0)),b.return(undefined)),
     whileDo(true,sequence(b.assign(index,call(random.exports.int,{stream:b.read(v=>v.query(cardPiles.exports.bindings,v.query(battles.exports.status,v.input.battle).piles).cardRng),start:0,end:b.read(v=>v.get(hand).length-1)})),b.assign(card,b.read(v=>v.get(hand)[v.get(index)]!)),when(b.read(v=>{const c=v.query(cardInstances.exports.current,v.get(card));return v.get(turn)?c.costForTurn>0:c.cost>0;}),sequence(call(cardInstances.exports.setCostForCombat,{entity:card,amount:0}),call(cardInstances.exports.setCostForTurn,{entity:card,amount:0}),b.return(undefined))))),
   );}));
-  const shackles=defineEffect<CardUse,void>(b=>sequence(call(cardPower(basicPowers.exports.Strength,[9,15],true,true),b.input),when(b.read(v=>v.input.target!==null&&v.query(attributes.exports.artifact,v.input.target)>0),call(cardPower(shackledPower.exports.Shackled,[9,15],true,false),b.input))));
+  const shackles=defineEffect<CardUse,void>(b=>sequence(call(cardPower(basicPowers.exports.Strength,[-9,-15],true,true),b.input),when(b.read(v=>v.input.target!==null&&v.query(attributes.exports.artifact,v.input.target)===0),call(cardPower(shackledPower.exports.Shackled,[9,15],true,false),b.input))));
+  const impatience=queue(defineEffect<CardUse,void>(b=>when(b.read(v=>!v.query(zones.exports.members,v.query(cardPiles.exports.bindings,v.query(battles.exports.status,v.input.battle).piles).hand).some(card=>v.query(cardInstances.exports.metadata,card).type===0)),call(cardPiles.exports.draw,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),count:b.read(v=>v.input.state.upgraded?3:2)}))));
   return{exports:{DarkShackles:concreteCard('DARK_SHACKLES',shackles),
     Apotheosis:concreteCard('APOTHEOSIS',apotheosis),
     Apparition:concreteCard('APPARITION',cardPower(defensePowers.exports.PlayerIntangible,1)),
@@ -37,7 +38,7 @@ export const colorlessSkillCards=defineRules({requires:[cardTargets,shackledPowe
     Blind:concreteCard('BLIND',defineEffect<CardUse,void>(b=>when(b.read(v=>v.input.state.upgraded),call(allPower(basicPowers.exports.EnemyWeak,2),b.input),call(cardPower(basicPowers.exports.EnemyWeak,2,true,true),b.input)))),
     Enlightenment:concreteCard('ENLIGHTENMENT',enlightenment),
     GoodInstincts:concreteCard('GOOD_INSTINCTS',cardBlock([6,9])),
-    Impatience:concreteCard('IMPATIENCE',cardDraw([2,3])),
+    Impatience:concreteCard('IMPATIENCE',impatience),
     Jax:concreteCard('JAX',composePrograms(hpLoss(3),cardPower(basicPowers.exports.Strength,[2,3]))),
     Madness:concreteCard('MADNESS',madness),
     MasterOfStrategy:concreteCard('MASTER_OF_STRATEGY',cardDraw([3,4])),

@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createCardLoader} from '@bear-forge/runtime-card';
@@ -24,9 +26,9 @@ test('real typed card programs preserve queued snapshots, payment, leave-hand, e
   const reference=await ReferenceClient.create();
   try{for(const seed of ['0','130'])for(const [index,c] of cases.entries()){
     const expected=await reference.call({op:'play-case',...c.setup,deck:c.setup.deck.map(c=>({...c,id:cardId[c.id]})),steps:c.steps.map(s=>'id'in s?{...s,id:cardId[s.id]}:s),seed}),definition=fixture(c.setup,c.steps,seed);
-    for(const controlled of [false,true]){const loaded=unwrap(await createCardLoader({controlled}).load(definition)),instance=unwrap(await loaded.core.start(undefined));
+    for(const controlled of [true]){const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(definition)),instance=unwrap(await loaded.core.start(undefined));
       try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error('Expected card flow completion');assertSameState(expected,stop.result,`play seed=${seed} case=${index} controlled=${controlled}`);}
-      finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+      finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
     }
   }}finally{await reference.close();}
 });

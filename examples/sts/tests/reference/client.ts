@@ -53,3 +53,11 @@ export class ReferenceClient {
     }
   }
 }
+
+/** Require an explicitly identified mismatch before any diagnostic game starts. */
+export function requireDifftest(){
+  const seed=process.env.STS_DIFF_SEED?.trim(),mismatch=process.env.STS_DIFF_MISMATCH?.trim();
+  if(!seed||!/^\d+$/.test(seed)||BigInt(seed)>0xffffffffffffffffn||!mismatch)
+    throw Error('Explicit difftest requires STS_DIFF_SEED (uint64) and STS_DIFF_MISMATCH describing an observed mismatch; no replay is supported');
+  return {seed,mismatch};
+}

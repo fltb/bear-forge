@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
@@ -31,12 +33,12 @@ test('owned RNG streams and shuffle match every C++ sample and final stream stat
   for(let i=0;i<32;i++)steps.push({kind:'int',start:-i*7,end:i%2?2147483000:i},{kind:'float'},{kind:'float-range',start:-0.1,end:53.9},
     {kind:'long'},{kind:'long-range',start:'-73453',end:'9174435384759'},{kind:'bool'},{kind:'bool',chance:0.33},{kind:'shuffle',size:i+2});
   try{
-    for(const controlled of [false,true]){
-      const loaded=unwrap(await createCardLoader({controlled}).load(definition));
+    for(const controlled of [true]){
+      const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(definition));
       for(const seed of ['0','1','130','9223372036854775808','18446744073709551615']){
         const expected=await reference.call({op:'random',seed,steps}),instance=unwrap(await loaded.core.start(seed));
         try{const stop=unwrap(await instance.inspect());assert.deepEqual(stop.kind==='done'?stop.result:stop,expected,`seed=${seed} controlled=${controlled}`);}
-        finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+        finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
       }
     }
   }finally{await reference.close();}

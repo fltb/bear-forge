@@ -1,8 +1,11 @@
+import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {rules} from '../src/rules/execution.ts';
-import {linkRules,CardProgram,CardMachine,plainCardStorage} from '@bear-forge/card-engine';
+import {linkRules,CardProgram,CardMachine} from '@bear-forge/card-engine';
 import {random} from '../src/rules/random.ts';
 import {encounterPlans} from "../src/content/enemies/plans.ts";
 import {productionDriver} from './production-driver.ts';
@@ -26,7 +29,7 @@ test('normal A20 adventure matches the source including future encounter, relic 
 test('all three acts preserve source weighted draws, repeat rejection and A20 second boss RNG',async()=>{
   const reference=await ReferenceClient.create();
   try{for(const seed of ['0','1','130','409','9223372036854775808','18446744073709551615'])for(const act of [1,2,3])for(const ascension of [0,20]){
-    const expected=await reference.call({op:'encounters',seed,act,ascension}),machine=new CardMachine(program,plainCardStorage(program.initial({seed,act,ascension},1_000_000))),stop=machine.advance();
+    const expected=await reference.call({op:'encounters',seed,act,ascension}),machine=new CardMachine(program,privateCardGraph(program.initial({seed,act,ascension},1_000_000))),stop=machine.advance();
     assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error('Encounter generation did not finish');
     assertSameState(expected,stop.result,`encounters seed=${seed} act=${act} ascension=${ascension}`);
   }}finally{await reference.close();}

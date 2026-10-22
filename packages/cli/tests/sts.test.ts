@@ -96,33 +96,3 @@ test('source provenance failure is archived as fault before loading a game',asyn
     assert.equal(JSON.parse(await readFile(join(out,'run.json'),'utf8')).status,'fault');
   }finally{if(previousPath===undefined)delete process.env.PATH;else process.env.PATH=previousPath;process.exitCode=previousExitCode;await rm(out,{recursive:true,force:true});await rm(bin,{recursive:true,force:true});}
 });
-
-test('formal JSONL CLI archives a complete fixed Heart replay with maps and production battle indices',{timeout:180000},async()=>{
-  const fixture=JSON.parse(await readFile(new URL('../../../examples/sts/tests/reference/fixtures/ironclad-a20-heart-130.json',import.meta.url),'utf8')) as {actions:{bits:number}[]};
-  const out=await mkdtemp(join(tmpdir(),'sts-cli-heart-')),input=new Readable({read(){}});let next=0,failure:Error|undefined;
-  const output=new Writable({write(chunk,_encoding,done){
-    try{
-      const message=JSON.parse(String(chunk));
-      if(message.kind==='decision'){
-        const bits=fixture.actions[next++]?.bits;
-        const action=message.presentation.actions.findIndex((a:{bits:number})=>a.bits===bits);
-        if(action<0)throw Error('Fixed CLI replay action missing at '+(next-1));
-        input.push(JSON.stringify({op:'act',sessionId:message.sessionId,decision:message.decision,action,reason:'Fixed engineering replay; not an agent-review run'})+'\n');
-      }else if(message.kind==='ended'||message.kind==='fault')input.push(null);
-    }catch(error){failure=error instanceof Error?error:Error(String(error));input.push('{"op":"quit"}\n');}
-    done();
-  }});
-  try{
-    await runSts(['play','--character','ironclad','--seed','130','--output',out,'--interface','jsonl'],input,output);
-    assert.equal(failure,undefined);assert.equal(next,fixture.actions.length);
-    const summary=JSON.parse(await readFile(join(out,'summary.json'),'utf8'));
-    assert.equal(summary.status,'heart-victory');assert.equal(summary.result.heartDefeated,true);assert.equal(summary.decisions,fixture.actions.length);
-    assert.equal(JSON.parse(await readFile(join(out,'run.json'),'utf8')).status,'heart-victory');
-    assert.deepEqual(JSON.parse(await readFile(join(out,'maps.json'),'utf8')).map((m:{act:number})=>m.act),[1,2,3,4]);
-    const events=(await readFile(join(out,'events.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));
-    assert.ok(events.every((e:{seq:number},i:number)=>e.seq===i));
-    assert.deepEqual(events.filter(e=>e.event.kind!=='detail').map(e=>e.event),fixture.actions);
-    assert.ok(summary.battles.length>10);assert.ok(summary.battles.every((b:{startEventSeq:number;endEventSeq:number})=>b.endEventSeq>b.startEventSeq));
-    assert.ok(summary.route.some((r:{act:number})=>r.act===4));
-  }finally{input.destroy();await rm(out,{recursive:true,force:true});}
-});

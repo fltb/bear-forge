@@ -321,8 +321,8 @@ const cases:{name:string;scenario:Scenario;block:number;enemies:number[];energy?
   {name:'没有迎战声明的防御牌不消耗迎战准备',scenario:{plays:[{definition:uncommon.exports.EngagePreparation},{definition:basic.exports.Defend},{definition:engageProbe}]},block:10,energy:28,enemies:[1000,1000,1000]},
   {name:'升级迎战准备可再次打出但减费仍不叠加',scenario:{plays:[{definition:uncommon.exports.EngagePreparation,upgraded:true},{definition:uncommon.exports.EngagePreparation,reuse:0},{definition:engageProbe}]},block:16,energy:29,enemies:[1000,1000,1000]},
 ];
-for(const c of cases)for(const controlled of [false,true])test(`${c.name}; controlled=${controlled}`,async()=>{
-  const loaded=unwrap(await createCardLoader({controlled}).load(fixture(c.scenario))),instance=unwrap(await loaded.core.start(undefined));
+for(const c of cases)for(const controlled of [true])test(`${c.name}; controlled=${controlled}`,async()=>{
+  const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(fixture(c.scenario))),instance=unwrap(await loaded.core.start(undefined));
   try{
     let stop=unwrap(await instance.inspect()),answerIndex=0;
     while(stop.kind==='call'){
@@ -338,5 +338,5 @@ for(const c of cases)for(const controlled of [false,true])test(`${c.name}; contr
     assert.equal(stop.result.hp,c.hp??80);assert.equal(stop.result.block,c.block);assert.deepEqual(stop.result.enemies,c.enemies);
     if(c.energy!==undefined)assert.equal(stop.result.energy,c.energy);
     if(c.hand!==undefined)assert.equal(stop.result.hand,c.hand);
-  }finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+  }finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
 });

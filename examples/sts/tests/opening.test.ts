@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {productionDriver} from './production-driver.ts';
@@ -33,8 +35,8 @@ test('all four actual Neow choices preserve source screens, rewards, deck, pools
 
 const unwrap=<T>(result:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!result.ok)throw Error(JSON.stringify(result.error));return result.value;};
 test('an out of range opening choice cannot advance or change the production Context',async()=>{
-  for(const controlled of [false,true]){
-    const loaded=unwrap(await createCardLoader({controlled}).load(cardDefinition)),instance=unwrap(await loaded.core.start({seed:'130'}));
+  for(const controlled of [true]){
+    const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(cardDefinition)),instance=unwrap(await loaded.core.start({seed:'130'}));
     try{const before=unwrap(await instance.inspect());unwrap(await instance.bind({decision:async()=>({kind:'reply',value:{bits:4}})}));const result=unwrap(await instance.run());assert.equal(result.accepted,false);assert.equal(result.pause,'invalid_reply');assert.deepEqual(unwrap(await instance.inspect()),before);}
     finally{await instance.close();await loaded.capture?.release(instance.id);}
   }

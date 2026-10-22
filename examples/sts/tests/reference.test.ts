@@ -1,15 +1,9 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ReferenceClient,type ReferenceState} from './reference/client.ts';
 import {firstDifference,assertSameState} from './reference/compare.ts';
-import {readFile} from 'node:fs/promises';
-import {replay} from './reference/replay.ts';
-import {revision} from './reference/build.ts';
-import type {Trace} from './reference/play.ts';
-import {productionDriver} from './production-driver.ts';
-import {oracleView} from './state-inspection.ts';
-import {publishReference} from './reference/publication.ts';
-import {potionId} from '../src/identifiers.ts';
 
 test('pinned reference starts a real Ironclad A20 run and inspection is read only',async()=>{
   const r=await ReferenceClient.create();
@@ -76,19 +70,6 @@ test('comparison detects changed RNG, card order, identity and a missing interac
   }finally{await r.close();}
 });
 
-test('real Ironclad A20 Heart fixture independently replays both bosses, keys and Act 4',async()=>{
-  const trace=JSON.parse(await readFile(new URL('./reference/fixtures/ironclad-a20-heart-130.json',import.meta.url),'utf8')) as Trace;
-  assert.equal(trace.actions.length,721);
-  const s=await replay(trace);
-  assert.equal(s.game.hp,6);assert.equal(s.heartDefeated,true);assert.equal(s.game.floor,56);
-});
-
-test('Heart validation cannot pass for an empty, incomplete or falsely labelled run',async()=>{
-  const base:Trace={reference:revision,seed:'130',character:'IRONCLAD',ascension:20,actions:[],heartDefeated:false};
-  await assert.rejects(replay(base),/complete Heart win/);
-  await assert.rejects(replay({...base,heartDefeated:true}));
-});
-
 test('a single card reward can be legally skipped even when the original helper omits it',async()=>{
   const r=await ReferenceClient.create();
   try {
@@ -104,18 +85,25 @@ test('a single card reward can be legally skipped even when the original helper 
 });
 
 
-test('pinned GameAction potion fallthrough aborts; the normal driver executes only the actual potion primitive and preserves the pending reward',async()=>{
-  const raw=await ReferenceClient.create(),fixed=await ReferenceClient.create(),prefix:number[]=[];
+
+test('hungry face starts with one charge in the controlled fixture and C++',async()=>{
+  // NlothsMask constructor counter=1 in sts-re relic.json; neither side is the oracle.
+  const [{createCardLoader},{adventureContentDefinition},{relicId}]=await Promise.all([
+    import('@bear-forge/runtime-card'),import('./adventure-content-fixture.ts'),import('../src/identifiers.ts'),
+  ]);
+  const unwrap=<T,E>(r:import('@bear-forge/contracts/instance').Outcome<T,E>):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};
+  const loaded=unwrap(await createCardLoader({controlled:true,recordCore:false}).load(adventureContentDefinition));
+  const instance=unwrap(await loaded.core.start({seed:'130',event:null,relic:'NLOTHS_HUNGRY_FACE'}));
+  let reference:ReferenceClient|undefined;
   try{
-    let before=await fixed.call({op:'start',seed:'0'});await raw.call({op:'start',seed:'0'});
-    for(let i=0;i<2;i++){const bits=before.actions[((i+1)*17)%before.actions.length]!.bits;prefix.push(bits);before=await fixed.call({op:'advance',bits});await raw.call({op:'advance',bits});}
-    assert.equal(before.game.screen,'REWARDS');assert.equal(before.game.potionCount,1);assert.equal(before.game.rewards.cards.length,0);
-    const drop=before.actions.find(a=>a.potion&&a.bits===0xc0000000);assert.ok(drop);
-    await assert.rejects(raw.call({op:'upstreamAdvance',bits:drop.bits}),/function obtain, file Deck\.cpp, line 178/);
-    const after=await fixed.call({op:'advance',bits:drop.bits}),expected=structuredClone(before);
-    expected.game.potions[0]=potionId.EMPTY_POTION_SLOT;expected.game.allPotions[0]=potionId.EMPTY_POTION_SLOT;expected.game.potionCount=0;expected.decisions++;
-    expected.actions=expected.actions.filter(a=>!a.potion||a.index!==0);assertSameState(expected,after,'discard changes only the original potion slot, count and decision domain');
-    const history=[...prefix,drop.bits].map(bits=>({kind:'game' as const,bits}));
-    for(const controlled of [false,true]){const driver=productionDriver('0',controlled);try{for(const bits of [...prefix,drop.bits])driver.advance(bits);const frame=driver.frame(),state=oracleView(driver.machine.root.state,frame);assertSameState(publishReference(after,history),frame,'discard resumes its original choice');assertSameState(after.game,state.game,'discard private state');}finally{driver.close();}}
-  }finally{await raw.close();await fixed.close();}
+    reference=await ReferenceClient.create();
+    const expected=await reference.call({op:'adventureContentStart',seed:'130',event:null,relic:relicId.NLOTHS_HUNGRY_FACE});
+    assert.equal(expected.game.relics.find((r:{id:string;data:number})=>r.id==='NLOTHS_HUNGRY_FACE')?.data,1);
+    let stop=unwrap(await instance.inspect());
+    while(stop.kind==='call'&&stop.call.port==='event'){
+      unwrap(await instance.bind({event:async()=>({kind:'reply',value:null})}));unwrap(await instance.run());stop=unwrap(await instance.inspect());
+    }
+    assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Acquisition fixture must finish');
+    assert.equal(stop.result.game.relics.find(r=>r.id==='NLOTHS_HUNGRY_FACE')?.data,1);
+  }finally{try{await instance.close();}finally{await reference?.close();}}
 });

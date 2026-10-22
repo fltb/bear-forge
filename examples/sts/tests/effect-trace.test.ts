@@ -1,8 +1,9 @@
+import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
-import {linkRules,ruleModules,CardMachine,CardProgram,plainCardStorage} from '@bear-forge/card-engine';
+import {linkRules,ruleModules,CardMachine,CardProgram} from '@bear-forge/card-engine';
 import {rules} from '../src/rules/execution.ts';
 import {effectTrace,fromSource,OriginKind,type Cause} from '../src/rules/effect-trace.ts';
 import {EffectKind,effectPolicy} from '../src/rules/effect-policy.ts';
@@ -43,9 +44,9 @@ function fixture(){
   return linkRules({id:'sts/effect-trace',schemas:{setup:z.undefined(),result:typedValue<{log:Cause[];card:number;relic:number;active:Cause}>(),ports:{wait:{input:z.number(),output:z.number()}}},initialize:()=>({}),entry,definitions:[entry,wait],modules:[module],initialEntities:[0]});
 }
 test('queued reaction keeps trigger and installation origins across a suspended task and independent context copies',()=>{
-  const program=new CardProgram(fixture()),parent=new CardMachine(program,plainCardStorage(program.initial(undefined)));
+  const program=new CardProgram(fixture()),parent=new CardMachine(program,privateCardGraph(program.initial(undefined)));
   assert.deepEqual(parent.advance(),{kind:'call',call:{port:'wait',input:7}});
-  const restored=new CardMachine(program,plainCardStorage(structuredClone(parent.root)));
+  const restored=new CardMachine(program,(parent.storage as ReturnType<typeof privateCardGraph<typeof parent.root>>).fork());
   for(const machine of [parent,restored]){
     const stop=machine.advance(1);assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected done');
     const {log,card,relic,active}=stop.result;
@@ -75,7 +76,7 @@ test('effect declarations qualify automatically from the active source',()=>{
     b.assign(result,rules.call(execute,source)),b.return(result),
   );});
   const definition=linkRules({id:'sts/effect-declaration',schemas:{setup:z.undefined(),result:z.array(z.number()),ports:{}},initialize:()=>({}),entry,definitions:[entry,execute,executeBody],modules:[module],initialEntities:[0]});
-  const program=new CardProgram(definition),machine=new CardMachine(program,plainCardStorage(program.initial(undefined)));
+  const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial(undefined)));
   assert.deepEqual(machine.advance(),{kind:'done',result:[0,7]});
 });
 
@@ -101,7 +102,7 @@ test('dynamic references retain their source after assignment, queueing and sour
     );
   });
   const definition=linkRules({id:'sts/dynamic-trace',schemas:{setup:z.undefined(),result:typedValue<{log:Cause[];survivor:number}>(),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[module],initialEntities:[0]});
-  const program=new CardProgram(definition),machine=new CardMachine(program,plainCardStorage(program.initial(undefined))),stop=machine.advance();
+  const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial(undefined))),stop=machine.advance();
   assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected done');
   assert.equal(stop.result.log.length,2);
   for(const cause of stop.result.log)assert.equal(cause.at(-1)!.source,stop.result.survivor);
@@ -125,7 +126,7 @@ test('scheduled work preserves the scheduling source while matching the original
     b.return({cause:rules.query(module.exports.history,undefined),source}),
   );});
   const definition=linkRules({id:'sts/scheduled-trace',schemas:{setup:z.undefined(),result:typedValue<{cause:Cause;source:number}>(),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[module],initialEntities:[0]});
-  const program=new CardProgram(definition),machine=new CardMachine(program,plainCardStorage(program.initial(undefined))),stop=machine.advance();
+  const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial(undefined))),stop=machine.advance();
   assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected done');
   assert.equal(stop.result.cause.at(-1)!.source,stop.result.source);assert.equal(stop.result.cause.at(-1)!.action,18);
 });
@@ -149,7 +150,7 @@ test('implicit static task sources obey source-present cancellation while captur
     ruleModules.drainQueue(queue),b.return({log:rules.query(module.exports.history,undefined),source}),
   );});
   const definition=linkRules({id:'sts/static-task-trace',schemas:{setup:z.undefined(),result:typedValue<{log:Cause[];source:number}>(),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[module],initialEntities:[0]});
-  const program=new CardProgram(definition),machine=new CardMachine(program,plainCardStorage(program.initial(undefined))),stop=machine.advance();
+  const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial(undefined))),stop=machine.advance();
   assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected done');
   assert.equal(stop.result.log.length,1);assert.equal(stop.result.log[0]!.at(-1)!.source,stop.result.source);
 });
@@ -186,7 +187,7 @@ test('persistent provenance ignores no-op merges and retains causes when inactiv
     );
   });
   const definition=linkRules({id:'sts/persistent-trace',schemas:{setup:z.undefined(),result:typedValue<{sources:(number|null)[];level:number;first:number;second:number}>(),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[module],initialEntities:[0]});
-  const program=new CardProgram(definition),machine=new CardMachine(program,plainCardStorage(program.initial(undefined))),stop=machine.advance();
+  const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial(undefined))),stop=machine.advance();
   assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected done');
   assert.deepEqual(stop.result.sources,[stop.result.first,stop.result.second]);assert.equal(stop.result.level,5);
 });
@@ -218,7 +219,7 @@ test('staged task groups retain their cause and restore the unrelated draining c
     );
   });
   const definition=linkRules({id:'sts/staged-trace',schemas:{setup:z.undefined(),result:typedValue<{log:Cause[];first:number;second:number;active:Cause}>(),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[module],initialEntities:[0]});
-  const program=new CardProgram(definition),machine=new CardMachine(program,plainCardStorage(program.initial(undefined))),stop=machine.advance();
+  const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial(undefined))),stop=machine.advance();
   assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected done');
   assert.deepEqual(stop.result.log.map(c=>c.at(-1)!.source),[stop.result.second,stop.result.first,stop.result.second]);
   assert.deepEqual(stop.result.log.map(c=>c.at(-1)!.action),[22,21,22]);
@@ -256,7 +257,7 @@ test('checkpoint replacements retain installation and caller causes without leak
     );
   });
   const definition=linkRules({id:'sts/replacement-trace',schemas:{setup:z.undefined(),result:typedValue<{log:Cause[];card:number;relic:number;result:rules.ReplacementResult<number>;active:Cause}>(),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[module],initialEntities:[0]});
-  const program=new CardProgram(definition),machine=new CardMachine(program,plainCardStorage(program.initial(undefined))),stop=machine.advance();
+  const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial(undefined))),stop=machine.advance();
   assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected done');
   const {log,card,relic,result,active}=stop.result;
   assert.notEqual(result.kind,'cancel');if(result.kind==='cancel')throw Error('Unexpected cancellation');assert.equal(result.value,7);
@@ -266,8 +267,8 @@ test('checkpoint replacements retain installation and caller causes without leak
   assert.equal(log[1]!.at(-1)!.installation.at(-1)!.source,relic);
 });
 
-for(const controlled of [false,true])test(`effect origins survive loader suspension${controlled?", fork and saved-context restoration":""}; controlled=${controlled}`,async()=>{
-  const loaded=unwrap(await createCardLoader({controlled}).load(fixture())),parent=unwrap(await loaded.core.start(undefined));
+for(const controlled of [true])test(`effect origins survive loader suspension${controlled?", fork and saved-context restoration":""}; controlled=${controlled}`,async()=>{
+  const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(fixture())),parent=unwrap(await loaded.core.start(undefined));
   const instances=[parent];
   const snapshot=loaded.persistence?unwrap(await loaded.persistence.save(parent)):null;
   try{
@@ -284,5 +285,5 @@ for(const controlled of [false,true])test(`effect origins survive loader suspens
       assert.equal(done.result.log[1]![0]!.source,done.result.card);
     }
     for(const result of results.slice(1))assert.deepEqual(results[0],result);
-  }finally{for(const instance of instances){await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}if(snapshot)await loaded.persistence!.release(snapshot);}
+  }finally{for(const instance of instances){await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}if(snapshot)await loaded.persistence!.release(snapshot);}
 });

@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ReferenceClient} from './reference/client.ts';

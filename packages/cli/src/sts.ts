@@ -27,7 +27,8 @@ export async function runSts(args=process.argv.slice(2),input:Readable=process.s
   await mkdir(out,{recursive:true});if((await readdir(out)).length)throw Error('Output directory must be empty');
   const sessionId=randomUUID(),startedAt=new Date().toISOString(),root=fileURLToPath(new URL('../../../',import.meta.url));
   const git=(...a:string[])=>{try{return execFileSync('git',a,{cwd:root,encoding:'utf8',maxBuffer:64*1024*1024});}catch{return null;}};
-  const metadata={pid:process.pid,sessionId,character,seed,ascension:20,review:flags.review!=='false',mode,startedAt,engine:'native production BaseGame',git:{commit:git('rev-parse','HEAD')?.trim()??null,status:git('status','--porcelain'),diff:git('diff','HEAD','--binary','--','examples/sts/src','packages','vendor','package.json','tsconfig.json'),untracked:git('ls-files','--others','--exclude-standard','--','examples/sts/src','packages','vendor')}};
+  const entrySources=['packages/cli/src/sts.ts','examples/sts/src/index.ts','examples/sts/src/interactive-session.ts','examples/sts/src/interactive-session.types.ts','examples/sts/src/presentation.ts'].map(path=>({path,blob:git('rev-parse','HEAD:'+path)?.trim()??null}));
+  const metadata={pid:process.pid,sessionId,character,seed,ascension:20,review:flags.review!=='false',mode,startedAt,engine:'controlled production BaseGame',entrySources,git:{commit:git('rev-parse','HEAD')?.trim()??null,status:git('status','--porcelain'),diff:git('diff','HEAD','--binary','--','examples/sts/src','examples/sts/package.json','examples/sts/tsconfig.json','packages','vendor','package.json','tsconfig.json'),untracked:git('ls-files','--others','--exclude-standard','--','examples/sts/src','packages','vendor')}};
   await writeFile(resolve(out,'run.json'),JSON.stringify({...metadata,status:'initializing'},null,2),{flag:'wx'});
   await Promise.all(['decisions.jsonl','events.jsonl'].map(f=>writeFile(resolve(out,f),'')));
   const emit=(v:unknown)=>{if(mode==='jsonl')output.write(JSON.stringify(v)+'\n');else output.write(JSON.stringify(v,null,2)+'\n');};
@@ -42,10 +43,11 @@ export async function runSts(args=process.argv.slice(2),input:Readable=process.s
   try{
     try{
       if(Object.values(metadata.git).some(v=>v===null))throw Error('Git provenance unavailable');
-      const sourcePaths=['examples/sts/src','packages','vendor','package.json','package-lock.json','tsconfig.json'];
+      if(entrySources.some(source=>source.blob===null))throw Error('Git provenance unavailable for entry source');
+      const sourcePaths=['examples/sts/src','examples/sts/package.json','examples/sts/tsconfig.json','packages','vendor','package.json','package-lock.json','tsconfig.json'];
       const diff=git('diff','HEAD','--binary','--',...sourcePaths),untracked=git('ls-files','--others','--exclude-standard','--',...sourcePaths);
       if(diff===null||untracked===null)throw Error('Git provenance unavailable');
-      let patch=diff;
+      let patch='# STS review source archive\n# commit: '+(metadata.git.commit??'unknown')+'\n'+entrySources.map(source=>'# entry source: '+source.path+' '+source.blob).join('\n')+'\n';patch+=diff;
       const newSources=untracked.split('\n').filter(p=>/\.(ts|tsx|js|mjs|cjs|json|py|cpp|h)$/.test(p)&&!p.split('/').some(part=>['data','node_modules','.env','credentials','secrets'].includes(part)));
       for(const path of newSources){
         try{patch+=execFileSync('git',['diff','--no-index','--binary','--','/dev/null',path],{cwd:root,encoding:'utf8',maxBuffer:64*1024*1024,stdio:['ignore','pipe','pipe']});}

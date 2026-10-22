@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
@@ -25,9 +27,9 @@ const definition=linkRules({id:'sts/normal-owner-start-1',schemas:{setup:SetupSc
 const unwrap=<T>(r:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};
 test('one shared Program constructs normal Ironclad owners, initial deck/relic, map, encounter pools, offers and all RNG streams against C++',async()=>{
   const reference=await ReferenceClient.create();
-  try{for(const controlled of [false,true]){const loaded=unwrap(await createCardLoader({controlled}).load(definition));for(const seed of ['0','1','2','7','42','130','507','9223372036854775808','18446744073709551615']){
+  try{for(const controlled of [true]){const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(definition));for(const seed of ['0','1','2','7','42','130','507','9223372036854775808','18446744073709551615']){
     const source=(await reference.call({op:'start',seed})).game,expected=Object.fromEntries(['seed','hp','maxHp','gold','deck','bottles','deckCounts','upgradeableCount','transformableCount','relics','map','monsterList','eliteList','boss','secondBoss','rng','neow','relicPools'].map(key=>[key,source[key]])),instance=unwrap(await loaded.core.start({seed}));
     try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error('Normal owner start failed');assertSameState(expected,stop.result,`normal owner start seed=${seed} controlled=${controlled}`);}
-    finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+    finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
   }}}finally{await reference.close();}
 });

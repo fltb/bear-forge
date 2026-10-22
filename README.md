@@ -158,7 +158,7 @@ npm run serve -- --output ./data/demo
 
 ## 专用卡牌路径
 
-同一 cardDefinition 的原生/受控模式都经过卡牌 Core，没有无 Core 的正式卡牌模式。斗地主、Forge Duel 和 STS 的 card:run/card:replay、build:games 均接此路径；demo/experiment 继续使用既有游戏。旧 async 游戏入口移入 tests/generic，作为通用后端的兼容性夹具；旧参考仅生成差分期望，正式 BaseGame 基准使用生产契约。
+同一 cardDefinition 的原生/受控模式都经过卡牌 Core，没有无 Core 的正式卡牌模式。斗地主、Forge Duel 的 card:run/card:replay 接此路径；STS仅使用受控的 sts play，通用card:run/card:replay拒绝STS；build:games装配STS受控产物。demo/experiment继续使用既有游戏。旧 async 游戏入口移入 tests/generic，作为通用后端的兼容性夹具；旧参考仅生成差分期望，正式 BaseGame 基准使用生产契约。
 
 当前基准为同一 Card Core 上的完整可交互 GameHost：原生游戏自身的多余路径单独核算，受控再核算新增能力的成本。默认原生不承担未启用的训练、记录、COW 或存档管理；游戏历史、观察、合法动作及实际事件交付保留。[完整游戏优化方案](docs/card-core-spec.md#gamehost-optimization) 与尚未完成项保留，当前按三层整体优化方案实施，实际完成状态见 plan.md。原生审计使用已有 recordCore:true；默认原生不发布 capture，--records 等显式消费者保留完整记录与重放。
 

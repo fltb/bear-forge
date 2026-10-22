@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
@@ -79,10 +81,10 @@ test('composed powers preserve source counters, justApplied, Artifact and float 
     for(const [index,steps] of cases.entries()){
       const wire=steps.map(s=>{const binding=(s.target===0?playerBindings:enemyBindings).find(b=>b.definition===s.definition);if(!binding)throw Error('Missing source power mapping');return{kind:s.kind,target:s.target,status:binding.id,amount:s.amount,source:s.source??null};});
       const expected=await reference.call({op:'power-case',bases,steps:wire}),d=fixture(steps);
-      for(const controlled of [false,true]){
-        const loaded=unwrap(await createCardLoader({controlled}).load(d)),instance=unwrap(await loaded.core.start(undefined));
+      for(const controlled of [true]){
+        const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(d)),instance=unwrap(await loaded.core.start(undefined));
         try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error('Expected result');assertSameState(expected,stop.result,`powers case=${index} controlled=${controlled}`);}
-        finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+        finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
       }
     }
   }finally{await reference.close();}

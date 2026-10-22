@@ -21,6 +21,8 @@ import { publishNativeStop } from './publication.ts';
 import { memorySnapshotStore } from './store.ts';
 import type { SnapshotStore } from './store.ts';
 
+/** recordCore:false disables execution capture as well as instruction traces;
+ * controlled Context save/restore/fork remain available without history logs. */
 export type CardOptions = { controlled?: boolean; stepBudget?: number; snapshots?: SnapshotStore; recordCore?: boolean; trace?: (event: CardTrace) => void };
 const nativeStructuredClone = globalThis.structuredClone;
 const traceReaders = new WeakMap<object, (id: string) => Outcome<CardTrace[]>>();
@@ -33,9 +35,9 @@ export function createCardLoader(options: CardOptions = {}) {
   const controlled = options.controlled ?? true;
   const store = controlled ? options.snapshots ?? memorySnapshotStore() : undefined;
   const recordCore = options.recordCore ?? controlled;
-  // The existing recordCore option explicitly requests native auditing too.
-  // Ordinary native games construct neither capture logs nor their registries.
-  const recording = controlled || recordCore;
+  // Explicit recordCore:false disables capture and instruction logs while
+  // controlled execution retains Context persistence and direct forks.
+  const recording = recordCore;
   return {
     async load<S, Setup, P extends { [K in keyof P]: PortShape }, R>(definition: CardDefinition<S, Setup, P, R>): Promise<Outcome<LoadedCore<Setup, P, R>>> {
       let ruleReplyGuard:ReturnType<typeof ruleReplyGuardFor>=null;
@@ -133,7 +135,7 @@ export function createCardLoader(options: CardOptions = {}) {
         if (controlled) controller.forkHandler = async () => {
           try {
             const storage = machine.storage as CardGraph<CardRoot<S>>;
-            return ok(instantiate(setup, { machine: new CardMachine(program, storage.fork()), state: controller.state, records: controller.records!, core, shared: true }));
+            return ok(instantiate(setup, { machine: new CardMachine(program, storage.fork()), state: controller.state, records: controller.records ?? [], core, shared: true }));
           } catch (error) { return fail('program_failed', exceptionMessage(error)); }
         };
         controllers?.set(controller.id, controller); return remember(controller.handle(), controller);
@@ -169,7 +171,7 @@ export function createCardLoader(options: CardOptions = {}) {
           try {
             const machine = machines!.get(c)!;
             const graph=(machine.storage as CardGraph<CardRoot<S>>).snapshot();
-            const bytes = serialize({ format: 1, rule: definition.id, root: graph.root, immutable:graph.immutable, state: c.state, records: c.records!.slice(), recordCore, core: coreRecords?.get(c)?.snapshot() ?? null });
+            const bytes = serialize({ format: 1, rule: definition.id, root: graph.root, immutable:graph.immutable, state: c.state, records: c.records?.slice() ?? [], recordCore, core: coreRecords?.get(c)?.snapshot() ?? null });
             const snapshotId = randomUUID(); await store!.put(snapshotId, bytes); return ok(InstanceSnapshotSchema.parse({ snapshotId }));
           } catch (error) { return fail('program_failed', exceptionMessage(error)); }
         },

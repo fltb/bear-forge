@@ -88,3 +88,24 @@ test('public Instance fork does not re-export a large pending view through its a
     const child = unwrap(await parent.fork()); assert.notEqual(child.id, parent.id); await child.close();
   } finally { CardGraph.prototype.export = original; await parent.close(); }
 });
+
+test('controlled Context saves, forks and restores with recording disabled and no reinitialization', async () => {
+  const store=memorySnapshotStore();let starts=0;
+  const loaded=unwrap(await createCardLoader({controlled:true,recordCore:false,snapshots:store}).load({...definition,initialize(setup){starts++;return definition.initialize(setup);}}));
+  const parent=unwrap(await loaded.core.start(1));
+  const instances=[parent];let saved:any;
+  try{
+    assert.equal(loaded.capture,undefined);
+    const before=unwrap(await parent.inspect());
+    saved=unwrap(await loaded.persistence.save(parent));
+    const bytes=await store.get(saved.snapshotId);assert.ok(bytes);
+    const snapshot=deserialize(bytes);assert.deepEqual(snapshot.records,[]);assert.equal(snapshot.core,null);
+    instances.push(unwrap(await parent.fork()),unwrap(await loaded.persistence.restore(saved)));
+    for(const instance of instances){
+      assert.deepEqual(unwrap(await instance.inspect()).call,before.call);
+      for(const value of [2,4]){unwrap(await instance.bind({choose:async()=>({kind:'reply',value})}));unwrap(await instance.run());}
+      const done=unwrap(await instance.inspect());assert.equal(done.kind,'done');assert.equal(done.result.sum,13);assert.deepEqual(done.result.seen,[9,5]);
+    }
+    assert.equal(starts,1);
+  }finally{for(const instance of instances)await instance.close();if(saved)unwrap(await loaded.persistence.release(saved));}
+});

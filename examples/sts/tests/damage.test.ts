@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
@@ -80,10 +82,10 @@ test('block, raw/calculated attack, direct HP loss, Buffer, Intangible, Torii, R
   const reference=await ReferenceClient.create();
   try{for(const [index,scenario] of scenarios.entries()){
     const expected=await reference.call({op:'damage-case',...scenario,relics:(scenario.relics??[]).map(id=>relicId[id])}),d=fixture(scenario);
-    for(const controlled of [false,true]){
-      const loaded=unwrap(await createCardLoader({controlled}).load(d)),instance=unwrap(await loaded.core.start(undefined));
+    for(const controlled of [true]){
+      const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(d)),instance=unwrap(await loaded.core.start(undefined));
       try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error('Expected result');assertSameState(expected,stop.result,`damage=${index} controlled=${controlled}`);}
-      finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+      finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
     }
   }}finally{await reference.close();}
 });

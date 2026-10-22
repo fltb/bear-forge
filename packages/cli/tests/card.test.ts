@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCardGame, replayCardGame } from '../src/card.ts';
@@ -16,7 +16,7 @@ test('default game build links Card definitions in both modes without creating a
     const { game } = await import(new URL('build/' + name + '.card.mjs', root).href);
     assert.equal(Object.hasOwn(game, 'program'), false);
     assert.equal(typeof game.definition.initialize, 'function');
-    for (const controlled of [false, true]) {
+    for (const controlled of (name === 'sts' ? [true] : [false, true])) {
       let executed = 0;
       const result = await createCardLoader({ controlled, trace: () => { executed++; } }).load(game.definition);
       if (!result.ok) throw Error(result.error.message);
@@ -33,7 +33,7 @@ test('default game build links Card definitions in both modes without creating a
     }
   }
 });
-for (const game of ['forge-duel', 'doudizhu', 'sts'] as const) for (const controlled of [false, true]) {
+for (const game of ['forge-duel', 'doudizhu'] as const) for (const controlled of [false, true]) {
   test(`production dedicated ${game} through BaseGame, record and replay, controlled ${controlled}`, async () => {
     const directory = await mkdtemp(join(tmpdir(), 'card-cli-'));
     try {
@@ -47,24 +47,14 @@ for (const game of ['forge-duel', 'doudizhu', 'sts'] as const) for (const contro
 }
 
 test('ordinary native CLI games finish without collecting or replaying an unrequested audit', async () => {
-  for (const game of ['forge-duel', 'doudizhu', 'sts'] as const) {
+  for (const game of ['forge-duel', 'doudizhu'] as const) {
     const result = await runCardGame({ game, controlled: false, seed: 31 });
     assert.equal(result.state.kind, 'ended');
     assert.equal(result.records, 0); assert.equal(result.replayVerified, false);
   }
 });
 
-test('STS CLI preserves a full uint64 seed through normal setup, records and replay', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'sts-cli-seed-'));
-  try {
-    const records = join(directory, 'records.json'), seed = '18446744073709551615';
-    const root = fileURLToPath(new URL('../../../', import.meta.url));
-    const result = await promisify(execFile)(process.execPath, ['--experimental-strip-types', 'packages/cli/src/main.ts', 'card:run', '--game', 'sts', '--native', '--seed', seed, '--records', records], { cwd: root, maxBuffer: 1024 * 1024 });
-    assert.equal(JSON.parse(result.stdout).state.kind, 'ended');
-    const capture = JSON.parse(await readFile(records, 'utf8'));
-    assert.deepEqual(capture.records[0], { sequence: 0, kind: 'started', setup: { seed } });
-    assert.equal((await replayCardGame({ game: 'sts', records, controlled: false })).replayVerified, true);
-    await assert.rejects(runCardGame({ game: 'sts', controlled: false, seed: Number(seed) }), /lossless/);
-    await assert.rejects(runCardGame({ game: 'sts', controlled: false, seed: '18446744073709551616' }));
-  } finally { await rm(directory, { recursive: true, force: true }); }
+test('STS rejects generic execution and replay before starting a game', async () => {
+  await assert.rejects(runCardGame({game:'sts',controlled:true,seed:'18446744073709551615'}), /dedicated sts play/);
+  await assert.rejects(replayCardGame({game:'sts',controlled:true,records:'/must-not-be-read'}), /replay is disabled/);
 });

@@ -3,7 +3,7 @@ import type {Setup,Ports,Frame} from './game.schemas.ts';
 import {programSchemas} from './game.schemas.ts';
 import {stsProgram} from "./program/entry.ts";
 
-/** Shared Program plus one independent rules Context; native/controlled use this same definition. */
+/** Shared Program plus one independent rules Context; controlled STS execution uses this definition. */
 export const cardDefinition=linkRules<{},Setup,Ports,Frame>({
   id:'sts-lightspeed-7476a819/ironclad-a20/typed-rules-1',
   schemas:programSchemas,

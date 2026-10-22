@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import {drawPowers} from "../src/content/powers/draw.ts";
 import {ironcladDrawPowers} from "../src/content/characters/ironclad/powers/draw.ts";
 import {pileCards} from "../src/content/cards/statuses/definitions.ts";
@@ -107,10 +109,10 @@ test('card pile continuations, composed draw/exhaust powers and relic queues mat
   const reference=await ReferenceClient.create();
   try{for(const seed of ['0','130','18446744073709551615'])for(const [index,c] of cases.entries()){
     const {wire,definition}=fixture({...c.setup,seed,cardSeed:seed},c.steps),expected=await reference.call({op:'pile-case',...wire});
-    for(const controlled of [false,true]){
-      const loaded=unwrap(await createCardLoader({controlled}).load(definition)),instance=unwrap(await loaded.core.start(undefined));
+    for(const controlled of [true]){
+      const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(definition)),instance=unwrap(await loaded.core.start(undefined));
       try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error('Expected completed pile case');assertSameState(expected,stop.result,`piles seed=${seed} case=${index} controlled=${controlled}`);}
-      finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+      finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
     }
   }}finally{await reference.close();}
 });

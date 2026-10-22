@@ -1,3 +1,4 @@
+import {mapRelics} from '../content/relics/common/map.ts';
 import {detailEvents} from '../adapters/detail-events.ts';
 import {startingRelics} from '../content/characters/ironclad/relics/burning-blood.ts';
 import type {AdventureCatalog} from '../rules/adventures.types.ts';
@@ -29,12 +30,13 @@ const selectionCards=createSelectionCards(combatChoices),colorlessSelectionCards
 export const adventureContent={cards,acquisition,neow,merchant,events,rooms:roomPrograms};
 
 /** The sole game root: typed calls own every continuation, including nested content windows. */
-export function createAdventureProgram(character:{start:typeof adventureStart;catalog:AdventureCatalog;initialize:(builder:rules.Builder<number,void>)=>ReturnType<typeof rules.sequence>;modules:readonly rules.RuleModule<unknown>[]}){return defineRules({requires:[detailEvents,character.start,adventureProgression,adventurePotions,revival,stsPorts,neow,roomPrograms,...character.modules],build(){
+export function createAdventureProgram(character:{start:typeof adventureStart;catalog:AdventureCatalog;initialize:(builder:rules.Builder<number,void>)=>ReturnType<typeof rules.sequence>;modules:readonly rules.RuleModule<unknown>[]}){return defineRules({requires:[mapRelics,detailEvents,character.start,adventureProgression,adventurePotions,revival,stsPorts,neow,roomPrograms,...character.modules],build(){
   const initialize=defineEffect(character.initialize);
   const run=defineEffect<Setup,Frame>(b=>{const game=b.local<number>(),catalog=b.local<{key:Room;definition:RoomDefinition}[]>(),x=b.local<number>(),room=b.local<number>(),dispatched=b.local<Room>(),followup=b.local<boolean>();return sequence(
     b.assign(game,call(character.start.exports.initialize,{setup:b.input,definition:rules.defineEntity(adventures.exports.kind,character.catalog)})),b.assign(catalog,roomPrograms.exports.definitions),call(stsPorts.exports.initialize,game),when(b.read(v=>v.input.detailedEvents===true),call(detailEvents.exports.initialize,game)),call(adventurePotions.exports.initialize,game),call(revival.exports.initialize,game),call(initialize,game),call(neow.exports.choose,game),
     whileDo(b.read(v=>v.query(adventures.exports.position,v.get(game)).outcome===1),sequence(
-      b.assign(x,call(adventureChoices.exports.choose,{run:game,actions:b.read(v=>{const s=v.query(adventures.exports.location,v.get(game));if(s.y===14)return[0];if(s.y===-1)return Array.from({length:7},(_,x)=>x).filter(x=>nodeAt(s.map,x,0).edges.length>0);return nodeAt(s.map,s.x,s.y).edges;})})),
+      b.assign(x,call(adventureChoices.exports.choose,{run:game,actions:query(mapRelics.exports.options,game)})),
+      call(mapRelics.exports.move,{run:game,x:b.read(v=>v.get(x)&255)}),
       call(adventures.exports.arrive,b.read(v=>{const s=v.query(adventures.exports.location,v.get(game)),nextX=v.get(x)&255,y=s.y+1;return{run:v.get(game),x:nextX,y,room:y===15?'BOSS' as const:nodeAt(s.map,nextX,y).room,event:eventId.INVALID};})),call(adventureProgression.exports.reseedFloor,game),call(adventures.exports.notifyEntered,{run:game,room:b.read(v=>v.query(adventures.exports.position,v.get(game)).room)}),
       when(b.read(v=>v.query(adventures.exports.position,v.get(game)).room==='EVENT'),call(roomPrograms.exports.resolveEvent,game)),
       b.assign(followup,true),whileDo(followup,sequence(b.assign(dispatched,b.read(v=>v.query(adventures.exports.position,v.get(game)).room)),b.assign(room,spawnEntity({kind:rooms.exports.kind,definition:b.read(v=>{const current=v.query(adventures.exports.position,v.get(game)).room,entry=v.get(catalog).find(entry=>entry.key===current);if(!entry)throw Error('Room content is not installed: '+current);return entry.definition;}),owner:game,scope:b.read(v=>v.query(adventures.exports.bindings,v.get(game)).scope),setup:{run:game}})),despawnEntity({entity:room,reason:{roomComplete:true}}),b.assign(followup,b.read(v=>{const s=v.query(adventures.exports.status,v.get(game));return s.outcome===1&&s.screen!=='MAP_SCREEN'&&s.room!==v.get(dispatched)&&v.query(resources.exports.vitality,s.actor).hp>0;})))),

@@ -15,7 +15,7 @@ import {programSchemas,type Ports,type Frame} from '../src/game.schemas.ts';
 import type {RelicId} from '../src/identifiers.ts';
 
 const {defineRules,defineEffect,sequence,when,forEach,call,query,spawnEntity,despawnEntity}=rules;
-const setupSchema=programSchemas.setup.extend({event:z.int32().nullable(),relic:z.custom<RelicId>().nullable()});
+const setupSchema=programSchemas.setup.extend({event:z.int32().nullable(),relic:z.custom<RelicId>().nullable(),owned:z.array(z.custom<RelicId>()).optional(),copyCard:z.boolean().optional(),rewardRelic:z.boolean().optional(),emptyDeck:z.boolean().optional()});
 export type AdventureContentCase=z.infer<typeof setupSchema>;
 const fixture=defineRules({requires:[adventureProgram],build(){
   const entry=defineEffect<AdventureContentCase,Frame>(b=>{
@@ -28,7 +28,10 @@ const fixture=defineRules({requires:[adventureProgram],build(){
       forEach(['BARRICADE','REGRET'] as const,id=>call(permanentDecks.exports.obtain,{deck:b.read(v=>state(v).deck),definition:query(adventures.exports.card,{run,id}),upgraded:false,specialData:0,count:1,upgrade:false})),
       call(adventures.exports.setScene,{run,screen:'MAP_SCREEN',continuation:true}),call(stsPorts.exports.initialize,run),call(adventurePotions.exports.initialize,run),
       when(b.read(v=>v.input.event!==null),forEach(['GOLDEN_IDOL','CIRCLET'] as const,id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})}))),
-      when(b.read(v=>v.input.relic!==null),call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id:b.read(v=>v.input.relic!)})})),
+      forEach(b.read(v=>v.input.owned??[]),id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),
+      when(b.read(v=>v.input.emptyDeck===true),forEach(b.read(v=>[...v.query(permanentDecks.exports.current,state(v).deck).cards].reverse()),card=>call(permanentDecks.exports.remove,{deck:b.read(v=>state(v).deck),card}))),
+      when(b.read(v=>v.input.copyCard===true),sequence(call(permanentDecks.exports.obtain,{deck:b.read(v=>state(v).deck),definition:query(adventures.exports.card,{run,id:'SEARING_BLOW'}),upgraded:true,specialData:3,count:1,upgrade:false}),call(permanentDecks.exports.bottle,{deck:b.read(v=>state(v).deck),index:13,type:0}))),
+      when(b.read(v=>v.input.relic!==null),when(b.read(v=>v.input.rewardRelic===true),sequence(call(adventures.exports.setRewards,{run,rewards:{gold:[17],cards:[[{definition:query(adventures.exports.card,{run,id:'BASH'}),upgraded:false,misc:0}]],potions:[],relics:[query(adventures.exports.relic,{run,id:b.read(v=>v.input.relic!)})],emeraldKey:false,sapphireKey:true}}),call(adventureContent.acquisition.exports.rewards,run)),call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id:b.read(v=>v.input.relic!)})}))),
       when(b.read(v=>v.input.event!==null),sequence(call(adventures.exports.setRoom,{run,room:'EVENT',event:b.read(v=>v.input.event!)}),call(adventureContent.events.exports.open,run))),
       when(b.read(v=>v.input.event===null),call(adventures.exports.setScene,{run,screen:'MAP_SCREEN',continuation:true})),
       when(b.read(v=>v.input.event!==null&&state(v).room!=='EVENT'&&state(v).screen!=='MAP_SCREEN'&&v.get(query(resources.exports.current,state(v).actor)).hp>0),sequence(

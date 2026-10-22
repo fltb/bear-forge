@@ -23,7 +23,7 @@ import {programSchemas,type Ports,type Frame} from '../src/game.schemas.ts';
 import {encounterId,type CardId} from '../src/identifiers.ts';
 import type {TurnActor} from '../src/rules/turns.types.ts';
 const {defineRules,defineComponent,defineQuery,defineEffect,defineEntity,sequence,when,forEach,call,query,on,install,spawnEntity,readComponent,updateLocalComponent}=rules;
-const setupSchema=programSchemas.setup.extend({id:z.custom<keyof typeof cards>(),upgraded:z.boolean(),enemyHp:z.int32().positive(),support:z.array(z.custom<keyof typeof cards>()),strength:z.int32().default(0),vulnerable:z.int32().default(0),attackIntent:z.boolean().default(false)});
+const setupSchema=programSchemas.setup.extend({id:z.custom<keyof typeof cards>(),upgraded:z.boolean(),enemyHp:z.int32().positive(),support:z.array(z.custom<keyof typeof cards>()),strength:z.int32().default(0),vulnerable:z.int32().default(0),attackIntent:z.boolean().default(false),dexterity:z.int32().default(0),frail:z.int32().default(0),enemyArtifact:z.int32().default(0),enemyStrength:z.int32().default(0),drawSupport:z.array(z.custom<keyof typeof cards>()).default([])});
 export type ContentCase=z.infer<typeof setupSchema>;
 const fixture=defineRules({requires:[adventureProgram],build(m){
   const done=defineComponent({schema:z.boolean(),initial:()=>false});
@@ -38,11 +38,12 @@ const fixture=defineRules({requires:[adventureProgram],build(m){
       when(b.read(v=>cards[v.input.environment.id].type===4),b.assign(subject,create(b.read(v=>v.input.environment.id),1,b.read(v=>v.input.environment.upgraded))),sequence(
         b.assign(subject,b.read(v=>{const found=[p(v).hand,p(v).draw,p(v).discard,p(v).exhaust].flatMap(zone=>v.get(query(zones.exports.members,zone))).find(card=>v.get(query(cardInstances.exports.current,card)).uniqueId===11);if(found===undefined)throw Error('Fixture subject is missing');return found;})),
         b.assign(from,query(zones.exports.location,subject)),when(b.read(v=>v.get(from)!==p(v).hand),sequence(call(zones.exports.move,{entity:subject,from,to:null,index:0}),call(cardPiles.exports.moveToHand,{piles,card:subject}))),
-      )),forEach(b.read(v=>v.input.environment.support),id=>create(id,1,false)),create('DAZED',0,false),
+      )),forEach(b.read(v=>v.input.environment.support),id=>create(id,1,false)),create('DAZED',0,false),forEach(b.read(v=>v.input.environment.drawSupport),id=>create(id,0,false)),
       call(resources.exports.setHealth,{entity:b.read(v=>board(v).enemies[0]!),hp:b.read(v=>v.input.environment.enemyHp),maxHp:b.read(v=>v.input.environment.enemyHp)}),
       call(resources.exports.gainBlock,{entity:b.read(v=>v.input.owner),amount:10}),call(resources.exports.rechargeEnergy,{entity:b.read(v=>v.input.owner),amount:20}),call(resources.exports.loseHp,{entity:b.read(v=>v.input.owner),amount:3,selfDamage:true}),
       when(b.read(v=>v.input.environment.strength!==0),call(powers.exports.apply,{registry:b.read(v=>board(v).registry),actor:b.read(v=>v.input.owner),definition:basicPowers.exports.Strength,amount:b.read(v=>v.input.environment.strength),source:null,debuff:false,scope:b.read(v=>board(v).scope)})),
       when(b.read(v=>v.input.environment.vulnerable!==0),call(powers.exports.apply,{registry:b.read(v=>board(v).registry),actor:b.read(v=>board(v).enemies[0]!),definition:basicPowers.exports.EnemyVulnerable,amount:b.read(v=>v.input.environment.vulnerable),source:null,debuff:true,scope:b.read(v=>board(v).scope)})),
+      ...([['dexterity',basicPowers.exports.Dexterity,false],['frail',basicPowers.exports.Frail,false],['enemyArtifact',basicPowers.exports.EnemyArtifact,true],['enemyStrength',basicPowers.exports.Strength,true]] as const).map(([field,definition,enemy])=>when(b.read(v=>v.input.environment[field]!==0),call(powers.exports.apply,{registry:b.read(v=>board(v).registry),actor:b.read(v=>enemy?board(v).enemies[0]!:v.input.owner),definition,amount:b.read(v=>v.input.environment[field]),source:null,debuff:field==='frail',scope:b.read(v=>board(v).scope)}))),
       when(b.read(v=>v.input.environment.attackIntent),call(enemies.exports.replaceMove,{enemy:b.read(v=>{const id=v.get(query(enemies.exports.forActor,board(v).enemies[0]!));if(id===null)throw Error('Fixture enemy is missing');return id;}),move:moveId.CULTIST_DARK_STRIKE})),
     );
   })});

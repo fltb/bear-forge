@@ -8,7 +8,7 @@ import type {Action} from './game.schemas.ts';
 const unwrap=<T>(r:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};
 export async function createInteractiveSession(options:InteractiveOptions){
   validatePresentationCatalog();
-  const loaded=unwrap(await createCardLoader({controlled:false,stepBudget:100_000_000}).load(cardDefinition));
+  const loaded=unwrap(await createCardLoader({recordCore:false,controlled:true,stepBudget:100_000_000}).load(cardDefinition));
   const instance=unwrap(await loaded.core.start({character:options.character,seed:options.seed,detailedEvents:true}));
   const binding=await createGameBinder().bind({instance,contract,...(loaded.persistence?{persistence:loaded.persistence}:{})});
   if(!binding.ok){await instance.close();await loaded.capture?.release(instance.id);throw Error(JSON.stringify(binding.error));}

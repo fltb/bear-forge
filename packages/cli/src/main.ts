@@ -38,7 +38,8 @@ export async function main(args = process.argv.slice(2)) {
   if (command === 'card:run' || command === 'card:replay') {
     if (flags.game !== 'forge-duel' && flags.game !== 'doudizhu' && flags.game !== 'sts') throw Error('--game must be forge-duel, doudizhu or sts');
     if (flags.native !== undefined && flags.native !== true) throw Error('--native takes no value');
-    const seed = flags.game === 'sts' ? String(flags.seed ?? 991) : Number(flags.seed ?? 991);
+    if (flags.game === 'sts') throw Error('Use sts play; generic STS run and replay are disabled');
+    const seed = Number(flags.seed ?? 991);
     if (typeof seed === 'number' && (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff)) throw Error('Invalid seed');
     if (flags.records !== undefined && typeof flags.records !== 'string') throw Error('--records requires a path');
     if (command === 'card:replay') {
@@ -58,7 +59,7 @@ export async function main(args = process.argv.slice(2)) {
       await build({ entryPoints: [resolve('examples', name, 'src/module.ts')], outfile,
         bundle: true, platform: 'node', format: 'esm', target: 'node22', packages: 'external' });
       const {game} = await import(pathToFileURL(outfile).href);
-      const linked = await createCardLoader({controlled:false}).load(game.definition);
+      const linked = await createCardLoader({controlled:name==='sts',recordCore:false}).load(game.definition);
       if (!linked.ok) throw Error(linked.error.message);
       console.log('Linked Card Core ' + name);
     }

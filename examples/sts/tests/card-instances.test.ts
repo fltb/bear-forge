@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import type {AdventureCatalog} from '../src/rules/adventures.types.ts';
 import assert from 'node:assert/strict';
@@ -51,16 +53,16 @@ const entry=defineEffect<z.infer<typeof setupSchema>,z.infer<typeof snapshotSche
 const definition=linkRules({id:'sts/card-instance-matrix-1',schemas:{setup:setupSchema,result:z.array(snapshotSchema),ports:{}},initialize:()=>({}),entry,definitions:[entry,noop],modules:[views]});
 const unwrap=<T>(r:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};
 
-test('every admitted card variant preserves CardInstance fees, upgrades, flags and signed storage through both modes',async()=>{
+test('every admitted card variant preserves CardInstance fees, upgrades, flags and signed storage through controlled execution',async()=>{
   const reference=await ReferenceClient.create();
   try{
-    const loaded=await Promise.all([false,true].map(async controlled=>unwrap(await createCardLoader({controlled}).load(definition))));
+    const loaded=await Promise.all([true].map(async controlled=>unwrap(await createCardLoader({recordCore:false,controlled}).load(definition))));
     for(const [index,id] of names.entries())for(const upgraded of [false,true]){
       const expected=await reference.call({op:'card-instance-case',id:cardId[id],upgraded,specialData:2,uniqueId:7,steps});
       for(const [mode,core] of loaded.entries()){
         const instance=unwrap(await core.core.start({index,upgraded}));
         try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error('Expected card result');assertSameState(expected,stop.result,`card=${id} upgraded=${upgraded} mode=${mode}`);}
-        finally{await instance.close();if(core.capture)await core.capture.release(instance.id);}
+        finally{await instance.close();if(core.capture)await core.capture?.release(instance.id);}
       }
     }
   }finally{await reference.close();}
@@ -75,12 +77,12 @@ test('a combat copy shares its definition and master identity while resetting te
     call(cardInstances.exports.updateCost,{entity:copy,amount:-1}),b.return({master:query(cardInstances.exports.current,master),copy:query(cardInstances.exports.current,copy)}),
   );});
   const d=linkRules({id:'sts/card-copy-1',schemas:{setup:z.undefined(),result:z.unknown(),ports:{}},initialize:()=>({}),entry,definitions:[entry,noop],modules:[cardInstances]});
-  for(const controlled of [false,true]){
-    const core=unwrap(await createCardLoader({controlled}).load(d)),instance=unwrap(await core.core.start(undefined)),stop=unwrap(await instance.inspect());
+  for(const controlled of [true]){
+    const core=unwrap(await createCardLoader({recordCore:false,controlled}).load(d)),instance=unwrap(await core.core.start(undefined)),stop=unwrap(await instance.inspect());
     assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error(JSON.stringify(stop));
     assert.deepEqual(stop.result,{master:{mode:0,master:null,uniqueId:-1,specialData:9,upgraded:true,cost:0,costForTurn:2,freeToPlayOnce:true,retain:true},
       copy:{mode:1,master:1,uniqueId:12,specialData:9,upgraded:true,cost:1,costForTurn:1,freeToPlayOnce:false,retain:false}});
-    await instance.close();if(core.capture)await core.capture.release(instance.id);
+    await instance.close();if(core.capture)await core.capture?.release(instance.id);
   }
 });
 
@@ -102,9 +104,9 @@ test('a custom card can combine private hooks and typed query policies for a two
     b.return({first,second,third,used:rules.readComponent(entity,used),card:query(cardInstances.exports.combatView,entity)}),
   );});
   const d=linkRules({id:'sts/custom-upgrade-1',schemas:{setup:z.undefined(),result:z.unknown(),ports:{}},initialize:()=>({}),entry,definitions:[entry,noop],modules:[custom]});
-  for(const controlled of [false,true]){
-    const loaded=unwrap(await createCardLoader({controlled}).load(d)),instance=unwrap(await loaded.core.start(undefined));
+  for(const controlled of [true]){
+    const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(d)),instance=unwrap(await loaded.core.start(undefined));
     try{const stop=unwrap(await instance.inspect());assert.deepEqual(stop.kind==='done'?stop.result:stop,{first:true,second:true,third:false,used:2,card:{id:'CUSTOM_TWO_STEP',uniqueId:4,specialData:0,cost:5,costForTurn:5,upgraded:true,freeToPlayOnce:false,retain:false}});}
-    finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+    finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
   }
 });

@@ -1,1 +1,4186 @@
-{"reference":"7476a81954020087da31d41d16fddf475746ec2d","seed":"130","character":"IRONCLAD","ascension":20,"actions":[{"kind":"game","bits":3},{"kind":"game","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"game","bits":134217728},{"kind":"game","bits":402653184},{"kind":"game","bits":0},{"kind":"game","bits":805306368},{"kind":"game","bits":2},{"kind":"game","bits":671088640},{"kind":"game","bits":0},{"kind":"game","bits":805306368},{"kind":"game","bits":1},{"kind":"game","bits":1},{"kind":"game","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":3},{"kind":"battle","bits":536870912},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741826},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":2},{"kind":"game","bits":134217728},{"kind":"game","bits":256},{"kind":"game","bits":805306368},{"kind":"game","bits":2},{"kind":"battle","bits":65536},{"kind":"battle","bits":2},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":65539},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"game","bits":134217728},{"kind":"game","bits":402653184},{"kind":"game","bits":0},{"kind":"game","bits":805306368},{"kind":"game","bits":2},{"kind":"game","bits":1},{"kind":"game","bits":7},{"kind":"game","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741826},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":3},{"kind":"game","bits":134217728},{"kind":"game","bits":402653184},{"kind":"game","bits":256},{"kind":"game","bits":805306368},{"kind":"game","bits":2},{"kind":"game","bits":1},{"kind":"game","bits":10},{"kind":"game","bits":1},{"kind":"game","bits":0},{"kind":"game","bits":536870912},{"kind":"game","bits":805306368},{"kind":"game","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":536870913},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":65539},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"game","bits":134217728},{"kind":"game","bits":402653184},{"kind":"game","bits":512},{"kind":"game","bits":805306368},{"kind":"game","bits":0},{"kind":"game","bits":1},{"kind":"game","bits":10},{"kind":"game","bits":0},{"kind":"game","bits":805306368},{"kind":"game","bits":1},{"kind":"game","bits":1},{"kind":"game","bits":6},{"kind":"game","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":536870912},{"kind":"battle","bits":1610612736},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":2},{"kind":"game","bits":134217728},{"kind":"game","bits":536870912},{"kind":"game","bits":256},{"kind":"game","bits":805306368},{"kind":"game","bits":2},{"kind":"game","bits":1},{"kind":"game","bits":8},{"kind":"game","bits":0},{"kind":"battle","bits":536870913},{"kind":"battle","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":4},{"kind":"battle","bits":1073741828},{"kind":"battle","bits":4},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":4},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":0},{"kind":"battle","bits":6},{"kind":"game","bits":134217728},{"kind":"game","bits":256},{"kind":"game","bits":805306368},{"kind":"game","bits":1},{"kind":"game","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":4},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"game","bits":134217728},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":0},{"kind":"battle","bits":65540},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741826},{"kind":"battle","bits":65539},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":4},{"kind":"battle","bits":6},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2147483648},{"kind":"game","bits":134217728},{"kind":"game","bits":134217728},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":1},{"kind":"battle","bits":65539},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":1073741827},{"kind":"battle","bits":0},{"kind":"battle","bits":65538},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"game","bits":134217728},{"kind":"game","bits":402653184},{"kind":"game","bits":0},{"kind":"game","bits":805306368},{"kind":"game","bits":1},{"kind":"game","bits":15},{"kind":"game","bits":1},{"kind":"game","bits":671088640},{"kind":"game","bits":5},{"kind":"game","bits":805306368},{"kind":"game","bits":1},{"kind":"game","bits":1},{"kind":"game","bits":6},{"kind":"game","bits":1},{"kind":"game","bits":1},{"kind":"battle","bits":65538},{"kind":"battle","bits":0},{"kind":"battle","bits":131073},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"game","bits":134217728},{"kind":"game","bits":536870912},{"kind":"game","bits":256},{"kind":"game","bits":805306368},{"kind":"game","bits":0},{"kind":"game","bits":1},{"kind":"game","bits":8},{"kind":"game","bits":1},{"kind":"game","bits":0},{"kind":"game","bits":268435456},{"kind":"game","bits":134217728},{"kind":"game","bits":805306368},{"kind":"game","bits":2},{"kind":"game","bits":1},{"kind":"game","bits":4},{"kind":"game","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":536870912},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":1},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"game","bits":134217728},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":0},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":1073741826},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":6},{"kind":"battle","bits":2},{"kind":"battle","bits":3},{"kind":"battle","bits":8},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":4},{"kind":"battle","bits":5},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":7},{"kind":"battle","bits":2},{"kind":"battle","bits":65542},{"kind":"game","bits":134217728},{"kind":"game","bits":402653184},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":1},{"kind":"game","bits":0},{"kind":"game","bits":134217728},{"kind":"game","bits":536870912},{"kind":"game","bits":805306368},{"kind":"game","bits":0},{"kind":"game","bits":2},{"kind":"game","bits":0},{"kind":"game","bits":1},{"kind":"game","bits":2},{"kind":"game","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"battle","bits":536870912},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":7},{"kind":"battle","bits":1073741824},{"kind":"battle","bits":5},{"kind":"battle","bits":4},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":1073741828},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":5},{"kind":"battle","bits":6},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"game","bits":134217728},{"kind":"game","bits":402653184},{"kind":"game","bits":0},{"kind":"game","bits":805306368},{"kind":"game","bits":1},{"kind":"game","bits":1},{"kind":"battle","bits":65537},{"kind":"battle","bits":3},{"kind":"battle","bits":536870912},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":1073741829},{"kind":"battle","bits":6},{"kind":"battle","bits":131072},{"kind":"battle","bits":1073741831},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":131073},{"kind":"battle","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":4},{"kind":"battle","bits":4},{"kind":"game","bits":134217728},{"kind":"game","bits":402653184},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":1},{"kind":"battle","bits":1},{"kind":"battle","bits":5},{"kind":"battle","bits":5},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":131074},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":0},{"kind":"game","bits":134217728},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":2},{"kind":"battle","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":536870912},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":5},{"kind":"battle","bits":4},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"game","bits":134217728},{"kind":"game","bits":402653184},{"kind":"game","bits":0},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"game","bits":671088640},{"kind":"game","bits":0},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"game","bits":2},{"kind":"game","bits":1280},{"kind":"game","bits":1280},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"game","bits":2},{"kind":"game","bits":3},{"kind":"game","bits":0},{"kind":"game","bits":134217728},{"kind":"game","bits":536870912},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741826},{"kind":"battle","bits":1},{"kind":"battle","bits":536870912},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":4},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"game","bits":268435456},{"kind":"game","bits":134217728},{"kind":"game","bits":536870912},{"kind":"game","bits":402653184},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":2},{"kind":"game","bits":0},{"kind":"game","bits":134217728},{"kind":"game","bits":536870912},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":3},{"kind":"battle","bits":536870912},{"kind":"battle","bits":1073741826},{"kind":"battle","bits":65536},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741828},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":131075},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"battle","bits":131074},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":4},{"kind":"battle","bits":1},{"kind":"battle","bits":3},{"kind":"game","bits":134217728},{"kind":"game","bits":536870912},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"game","bits":1},{"kind":"game","bits":5},{"kind":"game","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":5},{"kind":"battle","bits":2},{"kind":"battle","bits":1073741827},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"game","bits":134217728},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"game","bits":2},{"kind":"game","bits":536870913},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"battle","bits":5},{"kind":"battle","bits":0},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"game","bits":134217728},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"game","bits":1},{"kind":"game","bits":6},{"kind":"game","bits":0},{"kind":"battle","bits":4},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":131075},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":131073},{"kind":"battle","bits":1073741830},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":131074},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":131072},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":131072},{"kind":"battle","bits":0},{"kind":"battle","bits":4},{"kind":"battle","bits":131072},{"kind":"battle","bits":131072},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":131073},{"kind":"battle","bits":2},{"kind":"battle","bits":131075},{"kind":"battle","bits":3},{"kind":"battle","bits":65540},{"kind":"battle","bits":4},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":65537},{"kind":"battle","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":2},{"kind":"battle","bits":3},{"kind":"battle","bits":1073741826},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":65539},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":4},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":65539},{"kind":"battle","bits":65537},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":5},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":5},{"kind":"battle","bits":2},{"kind":"game","bits":3},{"kind":"game","bits":0},{"kind":"game","bits":3},{"kind":"game","bits":2},{"kind":"game","bits":402653184},{"kind":"game","bits":402653185},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"battle","bits":536870912},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":536870913},{"kind":"battle","bits":1},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":65538},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":65539},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":7},{"kind":"battle","bits":1},{"kind":"battle","bits":65537},{"kind":"game","bits":134217728},{"kind":"game","bits":536870912},{"kind":"game","bits":402653184},{"kind":"game","bits":1280},{"kind":"game","bits":805306368},{"kind":"game","bits":3},{"kind":"battle","bits":3},{"kind":"battle","bits":3},{"kind":"battle","bits":3},{"kind":"battle","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":536870912},{"kind":"battle","bits":1073741826},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":1073741824},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":3},{"kind":"battle","bits":4},{"kind":"battle","bits":1073741825},{"kind":"battle","bits":6},{"kind":"battle","bits":0},{"kind":"battle","bits":3},{"kind":"battle","bits":3},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":0},{"kind":"battle","bits":2},{"kind":"battle","bits":4},{"kind":"battle","bits":1},{"kind":"battle","bits":2},{"kind":"battle","bits":0},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":2},{"kind":"battle","bits":2147483648},{"kind":"battle","bits":1},{"kind":"battle","bits":1}],"heartDefeated":true,"final":{"actions":[],"battle":null,"decisions":733,"game":{"act":4,"allPotions":[1,1,1,1,1],"ascension":20,"boss":57,"bottles":[-1,-1,-1],"cardRarityFactor":3,"colorlessPool":[94,281,242,344,121,188,335,36,21,290,100,352,241,291,12,218,177,155,166,131,259,240,343,64,113,150,213,216,173,327,200,223,225,336,212],"deck":[{"id":"ASCENDERS_BANE","misc":0,"upgraded":false},{"id":"SWORD_BOOMERANG","misc":0,"upgraded":false},{"id":"INFLAME","misc":0,"upgraded":true},{"id":"WARCRY","misc":0,"upgraded":false},{"id":"FLAME_BARRIER","misc":0,"upgraded":true},{"id":"REAPER","misc":0,"upgraded":true},{"id":"DEMON_FORM","misc":0,"upgraded":true},{"id":"HEADBUTT","misc":0,"upgraded":false},{"id":"FEEL_NO_PAIN","misc":0,"upgraded":true},{"id":"BATTLE_TRANCE","misc":0,"upgraded":true},{"id":"UPPERCUT","misc":0,"upgraded":true},{"id":"WHIRLWIND","misc":0,"upgraded":true},{"id":"FLEX","misc":0,"upgraded":false},{"id":"PERFECTED_STRIKE","misc":0,"upgraded":false},{"id":"DARK_EMBRACE","misc":0,"upgraded":true},{"id":"PERFECTED_STRIKE","misc":0,"upgraded":true},{"id":"CORRUPTION","misc":0,"upgraded":true},{"id":"SECOND_WIND","misc":0,"upgraded":false},{"id":"SHOCKWAVE","misc":0,"upgraded":true},{"id":"PARASITE","misc":0,"upgraded":false},{"id":"EXHUME","misc":0,"upgraded":false}],"deckCounts":[7,7,5,1],"eliteList":[56],"eliteOffset":1,"event":0,"eventList":[],"eventName":"INVALID","floor":56,"gold":59,"hasContinuation":true,"hp":14,"keys":{"blue":true,"green":true,"red":true},"lastRoom":"ELITE","map":{"burningEliteBuff":-1,"burningEliteX":-1,"burningEliteY":-1,"nodes":[{"edges":[],"parents":[],"room":"NONE","x":0,"y":0},{"edges":[],"parents":[],"room":"NONE","x":1,"y":0},{"edges":[],"parents":[],"room":"NONE","x":2,"y":0},{"edges":[3],"parents":[],"room":"REST","x":3,"y":0},{"edges":[],"parents":[],"room":"NONE","x":4,"y":0},{"edges":[],"parents":[],"room":"NONE","x":5,"y":0},{"edges":[],"parents":[],"room":"NONE","x":6,"y":0},{"edges":[],"parents":[],"room":"NONE","x":0,"y":1},{"edges":[],"parents":[],"room":"NONE","x":1,"y":1},{"edges":[],"parents":[],"room":"NONE","x":2,"y":1},{"edges":[3],"parents":[3],"room":"SHOP","x":3,"y":1},{"edges":[],"parents":[],"room":"NONE","x":4,"y":1},{"edges":[],"parents":[],"room":"NONE","x":5,"y":1},{"edges":[],"parents":[],"room":"NONE","x":6,"y":1},{"edges":[],"parents":[],"room":"NONE","x":0,"y":2},{"edges":[],"parents":[],"room":"NONE","x":1,"y":2},{"edges":[],"parents":[],"room":"NONE","x":2,"y":2},{"edges":[3],"parents":[3],"room":"ELITE","x":3,"y":2},{"edges":[],"parents":[],"room":"NONE","x":4,"y":2},{"edges":[],"parents":[],"room":"NONE","x":5,"y":2},{"edges":[],"parents":[],"room":"NONE","x":6,"y":2},{"edges":[],"parents":[],"room":"NONE","x":0,"y":3},{"edges":[],"parents":[],"room":"NONE","x":1,"y":3},{"edges":[],"parents":[],"room":"NONE","x":2,"y":3},{"edges":[],"parents":[3],"room":"BOSS","x":3,"y":3},{"edges":[],"parents":[],"room":"NONE","x":4,"y":3},{"edges":[],"parents":[],"room":"NONE","x":5,"y":3},{"edges":[],"parents":[],"room":"NONE","x":6,"y":3},{"edges":[],"parents":[],"room":"NONE","x":0,"y":4},{"edges":[],"parents":[],"room":"NONE","x":1,"y":4},{"edges":[],"parents":[],"room":"NONE","x":2,"y":4},{"edges":[],"parents":[],"room":"NONE","x":3,"y":4},{"edges":[],"parents":[],"room":"NONE","x":4,"y":4},{"edges":[],"parents":[],"room":"NONE","x":5,"y":4},{"edges":[],"parents":[],"room":"NONE","x":6,"y":4},{"edges":[],"parents":[],"room":"NONE","x":0,"y":5},{"edges":[],"parents":[],"room":"NONE","x":1,"y":5},{"edges":[],"parents":[],"room":"NONE","x":2,"y":5},{"edges":[],"parents":[],"room":"NONE","x":3,"y":5},{"edges":[],"parents":[],"room":"NONE","x":4,"y":5},{"edges":[],"parents":[],"room":"NONE","x":5,"y":5},{"edges":[],"parents":[],"room":"NONE","x":6,"y":5},{"edges":[],"parents":[],"room":"NONE","x":0,"y":6},{"edges":[],"parents":[],"room":"NONE","x":1,"y":6},{"edges":[],"parents":[],"room":"NONE","x":2,"y":6},{"edges":[],"parents":[],"room":"NONE","x":3,"y":6},{"edges":[],"parents":[],"room":"NONE","x":4,"y":6},{"edges":[],"parents":[],"room":"NONE","x":5,"y":6},{"edges":[],"parents":[],"room":"NONE","x":6,"y":6},{"edges":[],"parents":[],"room":"NONE","x":0,"y":7},{"edges":[],"parents":[],"room":"NONE","x":1,"y":7},{"edges":[],"parents":[],"room":"NONE","x":2,"y":7},{"edges":[],"parents":[],"room":"NONE","x":3,"y":7},{"edges":[],"parents":[],"room":"NONE","x":4,"y":7},{"edges":[],"parents":[],"room":"NONE","x":5,"y":7},{"edges":[],"parents":[],"room":"NONE","x":6,"y":7},{"edges":[],"parents":[],"room":"NONE","x":0,"y":8},{"edges":[],"parents":[],"room":"NONE","x":1,"y":8},{"edges":[],"parents":[],"room":"NONE","x":2,"y":8},{"edges":[],"parents":[],"room":"NONE","x":3,"y":8},{"edges":[],"parents":[],"room":"NONE","x":4,"y":8},{"edges":[],"parents":[],"room":"NONE","x":5,"y":8},{"edges":[],"parents":[],"room":"NONE","x":6,"y":8},{"edges":[],"parents":[],"room":"NONE","x":0,"y":9},{"edges":[],"parents":[],"room":"NONE","x":1,"y":9},{"edges":[],"parents":[],"room":"NONE","x":2,"y":9},{"edges":[],"parents":[],"room":"NONE","x":3,"y":9},{"edges":[],"parents":[],"room":"NONE","x":4,"y":9},{"edges":[],"parents":[],"room":"NONE","x":5,"y":9},{"edges":[],"parents":[],"room":"NONE","x":6,"y":9},{"edges":[],"parents":[],"room":"NONE","x":0,"y":10},{"edges":[],"parents":[],"room":"NONE","x":1,"y":10},{"edges":[],"parents":[],"room":"NONE","x":2,"y":10},{"edges":[],"parents":[],"room":"NONE","x":3,"y":10},{"edges":[],"parents":[],"room":"NONE","x":4,"y":10},{"edges":[],"parents":[],"room":"NONE","x":5,"y":10},{"edges":[],"parents":[],"room":"NONE","x":6,"y":10},{"edges":[],"parents":[],"room":"NONE","x":0,"y":11},{"edges":[],"parents":[],"room":"NONE","x":1,"y":11},{"edges":[],"parents":[],"room":"NONE","x":2,"y":11},{"edges":[],"parents":[],"room":"NONE","x":3,"y":11},{"edges":[],"parents":[],"room":"NONE","x":4,"y":11},{"edges":[],"parents":[],"room":"NONE","x":5,"y":11},{"edges":[],"parents":[],"room":"NONE","x":6,"y":11},{"edges":[],"parents":[],"room":"NONE","x":0,"y":12},{"edges":[],"parents":[],"room":"NONE","x":1,"y":12},{"edges":[],"parents":[],"room":"NONE","x":2,"y":12},{"edges":[],"parents":[],"room":"NONE","x":3,"y":12},{"edges":[],"parents":[],"room":"NONE","x":4,"y":12},{"edges":[],"parents":[],"room":"NONE","x":5,"y":12},{"edges":[],"parents":[],"room":"NONE","x":6,"y":12},{"edges":[],"parents":[],"room":"NONE","x":0,"y":13},{"edges":[],"parents":[],"room":"NONE","x":1,"y":13},{"edges":[],"parents":[],"room":"NONE","x":2,"y":13},{"edges":[],"parents":[],"room":"NONE","x":3,"y":13},{"edges":[],"parents":[],"room":"NONE","x":4,"y":13},{"edges":[],"parents":[],"room":"NONE","x":5,"y":13},{"edges":[],"parents":[],"room":"NONE","x":6,"y":13},{"edges":[],"parents":[],"room":"NONE","x":0,"y":14},{"edges":[],"parents":[],"room":"NONE","x":1,"y":14},{"edges":[],"parents":[],"room":"NONE","x":2,"y":14},{"edges":[],"parents":[],"room":"NONE","x":3,"y":14},{"edges":[],"parents":[],"room":"NONE","x":4,"y":14},{"edges":[],"parents":[],"room":"NONE","x":5,"y":14},{"edges":[],"parents":[],"room":"NONE","x":6,"y":14}]},"maxHp":96,"monsterChance":0.10000000149011612,"monsterList":[],"monsterOffset":0,"noteForYourself":{"id":"IRON_WAVE","misc":0,"upgraded":false},"oneTimeEvents":[6,15,17,18,21,26,27,36,40,44,53,48],"outcome":2,"potionCapacity":2,"potionChance":-10,"potionCount":0,"potions":[1,1],"relicBits":["144678146619229184","577023719839367184","269484032"],"relicPools":{"boss":[62,134,64,59,53,108,114,127,100,172,102,140,135,133],"common":[132,144,169,9,93,89,149,119,159,70,0,167,90,55,76,48,174,97,44,8,139],"rare":[146,131,160,78,15,35,157,105,7,74,30,77,107,65,80,29,109,6,154,54,22,11,165,21,36,177],"shop":[66,145,138,99,161,136,128,69,155,20,47],"uncommon":[51,61,27,162,95,141,142,96,94,41,176,4,166,158,31,60,67,40,34,24,120]},"relics":[{"data":0,"id":"PANDORAS_BOX"},{"data":0,"id":"ORNAMENTAL_FAN"},{"data":0,"id":"KUNAI"},{"data":0,"id":"RUNIC_DOME"},{"data":0,"id":"RED_MASK"},{"data":2,"id":"SUNDIAL"},{"data":0,"id":"BUSTED_CROWN"},{"data":0,"id":"LANTERN"},{"data":0,"id":"DARKSTONE_PERIAPT"},{"data":0,"id":"MAW_BANK"},{"data":0,"id":"CHAMPION_BELT"},{"data":0,"id":"BAG_OF_MARBLES"},{"data":0,"id":"BAG_OF_PREPARATION"}],"rng":{"ai":{"counter":11,"seed0":"4226070012162629062","seed1":"3398742060482026177"},"card":{"counter":765,"seed0":"15603920996450879113","seed1":"13028935468443800396"},"cardRandom":{"counter":16,"seed0":"14423699632027862632","seed1":"6864090363350386636"},"event":{"counter":11,"seed0":"17588559331686637921","seed1":"6799687121329107417"},"mathUtil":{"counter":0,"seed0":"14135642520076695794","seed1":"9523824352037105434"},"merchant":{"counter":96,"seed0":"13455659488533339232","seed1":"3421413523311248776"},"misc":{"counter":0,"seed0":"15610942606313955250","seed1":"15088194088068306720"},"monster":{"counter":110,"seed0":"9885528205428648691","seed1":"12776850714436634651"},"monsterHp":{"counter":1,"seed0":"15088194088068306720","seed1":"13999467958238251129"},"neow":{"counter":5,"seed0":"18136513915323917101","seed1":"9895622376816553439"},"potion":{"counter":120,"seed0":"13418832649054689351","seed1":"13088192582453742700"},"relic":{"counter":4,"seed0":"2728233687570027143","seed1":"15783505782709037928"},"shuffle":{"counter":6,"seed0":"9630723706285693531","seed1":"16416883608269829496"},"treasure":{"counter":33,"seed0":"1755123870907016340","seed1":"17990657264577644617"}},"room":"BOSS","screen":"BATTLE","secondBoss":55,"seed":"130","shopChance":0.029999999329447746,"shopRemoveCount":3,"shrineList":[],"skipBattles":false,"speedrunPace":false,"transformableCount":20,"treasureChance":0.019999999552965164,"upgradeableCount":7,"x":3,"y":3},"heartDefeated":true},"fixtureProvenance":{"kind":"engineering-reference-fixture","reason":"Regenerated after Curiosity correction; old action sequence is stale. Not an agent-review game.","sourceReferenceRevision":"7476a81954020087da31d41d16fddf475746ec2d","curiosityCorrectionSource":"examples/sts/tests/reference/build.ts: explicit corrected BattleContext.cpp copy; pinned upstream Curiosity block is commented out.","sourcePrefix":"ironclad-a20-heart-130.json (previous fixture)","prefixSteps":600,"simulations":10000,"independentReplayVerified":true}}
+{
+ "reference": "227f406eae91b7b2f42b5e210d099ec992b03ddd",
+ "seed": "130",
+ "character": "IRONCLAD",
+ "ascension": 20,
+ "actions": [
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 671088640
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741826
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 256
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 65536
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 65539
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 7
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741826
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 256
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 10
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 536870912
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 536870913
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 65539
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 512
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 10
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 6
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 1610612736
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 536870912
+  },
+  {
+   "kind": "game",
+   "bits": 256
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 8
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 536870913
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741828
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 6
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 256
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 65540
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741826
+  },
+  {
+   "kind": "battle",
+   "bits": 65539
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 6
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 65539
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741827
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 65538
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 15
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 671088640
+  },
+  {
+   "kind": "game",
+   "bits": 5
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 6
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 65538
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 131073
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 536870912
+  },
+  {
+   "kind": "game",
+   "bits": 256
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 8
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 268435456
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 4
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741826
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 6
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 8
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 7
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 65542
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 536870912
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 7
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741824
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741828
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 6
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 65537
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741829
+  },
+  {
+   "kind": "battle",
+   "bits": 6
+  },
+  {
+   "kind": "battle",
+   "bits": 131072
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741831
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 131073
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 131074
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 671088640
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 536870912
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741826
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 268435456
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 536870912
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 536870912
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741826
+  },
+  {
+   "kind": "battle",
+   "bits": 65536
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741828
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 131075
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 131074
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 536870912
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 5
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741827
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 536870913
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 1
+  },
+  {
+   "kind": "game",
+   "bits": 6
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 131075
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 131073
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741830
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 131074
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 131072
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 131072
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 131072
+  },
+  {
+   "kind": "battle",
+   "bits": 131072
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 131073
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 131075
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 65540
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 65537
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741826
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 65539
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 65539
+  },
+  {
+   "kind": "battle",
+   "bits": 65537
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 5
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 0
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "game",
+   "bits": 2
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 402653185
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 536870913
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 65538
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 65539
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 7
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 65537
+  },
+  {
+   "kind": "game",
+   "bits": 134217728
+  },
+  {
+   "kind": "game",
+   "bits": 536870912
+  },
+  {
+   "kind": "game",
+   "bits": 402653184
+  },
+  {
+   "kind": "game",
+   "bits": 1280
+  },
+  {
+   "kind": "game",
+   "bits": 805306368
+  },
+  {
+   "kind": "game",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 536870912
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741826
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741824
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 1073741825
+  },
+  {
+   "kind": "battle",
+   "bits": 6
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 3
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 4
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 0
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 2
+  },
+  {
+   "kind": "battle",
+   "bits": 2147483648
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  },
+  {
+   "kind": "battle",
+   "bits": 1
+  }
+ ],
+ "heartDefeated": true,
+ "final": {
+  "actions": [],
+  "battle": null,
+  "decisions": 733,
+  "game": {
+   "act": 4,
+   "allPotions": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "ascension": 20,
+   "boss": 57,
+   "bottles": [
+    -1,
+    -1,
+    -1
+   ],
+   "cardRarityFactor": 3,
+   "colorlessPool": [
+    94,
+    281,
+    242,
+    344,
+    121,
+    188,
+    335,
+    36,
+    21,
+    290,
+    100,
+    352,
+    241,
+    291,
+    12,
+    218,
+    177,
+    155,
+    166,
+    131,
+    259,
+    240,
+    343,
+    64,
+    113,
+    150,
+    213,
+    216,
+    173,
+    327,
+    200,
+    223,
+    225,
+    336,
+    212
+   ],
+   "deck": [
+    {
+     "id": "ASCENDERS_BANE",
+     "misc": 0,
+     "upgraded": false
+    },
+    {
+     "id": "SWORD_BOOMERANG",
+     "misc": 0,
+     "upgraded": false
+    },
+    {
+     "id": "INFLAME",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "WARCRY",
+     "misc": 0,
+     "upgraded": false
+    },
+    {
+     "id": "FLAME_BARRIER",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "REAPER",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "DEMON_FORM",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "HEADBUTT",
+     "misc": 0,
+     "upgraded": false
+    },
+    {
+     "id": "FEEL_NO_PAIN",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "BATTLE_TRANCE",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "UPPERCUT",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "WHIRLWIND",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "FLEX",
+     "misc": 0,
+     "upgraded": false
+    },
+    {
+     "id": "PERFECTED_STRIKE",
+     "misc": 0,
+     "upgraded": false
+    },
+    {
+     "id": "DARK_EMBRACE",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "PERFECTED_STRIKE",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "CORRUPTION",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "SECOND_WIND",
+     "misc": 0,
+     "upgraded": false
+    },
+    {
+     "id": "SHOCKWAVE",
+     "misc": 0,
+     "upgraded": true
+    },
+    {
+     "id": "PARASITE",
+     "misc": 0,
+     "upgraded": false
+    },
+    {
+     "id": "EXHUME",
+     "misc": 0,
+     "upgraded": false
+    }
+   ],
+   "deckCounts": [
+    7,
+    7,
+    5,
+    1
+   ],
+   "eliteList": [
+    56
+   ],
+   "eliteOffset": 1,
+   "event": 0,
+   "eventList": [],
+   "eventName": "INVALID",
+   "floor": 56,
+   "gold": 59,
+   "hasContinuation": true,
+   "hp": 14,
+   "keys": {
+    "blue": true,
+    "green": true,
+    "red": true
+   },
+   "lastRoom": "ELITE",
+   "map": {
+    "burningEliteBuff": -1,
+    "burningEliteX": -1,
+    "burningEliteY": -1,
+    "nodes": [
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 0
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 0
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 0
+     },
+     {
+      "edges": [
+       3
+      ],
+      "parents": [],
+      "room": "REST",
+      "x": 3,
+      "y": 0
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 0
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 0
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 0
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 1
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 1
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 1
+     },
+     {
+      "edges": [
+       3
+      ],
+      "parents": [
+       3
+      ],
+      "room": "SHOP",
+      "x": 3,
+      "y": 1
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 1
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 1
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 1
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 2
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 2
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 2
+     },
+     {
+      "edges": [
+       3
+      ],
+      "parents": [
+       3
+      ],
+      "room": "ELITE",
+      "x": 3,
+      "y": 2
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 2
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 2
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 2
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 3
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 3
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 3
+     },
+     {
+      "edges": [],
+      "parents": [
+       3
+      ],
+      "room": "BOSS",
+      "x": 3,
+      "y": 3
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 3
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 3
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 3
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 4
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 4
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 4
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 4
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 4
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 4
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 4
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 5
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 5
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 5
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 5
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 5
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 5
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 5
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 6
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 6
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 6
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 6
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 6
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 6
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 6
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 7
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 7
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 7
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 7
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 7
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 7
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 7
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 8
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 8
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 8
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 8
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 8
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 8
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 8
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 9
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 9
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 9
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 9
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 9
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 9
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 9
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 10
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 10
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 10
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 10
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 10
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 10
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 10
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 11
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 11
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 11
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 11
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 11
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 11
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 11
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 12
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 12
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 12
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 12
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 12
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 12
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 12
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 13
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 13
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 13
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 13
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 13
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 13
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 13
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 0,
+      "y": 14
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 1,
+      "y": 14
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 2,
+      "y": 14
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 3,
+      "y": 14
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 4,
+      "y": 14
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 5,
+      "y": 14
+     },
+     {
+      "edges": [],
+      "parents": [],
+      "room": "NONE",
+      "x": 6,
+      "y": 14
+     }
+    ]
+   },
+   "maxHp": 96,
+   "monsterChance": 0.10000000149011612,
+   "monsterList": [],
+   "monsterOffset": 0,
+   "noteForYourself": {
+    "id": "IRON_WAVE",
+    "misc": 0,
+    "upgraded": false
+   },
+   "oneTimeEvents": [
+    6,
+    15,
+    17,
+    18,
+    21,
+    26,
+    27,
+    36,
+    40,
+    44,
+    53,
+    48
+   ],
+   "outcome": 2,
+   "potionCapacity": 2,
+   "potionChance": -10,
+   "potionCount": 0,
+   "potions": [
+    1,
+    1
+   ],
+   "relicBits": [
+    "144678146619229184",
+    "577023719839367184",
+    "269484032"
+   ],
+   "relicPools": {
+    "boss": [
+     62,
+     134,
+     64,
+     59,
+     53,
+     108,
+     114,
+     127,
+     100,
+     172,
+     102,
+     140,
+     135,
+     133
+    ],
+    "common": [
+     132,
+     144,
+     169,
+     9,
+     93,
+     89,
+     149,
+     119,
+     159,
+     70,
+     0,
+     167,
+     90,
+     55,
+     76,
+     48,
+     174,
+     97,
+     44,
+     8,
+     139
+    ],
+    "rare": [
+     146,
+     131,
+     160,
+     78,
+     15,
+     35,
+     157,
+     105,
+     7,
+     74,
+     30,
+     77,
+     107,
+     65,
+     80,
+     29,
+     109,
+     6,
+     154,
+     54,
+     22,
+     11,
+     165,
+     21,
+     36,
+     177
+    ],
+    "shop": [
+     66,
+     145,
+     138,
+     99,
+     161,
+     136,
+     128,
+     69,
+     155,
+     20,
+     47
+    ],
+    "uncommon": [
+     51,
+     61,
+     27,
+     162,
+     95,
+     141,
+     142,
+     96,
+     94,
+     41,
+     176,
+     4,
+     166,
+     158,
+     31,
+     60,
+     67,
+     40,
+     34,
+     24,
+     120
+    ]
+   },
+   "relics": [
+    {
+     "data": 0,
+     "id": "PANDORAS_BOX"
+    },
+    {
+     "data": 0,
+     "id": "ORNAMENTAL_FAN"
+    },
+    {
+     "data": 0,
+     "id": "KUNAI"
+    },
+    {
+     "data": 0,
+     "id": "RUNIC_DOME"
+    },
+    {
+     "data": 0,
+     "id": "RED_MASK"
+    },
+    {
+     "data": 2,
+     "id": "SUNDIAL"
+    },
+    {
+     "data": 0,
+     "id": "BUSTED_CROWN"
+    },
+    {
+     "data": 0,
+     "id": "LANTERN"
+    },
+    {
+     "data": 0,
+     "id": "DARKSTONE_PERIAPT"
+    },
+    {
+     "data": 0,
+     "id": "MAW_BANK"
+    },
+    {
+     "data": 0,
+     "id": "CHAMPION_BELT"
+    },
+    {
+     "data": 0,
+     "id": "BAG_OF_MARBLES"
+    },
+    {
+     "data": 0,
+     "id": "BAG_OF_PREPARATION"
+    }
+   ],
+   "rng": {
+    "ai": {
+     "counter": 11,
+     "seed0": "4226070012162629062",
+     "seed1": "3398742060482026177"
+    },
+    "card": {
+     "counter": 765,
+     "seed0": "15603920996450879113",
+     "seed1": "13028935468443800396"
+    },
+    "cardRandom": {
+     "counter": 16,
+     "seed0": "14423699632027862632",
+     "seed1": "6864090363350386636"
+    },
+    "event": {
+     "counter": 11,
+     "seed0": "17588559331686637921",
+     "seed1": "6799687121329107417"
+    },
+    "mathUtil": {
+     "counter": 0,
+     "seed0": "14135642520076695794",
+     "seed1": "9523824352037105434"
+    },
+    "merchant": {
+     "counter": 96,
+     "seed0": "13455659488533339232",
+     "seed1": "3421413523311248776"
+    },
+    "misc": {
+     "counter": 0,
+     "seed0": "15610942606313955250",
+     "seed1": "15088194088068306720"
+    },
+    "monster": {
+     "counter": 110,
+     "seed0": "9885528205428648691",
+     "seed1": "12776850714436634651"
+    },
+    "monsterHp": {
+     "counter": 1,
+     "seed0": "15088194088068306720",
+     "seed1": "13999467958238251129"
+    },
+    "neow": {
+     "counter": 5,
+     "seed0": "18136513915323917101",
+     "seed1": "9895622376816553439"
+    },
+    "potion": {
+     "counter": 120,
+     "seed0": "13418832649054689351",
+     "seed1": "13088192582453742700"
+    },
+    "relic": {
+     "counter": 4,
+     "seed0": "2728233687570027143",
+     "seed1": "15783505782709037928"
+    },
+    "shuffle": {
+     "counter": 6,
+     "seed0": "9630723706285693531",
+     "seed1": "16416883608269829496"
+    },
+    "treasure": {
+     "counter": 33,
+     "seed0": "1755123870907016340",
+     "seed1": "17990657264577644617"
+    }
+   },
+   "room": "BOSS",
+   "screen": "BATTLE",
+   "secondBoss": 55,
+   "seed": "130",
+   "shopChance": 0.029999999329447746,
+   "shopRemoveCount": 3,
+   "shrineList": [],
+   "skipBattles": false,
+   "speedrunPace": false,
+   "transformableCount": 20,
+   "treasureChance": 0.019999999552965164,
+   "upgradeableCount": 7,
+   "x": 3,
+   "y": 3
+  },
+  "heartDefeated": true
+ },
+ "fixtureProvenance": {
+  "kind": "engineering-reference-fixture",
+  "reason": "Regenerated after Curiosity correction; old action sequence is stale. Not an agent-review game.",
+  "sourceReferenceRevision": "7476a81954020087da31d41d16fddf475746ec2d",
+  "curiosityCorrectionSource": "examples/sts/tests/reference/build.ts: explicit corrected BattleContext.cpp copy; pinned upstream Curiosity block is commented out.",
+  "sourcePrefix": "ironclad-a20-heart-130.json (previous fixture)",
+  "prefixSteps": 600,
+  "simulations": 10000,
+  "independentReplayVerified": true,
+  "baselineUpdates": [
+   {
+    "from": "cd3cdec900f0cd044370b2e0277c75586f7bf246",
+    "to": "227f406eae91b7b2f42b5e210d099ec992b03ddd",
+    "reason": "potion capacity legality fix in the fixed reference; action band unchanged, full replay re-verified",
+    "at": "2026-10-22"
+   }
+  ]
+ },
+ "acquiredReference": "7476a81954020087da31d41d16fddf475746ec2d"
+}

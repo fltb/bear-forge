@@ -1,8 +1,11 @@
+import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {rules} from '../src/rules/execution.ts';
-import {linkRules,CardProgram,CardMachine,plainCardStorage} from '@bear-forge/card-engine';
+import {linkRules,CardProgram,CardMachine} from '@bear-forge/card-engine';
 import {portEffect} from '../../../packages/card-engine/src/rules-internal.ts';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {zones} from '../src/rules/zones.ts';
@@ -50,10 +53,10 @@ test('zone moves preserve exact CardManager order in C++ and both real Instance 
   const reference=await ReferenceClient.create();
   try{
     const expected=await reference.call({op:'zone-case',count:4,steps});
-    for(const controlled of [false,true]){
-      const loaded=unwrap(await createCardLoader({controlled}).load(fixture(steps))),instance=unwrap(await loaded.core.start(undefined));
+    for(const controlled of [true]){
+      const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(fixture(steps))),instance=unwrap(await loaded.core.start(undefined));
       try{const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done',JSON.stringify(stop));if(stop.kind!=='done')throw Error(JSON.stringify(stop));assertSameState(expected,stop.result,`zones controlled=${controlled}`);}
-      finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+      finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
     }
   }finally{await reference.close();}
 });
@@ -71,12 +74,12 @@ test('a full destination cannot lose a source member, and reordering preserves t
     );
   });
   const definition=linkRules({id:'sts/zone-boundaries-1',schemas:{setup:z.undefined(),result:z.unknown(),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[members]});
-  for(const controlled of [false,true]){
-    const loaded=unwrap(await createCardLoader({controlled}).load(definition)),instance=unwrap(await loaded.core.start(undefined));
+  for(const controlled of [true]){
+    const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(definition)),instance=unwrap(await loaded.core.start(undefined));
     const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected completed move');
     const result=stop.result as {identities:{a:number;c:number;source:number};legal:boolean;source:number[];target:number[];locations:number[]};
     const {identities,...actual}=result;assert.deepEqual(actual,{legal:false,source:[identities.a,identities.c],target:[],locations:[identities.source,identities.source]});
-    await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);
+    await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);
   }
 });
 
@@ -92,8 +95,8 @@ test('illegal movement and a non-permutation fail before changing either half of
       );
     });
     const definition=linkRules({id:'sts/zone-invalid-1',schemas:{setup:z.undefined(),result:z.undefined(),ports:{pause:{input:z.undefined(),output:z.undefined()}}},initialize:()=>({}),entry,definitions:[entry,pause],modules:[members]});
-    const program=new CardProgram(definition),machine=new CardMachine(program,plainCardStorage(program.initial(undefined)));
-    assert.equal(machine.advance().kind,'call');const before=structuredClone(machine.root.state);
-    assert.equal(machine.advance(undefined).kind,'fault');assert.deepEqual(machine.root.state,before,'failed commit must preserve the entire module state');
+    const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial(undefined)));
+    assert.equal(machine.advance().kind,'call');const before=machine.storage.export(machine.root.state);
+    assert.equal(machine.advance(undefined).kind,'fault');assert.deepEqual(machine.storage.export(machine.root.state),before,'failed commit must preserve the entire module state');
   }
 });

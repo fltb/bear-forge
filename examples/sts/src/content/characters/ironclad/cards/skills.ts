@@ -23,7 +23,7 @@ export const skillCards=defineRules({requires:[cardTargets,cardEffects,battles,b
   const entrench=queue(defineEffect<CardUse,void>(b=>call(cardEffects.exports.gainBlock,{use:b.input,amount:b.read(v=>v.query(resources.exports.defense,v.input.owner).block)})));
   const limitBreak=queue(defineEffect<CardUse,void>(b=>call(powers.exports.apply,{registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),actor:b.read(v=>v.input.owner),definition:basicPowers.exports.Strength,amount:query(attributes.exports.strength,b.read(v=>v.input.owner)),source:b.read(v=>v.input.owner),debuff:false,scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope)})));
   return{exports:{Bloodletting:concreteCard('BLOODLETTING',composePrograms(hpLoss(3),energy([2,3]))),
-    Disarm:concreteCard('DISARM',cardPower(basicPowers.exports.Strength,-2,true,true)),
+    Disarm:concreteCard('DISARM',cardPower(basicPowers.exports.Strength,[-2,-3],true,true)),
     Entrench:concreteCard('ENTRENCH',entrench),
     GhostlyArmor:concreteCard('GHOSTLY_ARMOR',cardBlock([10,13])),
     Impervious:concreteCard('IMPERVIOUS',cardBlock([30,40])),

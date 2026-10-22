@@ -21,7 +21,7 @@ const {defineRules,defineEffect,defineEntity,sequence,query,enqueue}=rules;
 /** Concrete programs share typed authoring utilities, never a name-based action dispatcher. */
 export const basicCards=defineRules({requires:[cardTargets,cardEffects,battles,basicPowers,drawPowers,turnPowers],build(){
   function attack(base:number,upgraded:number){return targetAttack([base,upgraded]);}
-  function block(base:number,upgraded:number,twice=false){return defineEffect<CardUse,void>(b=>enqueue(cardEffects.exports.gainBlock,{use:b.input,amount:b.read(v=>{const amount=v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:v.input.state.upgraded?upgraded:base});return twice?v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:amount}):amount;})},
+  function block(base:number,upgraded:number){return defineEffect<CardUse,void>(b=>enqueue(cardEffects.exports.gainBlock,{use:b.input,amount:b.read(v=>{const amount=v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:v.input.state.upgraded?upgraded:base});return amount;})},
     {queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
   function power(definition:PowerDefinition,base:number,upgraded:number,targeted=false,debuff=false){return cardPower(definition,[base,upgraded],targeted,debuff);}
   function draw(base:number,upgraded:number){return defineEffect<CardUse,void>(b=>enqueue(cardPiles.exports.draw,{piles:b.read(v=>v.query(battles.exports.status,v.input.battle).piles),count:b.read(v=>v.input.state.upgraded?upgraded:base)},
@@ -36,6 +36,6 @@ export const basicCards=defineRules({requires:[cardTargets,cardEffects,battles,b
     BattleTrance:card('BATTLE_TRANCE',compose(draw(3,4),power(drawPowers.exports.NoDraw,1,1,false,true))),
     PommelStrike:card('POMMEL_STRIKE',compose(attack(9,10),draw(1,2))),
     ShrugItOff:card('SHRUG_IT_OFF',compose(block(8,11),draw(1,1))),
-    IronWave:card('IRON_WAVE',compose(block(5,7,true),attack(5,7))),
+    IronWave:card('IRON_WAVE',compose(block(5,7),attack(5,7))),
     SeeingRed:card('SEEING_RED',defineEffect<CardUse,void>(b=>enqueue(resources.exports.gainEnergy,{entity:b.read(v=>v.input.owner),amount:2},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'})))}};
 }});

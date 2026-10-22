@@ -247,7 +247,7 @@ class Reference {
     std::unique_ptr<GameContext> game;
     std::unique_ptr<BattleContext> battle;
     bool heart=false;
-    J history=J::array();
+    std::size_t decisions=0;
     void settle() {
         for (;;) {
             if (game->outcome!=GameOutcome::UNDECIDED) return;
@@ -302,24 +302,78 @@ public:
             }
         }
         return {{"game",gameState(*game)},{"battle",battle?battleState(*battle):J(nullptr)},
-            {"actions",actions},{"heartDefeated",heart},{"decisions",history.size()}};
+            {"actions",actions},{"heartDefeated",heart},{"decisions",decisions}};
     }
     J call(const J &q) {
         const auto op=q.at("op").get<std::string>();
+        if(op=="prism-policy-case") {
+            GameContext g(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);
+            J generated=J::array();const auto count=g.shopRelicPool.size();
+            for(int i=0;i<count;++i){const auto id=g.returnRandomRelic(RelicTier::SHOP,true,true);generated.push_back(relicEnumNames[static_cast<int>(id)]);}
+            if(q.at("owned").get<bool>())g.obtainRelic(RelicId::PRISMATIC_SHARD);
+            J cards=J::array();for(const auto &c:g.createCardReward(Room::MONSTER))cards.push_back(getCardEnumName(c.id));
+            return {{"generated",generated},{"held",g.hasRelic(RelicId::PRISMATIC_SHARD)},{"cards",cards}};
+        }
+        if(op=="map-relic-case") {
+            GameContext g(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);
+            g.obtainRelic(RelicId::WING_BOOTS);g.screenState=ScreenState::MAP_SCREEN;
+            J result=J::array();
+            for(const auto &step:q.at("positions")){
+                g.curMapNodeX=step.at("x");g.curMapNodeY=step.at("y");g.screenState=ScreenState::MAP_SCREEN;
+                J options=J::array();for(const auto &a:search::GameAction::getAllActionsInState(g)){if(!a.isPotionAction()){if(!a.isValidAction(g))throw std::runtime_error("Invalid enumerated map action");options.push_back(a.getIdx1());}}
+                if(!step.at("target").is_null()){search::GameAction a(step.at("target").get<int>());if(!a.isValidAction(g))throw std::runtime_error("Invalid flight");a.execute(g);}
+                result.push_back({{"options",options},{"counter",g.relics.getRelicValue(RelicId::WING_BOOTS)}});
+            }return result;
+        }
+        if(op=="potion-relic-case") {
+            GameContext g(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);
+            for(const auto &id:q.at("relics"))g.obtainRelic(static_cast<RelicId>(id.get<int>()));
+            g.curHp=10;g.maxHp=80;g.obtainPotion(static_cast<Potion>(q.at("potion").get<int>()));
+            if(q.at("discard").get<bool>())g.discardPotionAtIdx(0);else g.drinkPotionAtIdx(0);
+            return gameState(g);
+        }
+        if(op=="relic-fallback") {
+            GameContext g(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);
+            auto pool=[&](const std::string &tier)->std::vector<RelicId>& {
+                if(tier=="common")return g.commonRelicPool;
+                if(tier=="uncommon")return g.uncommonRelicPool;
+                if(tier=="rare")return g.rareRelicPool;
+                if(tier=="shop")return g.shopRelicPool;
+                if(tier=="boss")return g.bossRelicPool;
+                throw std::runtime_error("Unknown relic tier");
+            };
+            for(const auto &tier:q.at("clear"))pool(tier.get<std::string>()).clear();
+            const auto name=q.at("tier").get<std::string>();
+            const auto tier=name=="common"?RelicTier::COMMON:name=="uncommon"?RelicTier::UNCOMMON:name=="rare"?RelicTier::RARE:name=="shop"?RelicTier::SHOP:RelicTier::BOSS;
+            const auto picked=g.returnRandomRelic(tier,false,q.at("front").get<bool>());
+            return {{"picked",static_cast<int>(picked)},{"remaining",{{"common",g.commonRelicPool.size()},{"uncommon",g.uncommonRelicPool.size()},{"rare",g.rareRelicPool.size()},{"shop",g.shopRelicPool.size()},{"boss",g.bossRelicPool.size()}}}};
+        }
         if (op=="start") {
             const auto seed=q.at("seed").get<std::string>(); std::size_t end=0;
             if (seed.empty() || seed.find_first_not_of("0123456789")!=std::string::npos) throw std::runtime_error("Invalid unsigned seed");
             const auto n=std::stoull(seed,&end); if (end!=seed.size()) throw std::runtime_error("Invalid seed");
-            battle.reset(); game=std::make_unique<GameContext>(CharacterClass::IRONCLAD,n,20); heart=false; history=J::array();
-            settle(); return inspect();
+            battle.reset(); game=std::make_unique<GameContext>(CharacterClass::IRONCLAD,n,20); heart=false; decisions=0;
+            settle(); return q.value("resultOnly",false)?J(nullptr):inspect();
         }
         if(op=="adventureContentStart") {
-            battle.reset();game=std::make_unique<GameContext>(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);heart=false;history=J::array();
+            battle.reset();game=std::make_unique<GameContext>(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);heart=false;decisions=0;
             game->curHp=490;game->maxHp=500;game->gold=1000;game->deck.obtain(*game,Card(CardId::BARRICADE));game->deck.obtain(*game,Card(CardId::REGRET));
             game->screenState=ScreenState::MAP_SCREEN;game->regainControlAction=[](GameContext &g){g.screenState=ScreenState::MAP_SCREEN;};
-            if(!q.at("relic").is_null())game->obtainRelic(static_cast<RelicId>(q.at("relic").get<int>()));
+            for(const auto &id:q.value("owned",J::array()))game->obtainRelic(static_cast<RelicId>(id.get<int>()));
+            if(q.value("emptyDeck",false))for(int i=game->deck.size()-1;i>=0;--i)game->deck.remove(*game,i);
+            if(q.value("copyCard",false)){Card c(CardId::SEARING_BLOW,true);c.misc=3;game->deck.obtain(*game,c);game->deck.bottleCard(13,CardType::ATTACK);}
+            if(!q.at("relic").is_null()) {
+                const auto id=static_cast<RelicId>(q.at("relic").get<int>());
+                if(q.value("rewardRelic",false)){
+                    Rewards reward;reward.addGold(17);CardReward cards;cards.push_back(Card(CardId::BASH));reward.addCardReward(cards);reward.addRelic(id);reward.sapphireKey=true;game->openCombatRewardScreen(reward);
+                } else game->obtainRelic(id);
+            }
             if(!q.at("event").is_null()){game->obtainRelic(RelicId::GOLDEN_IDOL);game->obtainRelic(RelicId::CIRCLET);game->curRoom=Room::EVENT;game->curEvent=static_cast<Event>(q.at("event").get<int>());game->setupEvent();}
             settle();return inspect();
+        }
+        if(op=="implantStart") {
+            J setup=q;setup["op"]="combatContentStart";setup["encounter"]=static_cast<int>(MonsterEncounter::WRITHING_MASS);setup["potion"]=nullptr;setup["durable"]=true;setup["elite"]=false;call(setup);
+            battle->player.curHp=100;battle->monsters.arr[0].curHp=1;battle->monsters.arr[0].moveHistory[0]=MMID::WRITHING_MASS_IMPLANT;return inspect();
         }
         if(op=="combatPhaseStart") {
             J setup=q;setup["op"]="combatContentStart";setup["relics"]=J::array();setup["potion"]=nullptr;setup["durable"]=true;setup["elite"]=false;call(setup);
@@ -327,16 +381,17 @@ public:
             auto &enemy=battle->monsters.arr[slot];enemy.curHp=std::min(enemy.maxHp,q.at("hp").get<int>());return inspect();
         }
         if(op=="combatContentStart") {
-            battle.reset();game=std::make_unique<GameContext>(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);heart=false;history=J::array();
+            battle.reset();game=std::make_unique<GameContext>(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);heart=false;decisions=0;
             if(q.at("durable").get<bool>()){game->curHp=9990;game->maxHp=10000;}
             if((!q.at("potion").is_null()&&static_cast<Potion>(q.at("potion").get<int>())==Potion::FAIRY_POTION)||std::any_of(q.at("relics").begin(),q.at("relics").end(),[](const J &id){return static_cast<RelicId>(id.get<int>())==RelicId::LIZARD_TAIL;})){game->curHp=1;game->maxHp=80;}
             for(const auto &r:q.at("relics"))if(game->obtainRelic(static_cast<RelicId>(r.get<int>())))throw std::runtime_error("Acquisition screen requires its own directed case");
+            if(q.value("spentOmamori",0)>0)game->relics.getRelicValueRef(RelicId::OMAMORI)-=q.at("spentOmamori").get<int>();
             if(!q.at("potion").is_null())game->obtainPotion(static_cast<Potion>(q.at("potion").get<int>()));
             game->curRoom=q.at("elite").get<bool>()?Room::ELITE:Room::MONSTER;game->regainControlAction=[](GameContext &g){g.screenState=ScreenState::MAP_SCREEN;};
             game->enterBattle(static_cast<MonsterEncounter>(q.at("encounter").get<int>()));settle();return inspect();
         }
         if (op=="contentStart") {
-            battle.reset();game=std::make_unique<GameContext>(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);heart=false;history=J::array();
+            battle.reset();game=std::make_unique<GameContext>(CharacterClass::IRONCLAD,std::stoull(q.at("seed").get<std::string>()),20);heart=false;decisions=0;
             const auto id=static_cast<CardId>(q.at("id").get<int>());const bool permanent=Card(id).getType()!=CardType::STATUS;
             if(permanent)game->deck.obtain(*game,Card(id,q.at("upgraded").get<bool>()));
             game->curRoom=Room::MONSTER;game->regainControlAction=[](GameContext &g){g.screenState=ScreenState::MAP_SCREEN;};game->enterBattle(MonsterEncounter::CULTIST);settle();
@@ -353,9 +408,8 @@ public:
             if(q.value("attackIntent",false))battle->monsters.arr[0].moveHistory[0]=MonsterMoveId::CULTIST_DARK_STRIKE;
             return inspect();
         }
-        if (op=="close") { battle.reset();game.reset();history=J::array();return nullptr; }
+        if (op=="close") { battle.reset();game.reset();decisions=0;return nullptr; }
         if (op=="inspect") return inspect();
-        if (op=="history") return history;
         if(op=="map") {
             const auto seed=std::stoull(q.at("seed").get<std::string>());const int act=q.at("act").get<int>();
             return mapState(act==4?Map::act4Map():Map::fromSeed(seed,q.value("ascension",20),act,q.value("burning",true)));
@@ -724,19 +778,13 @@ public:
             if (op=="validate") return ok;
             if (!ok) throw std::runtime_error("Illegal action");
             const auto bits=static_cast<std::uint32_t>(bits64);
-            history.push_back({{"kind",battle?"battle":"game"},{"screen",screenName(game->screenState)},{"bits",bits}});
+            ++decisions;
             if (battle) search::Action(bits).execute(*battle);
             else {
                 const search::GameAction action(bits);
-                // The pinned GameAction helper falls through into the active screen after a potion.
-                // Drive the actual player primitive exactly once; upstreamAdvance preserves the
-                // broken helper for the dedicated normal-start regression.
-                if (op=="advance" && action.isPotionAction()) {
-                    if (action.isPotionDiscard()) game->discardPotionAtIdx(action.getIdx1());
-                    else game->drinkPotionAtIdx(action.getIdx1());
-                } else action.execute(*game);
+                action.execute(*game);
             }
-            settle(); return inspect();
+            settle(); return q.value("resultOnly",false)?J(nullptr):inspect();
         }
         throw std::runtime_error("Unknown operation");
     }

@@ -37,8 +37,8 @@ test('history crosses chunk boundaries, acknowledges only published entries, and
     return{exports:{run}};
   }});
   const definition=linkRules<{},null,{choose:{input:z.output<typeof report>;output:number}},z.output<typeof report>>({id:'chunked-history',schemas:{setup:z.null(),result:report,ports:{choose:{input:report,output:z.number().int().nonnegative()}}},initialize:()=>({}),entry:module.exports.run,definitions:[module.exports.run],modules:[module]});
-  for(const controlled of [false,true]){
-    const loaded=unwrap(await createCardLoader({controlled}).load(definition)),parent=unwrap(await loaded.core.start(null));
+  for(const controlled of [true]){
+    const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(definition)),parent=unwrap(await loaded.core.start(null));
     const first=unwrap(await parent.inspect());assert.equal(first.kind,'call',JSON.stringify(first));if(first.kind!=='call')throw Error('Expected history choice');
     assert.equal(first.call.input.all.history.length,129);assert.equal(first.call.input.pending.length,65);assert.deepEqual(first.call.input.cursor,{length:129,published:64});
     const variants=[parent];

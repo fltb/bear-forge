@@ -1,3 +1,5 @@
+import {requireDifftest} from './reference/client.ts';
+requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
@@ -38,9 +40,9 @@ function fixture(steps:readonly Step[],ownedRelics:readonly (typeof resourceReli
   return linkRules({id:'sts/resource-fixture-1',schemas:{setup:resourceSetupSchema,result:z.array(resourceSetupSchema),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[resources,resourceRelics,random]});
 }
 async function execute<R>(definition:CardDefinition<any,ResourceSetup,any,R>,setup:ResourceSetup,controlled:boolean){
-  const loaded=unwrap(await createCardLoader({controlled}).load(definition)),instance=unwrap(await loaded.core.start(setup));
+  const loaded=unwrap(await createCardLoader({recordCore:false,controlled}).load(definition)),instance=unwrap(await loaded.core.start(setup));
   try{const result=unwrap(await instance.inspect());assert.equal(result.kind,'done');if(result.kind!=='done')throw Error(JSON.stringify(result));return result.result;}
-  finally{await instance.close();if(loaded.capture)await loaded.capture.release(instance.id);}
+  finally{await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}
 }
 
 test('typed resource atoms agree with pinned C++ Player in both real Instance modes',async()=>{
@@ -65,7 +67,7 @@ test('typed resource atoms agree with pinned C++ Player in both real Instance mo
     ]});
     for(const [index,c] of cases.entries()){
       const expected=await reference.call({op:'resource-case',...c}),definition=fixture(c.steps);
-      for(const controlled of [false,true])assertSameState(expected,await execute(definition,c.setup,controlled),`resources case=${index} controlled=${controlled}`);
+      for(const controlled of [true])assertSameState(expected,await execute(definition,c.setup,controlled),`resources case=${index} controlled=${controlled}`);
     }
     assertSameState(active,await reference.call({op:'inspect'}),'resource scenarios leave normal run untouched');
   }finally{await reference.close();}
@@ -87,10 +89,10 @@ test('resource checkpoint extensions compose without resource-module content bra
     call(resources.exports.gainBlock,{entity,amount:5}),b.return(query(resources.exports.current,entity)),
   );});
   const definition=linkRules({id:'sts/resource-extension-1',schemas:{setup:resourceSetupSchema,result:resourceSetupSchema,ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[resources,extension]});
-  for(const controlled of [false,true])assert.deepEqual(await execute(definition,{hp:30,maxHp:80,block:0,energy:3,gold:99},controlled),{hp:36,maxHp:80,block:5,energy:3,gold:99});
+  for(const controlled of [true])assert.deepEqual(await execute(definition,{hp:30,maxHp:80,block:0,energy:3,gold:99},controlled),{hp:36,maxHp:80,block:5,energy:3,gold:99});
 });
 
-test('five resource relics and their interactions use composed hooks and match C++ in both modes',async()=>{
+test('five resource relics and their interactions use composed hooks and match C++ in controlled execution',async()=>{
   const definitions=resourceRelics.exports;
   const cases:{definitions:(typeof definitions.MagicFlower)[];ids:RelicId[]}[]=[
     {definitions:[definitions.MagicFlower],ids:['MAGIC_FLOWER']},{definitions:[definitions.MarkOfTheBloom],ids:['MARK_OF_THE_BLOOM']},
@@ -106,7 +108,7 @@ test('five resource relics and their interactions use composed hooks and match C
   try{
     for(const [index,c] of cases.entries()){
       const expected=await reference.call({op:'resource-case',setup,steps,relics:c.ids.map(id=>relicId[id])}),definition=fixture(steps,c.definitions);
-      for(const controlled of [false,true])assertSameState(expected,await execute(definition,setup,controlled),`resource relics=${index} controlled=${controlled}`);
+      for(const controlled of [true])assertSameState(expected,await execute(definition,setup,controlled),`resource relics=${index} controlled=${controlled}`);
     }
   }finally{await reference.close();}
 });
@@ -127,5 +129,5 @@ test('redirected HP loss reports death for the committed target and permits its 
   );});
   const definition=linkRules({id:'sts/resource-redirect-1',schemas:{setup:resourceSetupSchema,result:z.unknown(),ports:{}},initialize:()=>({}),entry,definitions:[entry],modules:[extension]});
   const setup={hp:20,maxHp:80,block:0,energy:3,gold:99};
-  for(const controlled of [false,true])assert.deepEqual(await execute(definition,setup,controlled),{lost:3,original:setup,target:{hp:10,maxHp:80,block:0,energy:0,gold:0}});
+  for(const controlled of [true])assert.deepEqual(await execute(definition,setup,controlled),{lost:3,original:setup,target:{hp:10,maxHp:80,block:0,energy:0,gold:0}});
 });

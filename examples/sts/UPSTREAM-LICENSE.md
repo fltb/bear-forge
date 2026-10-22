@@ -21,3 +21,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+The local differential reference now pins correction commit 3cea139e546bd8f8a21a2791e1c62b7266743d70 in ../sts_lightspeed (branch fix/rulebook-alignment). It corrects the documented game-rule defects and implements the six relic effects, nested reward continuations and safe card reward storage, nondestructive full-inventory potion handling and the initial Hungry Face chest charge; the upstream attribution and license remain unchanged. Existing Heart tapes retain their original acquisition revision in acquiredReference as historical data; execution and acceptance no longer read or replay them.

@@ -4,7 +4,7 @@ import {productionDriver} from './production-driver.ts';
 import {volibearCardDescriptions} from '../src/content/characters/volibear/cards/metadata.ts';
 
 test('Volibear normal A20 start, rewards and successive combats complete in the controlled executor',()=>{
-  const controlled=productionDriver('130','volibear');
+  const controlled=productionDriver('130','volibear',true);
   const pool=new Set(Object.values(volibearCardDescriptions).map(c=>c.id));
   const combats=new Set<number>();let rewards=0;
   try{
@@ -20,6 +20,7 @@ test('Volibear normal A20 start, rewards and successive combats complete in the 
         if(!combats.has(frame.game.floor)){
           assert.equal(frame.battle.turn,0);assert.equal(frame.battle.player.energy,3);
           assert.equal(frame.battle.hand.length,5);assert.equal(frame.battle.player.strength,0);
+          assert.ok(frame.battle.effects?.some(e=>e.name==='蓄雷'&&e.level===1));
           combats.add(frame.game.floor);
         }
         if(combats.size===3){assert.ok(frame.game.deck.length>=13);break;}

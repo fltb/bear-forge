@@ -36,13 +36,16 @@ export function relicFallbackFixture(clear:readonly RelicTier[],tier:RelicTier,f
   return linkRules<{},Setup,Ports,z.infer<typeof result>>({id:'sts/relic-fallback-case',schemas:{...programSchemas,result},initialize:()=>({}),entry:fixture.exports.entry,definitions:[fixture.exports.entry],modules:[fixture]});
 }
 /** Normal construction followed only by explicit production owner operations. */
-export function deckCaseFixture(steps:readonly DeckCaseStep[],owned:readonly RelicId[]){
+export function deckCaseFixture(steps:readonly DeckCaseStep[],owned:readonly RelicId[],enterMap=false){
   const entry=defineEffect<Setup,GameView[]>(b=>{
     const run=b.local<number>(),history=b.local<GameView[]>();
     const cardAt=(index:number)=>b.read(v=>{const s=v.get(query(adventures.exports.current,v.get(run))),card=v.get(query(permanentDecks.exports.current,s.deck)).cards[index];if(card===undefined)throw Error('Invalid deck case index');return card;});
     return sequence(
       b.assign(run,call(adventureStart.exports.initialize,{setup:b.input,definition:rules.defineEntity(adventures.exports.kind,{starterRelic:startingRelics.exports.BurningBlood,cardPools:adventureContent.cards.exports.cardPools,cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),
-      forEach(owned,id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),b.assign(history,[query(adventureViews.exports.privateGame,run)]),
+      forEach(owned,id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),
+      // Opt-in for owner-only tests which never execute the Neow menu setup.
+      ...(enterMap?[call(adventures.exports.setScene,{run,screen:'MAP_SCREEN',continuation:true})]:[]),
+      b.assign(history,[query(adventureViews.exports.privateGame,run)]),
       ...steps.flatMap(step=>{
         const deck=b.read(v=>v.get(query(adventures.exports.current,v.get(run))).deck);
         const operation=step.kind==='obtain'?call(permanentDecks.exports.obtain,{deck,definition:query(adventures.exports.card,{run,id:step.id}),count:step.count??1,upgraded:step.upgraded??false,specialData:step.misc??0,upgrade:false}):step.kind==='remove'?call(permanentDecks.exports.remove,{deck,card:cardAt(step.index)}):step.kind==='upgrade'?call(permanentDecks.exports.upgrade,{deck,card:cardAt(step.index)}):step.kind==='bottle'?call(permanentDecks.exports.bottle,{deck,index:step.index,type:step.type}):call(permanentDecks.exports.upgradeRandom,{deck,stream:b.read(v=>v.get(query(adventures.exports.current,v.get(run))).streams.misc),count:step.kind==='upgrade-random'?step.count:0});
@@ -86,6 +89,7 @@ export function potionRelicFixture(owned:readonly RelicId[],potion:number,discar
     b.assign(run,call(adventureStart.exports.initialize,{setup:b.input,definition:rules.defineEntity(adventures.exports.kind,{starterRelic:startingRelics.exports.BurningBlood,cardPools:adventureContent.cards.exports.cardPools,cards:adventureContent.cards.exports.definitions,relics:adventureContent.acquisition.exports.definitions})})),
     forEach(owned,id=>call(adventureContent.acquisition.exports.give,{run,definition:query(adventures.exports.relic,{run,id})})),
     call(resources.exports.setHealth,{entity:b.read(v=>v.query(adventures.exports.bindings,v.get(run)).actor),hp:10,maxHp:80}),call(potions.exports.obtain,{inventory:b.read(v=>v.query(adventures.exports.bindings,v.get(run)).potions),potion}),
+    call(adventures.exports.setScene,{run,screen:'MAP_SCREEN',continuation:true}),
     call(adventurePotions.exports.drink,{run,bits:discard?0xc0000000:0x80000000}),b.return(query(adventureViews.exports.privateGame,run)),
   );});
   return linkRules<{},Setup,Ports,GameView>({id:'sts/potion-relic-case',schemas:{...programSchemas,result:GameViewSchema},initialize:()=>({}),entry,definitions:[entry],modules:[adventureContent.cards,adventureContent.acquisition,adventureStart,adventurePotions,adventureViews]});

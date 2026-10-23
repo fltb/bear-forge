@@ -1,3 +1,4 @@
+import {describeProgram} from '../../../cards/shared/program-facts.ts';
 import {z} from 'zod';
 import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
@@ -44,5 +45,7 @@ export const volibearTraining=rules.defineRules({requires:[battles,cardInstances
         rules.spawnEntity({definition,setup:b.input,owner:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).actor),scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope)})),
     );
   });
-  return {exports:{eligible,fixedAttack,permanentBonus,add}};
+  const describe=(amount:string)=>`该牌本战每段固定攻击伤害增加${amount}；复制继承，不写回永久牌组。`;
+  describeProgram(add,describe('传入数量'));
+  return {exports:{eligible,fixedAttack,permanentBonus,add,describe}};
 }});

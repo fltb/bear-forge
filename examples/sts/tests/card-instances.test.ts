@@ -8,7 +8,7 @@ import {rules} from '../src/rules/execution.ts';
 import {linkRules} from '@bear-forge/card-engine';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {cardInstances,CardMode} from '../src/rules/card-instances.ts';
-import type {CardConfig,CardUse,CardSetup} from '../src/rules/card-instances.types.ts';
+import type {CardConfig,CardUse,CardSetup,CardIdentity,CardMetadata} from '../src/rules/card-instances.types.ts';
 import {combatCardSchema,cardEvaluationSchema,cardMutableSchema,cardChangeSchema} from '../src/rules/card-instances.schemas.ts';
 import {cards} from '../src/cards.ts';
 import {cardId} from '../src/identifiers.ts';
@@ -19,8 +19,10 @@ const {defineRules,defineEffect,defineQuery,defineEntity,sequence,spawnEntity,ca
 const noop=defineEffect<CardUse,void>(b=>b.return(undefined));
 const names=Object.keys(cards) as (keyof typeof cards)[];
 // Isolated instance fixtures supply no play behavior; these are never production card definitions.
+// Their independent damage sentinel describes noop, not the production card's attack.
+const fixtureMetadata=(identity:CardIdentity):CardMetadata=>({...identity,variants:[{...identity.variants[0],damage:-1},{...identity.variants[1],damage:-1}]});
 const definitions=names.map(id=>{
-  const metadata=cards[id],repeat=id==='SEARING_BLOW';
+  const metadata=fixtureMetadata(cards[id]),repeat=id==='SEARING_BLOW';
   return defineEntity(cardInstances.exports.kind,{id,metadata,use:noop,canUpgrade:repeat?defineQuery({input:cardEvaluationSchema,output:z.boolean(),base:()=>true}):upgradeOnce(metadata),
     upgrade:repeat?repeatedUpgrade(metadata):standardUpgrade(metadata),...(repeat?{upgradeCount:defineQuery({input:cardEvaluationSchema,output:z.int32(),base:(_r,c)=>c.state.specialData})}:{})});
 });
@@ -96,7 +98,7 @@ test('a custom card can combine private hooks and typed query policies for a two
     const upgrade=defineQuery({input:cardEvaluationSchema,output:cardMutableSchema,reads:[used],base:(r,input)=>{
       const cost=input.state.cost+r.component(input.entity,used)+1;return{...mutableCard(input.state),upgraded:true,cost,costForTurn:cost};
     }});
-    return{exports:{card:defineEntity(cardInstances.exports.kind,{id:'CUSTOM_TWO_STEP',metadata:cards.BASH,use:noop,canUpgrade,upgrade,created},{components:[used]})}};
+    return{exports:{card:defineEntity(cardInstances.exports.kind,{id:'CUSTOM_TWO_STEP',metadata:fixtureMetadata(cards.BASH),use:noop,canUpgrade,upgrade,created},{components:[used]})}};
   }});
   const entry=defineEffect<void,unknown>(b=>{const catalog=b.local<AdventureCatalog>(),entity=b.local<number>(),first=b.local<boolean>(),second=b.local<boolean>(),third=b.local<boolean>();return sequence(
     b.assign(catalog,{starterRelic:null,cardPools:{color:0,rarity:[[],[],[]],typeRarity:[[[],[],[]],[[],[],[]],[[],[],[]]],random:[],transform:[],combat:[[],[],[],[],[]],startingBasics:[]},cards:[{id:'CUSTOM_TWO_STEP',definition:custom.exports.card}],relics:[]}),b.assign(entity,spawnEntity({kind:cardInstances.exports.kind,definition:b.read(v=>v.get(catalog).cards[0]!.definition),owner:null,scope:0,setup:{mode:CardMode.Combat,master:null,uniqueId:4,upgraded:false,specialData:0}})),

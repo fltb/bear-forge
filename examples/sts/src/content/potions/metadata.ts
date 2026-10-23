@@ -1,9 +1,8 @@
 import {potionId} from '../../identifiers.ts';
+import {potionPrograms} from './programs.ts';
+export {bloodPotionHealing} from './vitality.ts';
 
-/** Shared by legal-action production and operator presentation. */
-export function potionRequiresEnemy(id:number):boolean{
-  return id===potionId.FEAR_POTION||id===potionId.FIRE_POTION||id===potionId.WEAK_POTION;
+/** Legal actions and operator presentation project the executing composition. */
+export function potionRequiresEnemy(id:number):boolean {
+  return Object.entries(potionPrograms).some(([name,program])=>potionId[name as keyof typeof potionPrograms]===id&&program.targeted);
 }
-
-/** Blood Potion uses the same 20%-per-potency multiplier in and out of combat. */
-export function bloodPotionHealing(maxHp:number,multiplier:1|2):number{return Math.trunc(Math.fround(Math.fround(maxHp)*Math.fround(multiplier===2?.4:.2)));}

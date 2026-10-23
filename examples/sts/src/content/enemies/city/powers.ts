@@ -1,22 +1,20 @@
-import { typedValue } from '../../../rules/value.schemas.ts';
-import {pileCards} from "../../cards/statuses/definitions.ts";
-import {z} from 'zod';
+import {enemyCardOperations} from '../shared/card-operations.ts';
+import {enemyPowerAbilities,defineDescribedEnemyPower,contribution} from '../shared/abilities.ts';
+import {usedCard,ownCardCategory,queuedCard,cardBattle,hpLost,ownAttackDamagedPlayer,registryBattle} from '../shared/status-programs.ts';
+import {pileCards} from '../../cards/statuses/definitions.ts';
 import {rules} from '../../../rules/execution.ts';
-import {powers} from "../../../rules/powers.ts";
-import {battles} from "../../../rules/battles.ts";
-import {cardInstances} from "../../../rules/card-instances.ts";
-import {cardPiles} from "../../../rules/card-piles.ts";
-import {resources} from "../../../rules/resources.ts";
-import {counterPolicies,attachAbilities} from "../../powers/utils.ts";
-import {actionQueue} from "../../../rules/combat-actions.ts";
-import {PS,MS} from "../../../combat-identifiers.ts";
-import type {CardUse} from "../../../rules/card-instances.types.ts";
-import type {HpLost} from "../../../rules/resources.types.ts";
-const {defineRules,defineQuery,defineEffect,defineEntity,on,query,enqueue}=rules;
-export const cityPowers=defineRules({requires:[powers,battles,pileCards],build(){
-  const hex=on(battles.exports.used,{condition:defineQuery({input:typedValue<rules.ReactionContext<CardUse>>(),output:z.boolean(),dependencies:[powers.exports.enabled,cardInstances.exports.metadata],base:(r,c)=>c.event.owner===c.owner&&r.query(powers.exports.enabled,c.source)&&r.query(cardInstances.exports.metadata,c.event.card).type!==0}),effect:defineEffect<rules.ReactionContext<CardUse>,void>(b=>enqueue(cardPiles.exports.create,{piles:b.read(v=>v.query(battles.exports.status,v.input.event.battle).piles),definition:pileCards.exports.Dazed,upgraded:false,specialData:0,destination:0,shuffle:true,mutable:null},{queue:actionQueue,source:b.read(v=>v.input.source),lifetime:b.read(v=>v.query(battles.exports.status,v.input.event.battle).actionScope),eligible:'captured'}))});
-  const Hex=defineEntity(powers.exports.kind,{presentation:{key:PS.HEX,flag:true},...counterPolicies({bits:16,harmful:true,zeroIsNoop:true,resetWhenInactive:true}),attach:attachAbilities(hex)});
-  const stab=on(resources.exports.hpLost,{condition:defineQuery({input:typedValue<rules.ReactionContext<HpLost>>(),output:z.boolean(),dependencies:[powers.exports.enabled,battles.exports.forRegistry,powers.exports.current,battles.exports.current,battles.exports.status],base:(r,c)=>{if(!r.query(powers.exports.enabled,c.source)||!c.event.context?.attack||c.event.context.source!==c.owner||c.event.amount<=0)return false;const board=r.query(battles.exports.forRegistry,r.query(powers.exports.current,c.source).registry);return board!==null&&r.query(battles.exports.status,board).actor===c.event.entity;}}),effect:defineEffect<rules.ReactionContext<HpLost>,void>(b=>enqueue(cardPiles.exports.create,{piles:b.read(v=>{const board=v.query(battles.exports.forRegistry,v.query(powers.exports.current,v.input.source).registry);if(board===null)throw Error('Painful Stabs needs a battle');return v.query(battles.exports.status,board).piles;}),definition:pileCards.exports.Wound,upgraded:false,specialData:0,destination:2,shuffle:false,mutable:null},{queue:actionQueue,source:b.read(v=>v.input.source),lifetime:b.read(v=>{const board=v.query(battles.exports.forRegistry,v.query(powers.exports.current,v.input.source).registry);if(board===null)throw Error('Painful Stabs needs a battle');return v.query(battles.exports.status,board).actionScope;}),eligible:'captured'}))});
-  const PainfulStabs=defineEntity(powers.exports.kind,{presentation:{key:MS.PAINFUL_STABS,flag:true},...counterPolicies({bits:32,flag:true}),attach:attachAbilities(stab)});
-  return{exports:{Hex,PainfulStabs}};
+import {powers} from '../../../rules/powers.ts';
+import {battles} from '../../../rules/battles.ts';
+import {counterPolicies} from '../../powers/utils.ts';
+import {PS,MS} from '../../../combat-identifiers.ts';
+import type {HpLost} from '../../../rules/resources.types.ts';
+
+export const cityPowers=rules.defineRules({requires:[enemyCardOperations,powers,battles,pileCards],build(){
+  const hexCard={definition:pileCards.exports.Dazed,name:'晕眩',destination:0,shuffle:true} as const;
+  const woundCard={definition:pileCards.exports.Wound,name:'伤口',destination:2,shuffle:false} as const;
+  const hex=usedCard({condition:ownCardCategory(false),effect:queuedCard(cardBattle(),hexCard)});
+  const Hex=defineDescribedEnemyPower('妖术',{presentation:{key:PS.HEX,flag:true},...counterPolicies({bits:16,harmful:true,zeroIsNoop:true,resetWhenInactive:true})},{},enemyPowerAbilities(contribution(hex)));
+  const stab=hpLost({condition:ownAttackDamagedPlayer(),effect:queuedCard(registryBattle<HpLost>('Painful Stabs needs a battle'),woundCard)});
+  const PainfulStabs=defineDescribedEnemyPower('痛苦之刺',{presentation:{key:MS.PAINFUL_STABS,flag:true},...counterPolicies({bits:32,flag:true})},{},enemyPowerAbilities(contribution(stab)));
+  return{exports:{Hex:Hex.definition,PainfulStabs:PainfulStabs.definition,programs:{Hex,PainfulStabs},statusTexts:{HEX:Hex.text,PAINFUL_STABS:PainfulStabs.text}}};
 }});

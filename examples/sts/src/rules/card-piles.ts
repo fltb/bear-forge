@@ -2,6 +2,7 @@ import {typedValue} from './value.schemas.ts';
 import {componentPart,projectFields} from './component-parts.ts';
 import {z} from 'zod';
 import {rules} from './execution.ts';
+import {describeProgram} from './program-descriptions.ts';
 import {ruleModules} from '@bear-forge/card-engine';
 import {zones} from './zones.ts';
 import {random} from './random.ts';
@@ -41,6 +42,9 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
   const initialize=defineEffect<rules.EntityLifecycle<CardPilesSetup>,void>(b=>call(initializeState,{entity:b.read(v=>v.input.entity),value:query(validated,b.read(v=>({...v.input.setup,scope:v.input.scope,drawn:0,discarded:0,initialized:false,nextUniqueId:0,registered:[],auxiliary:[]})))}));
   const kind=m.kind({config:z.undefined(),setup:cardPilesSetupSchema,components:[bindings.component,counters.component,membership.component,shuffleState],initialize});
   const canDraw=defineQuery({input:entityId,output:z.boolean(),base:()=>true});
+  describeProgram(canDraw,'是否允许抽牌');
+  describeProgram(drawing.public,'抽牌离开抽牌堆后、入手前');describeProgram(drawn.public,'抽牌结算后');describeProgram(enteringHand.public,'卡牌入手前');
+  describeProgram(shuffling.public,'弃牌堆重洗前');describeProgram(exhausting.public,'卡牌移入消耗堆前');describeProgram(exhausted.public,'卡牌消耗后');describeProgram(discarded.public,'弃牌后');
   function announce<T>(schema:rules.Schema<T>,event:ruleModules.Owned<rules.RuleEvent<T>>):rules.Effect<T,void>{
     return m.atom({input:schema,output:z.undefined(),reads:[],writes:[],emits:[event],run(_r,payload){return{writes:[],events:[{event,payload}],result:undefined};}});
   }
@@ -108,6 +112,7 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
   // Explicit observer identity follows only this draw operation, including its
   // shuffle continuation. Draws triggered by other listeners start without it.
   const drawPolicy=defineQuery({input:pileCardSchema,output:z.object({exhaust:z.boolean(),ownEffects:z.boolean(),replacementDraws:z.int32().nonnegative()}),base:()=>({exhaust:false,ownEffects:true,replacementDraws:0})});
+  describeProgram(drawPolicy,'抽牌的消耗、卡牌效果与替代抽牌策略');
   const drawObserverKind=m.kind({config:z.object({observed:typedValue<rules.Effect<{observer:number;piles:number;card:number},void>>()}),components:[]});
   const drawBatch:rules.Effect<{piles:number;count:number;observer:number|null},void>=defineEffect(b=>{
     const p=b.local<CardPilesState>(),amount=b.local<number>(),available=b.local<number>(),picked=b.local<number>(),reservation=b.local<number>(),enabled=b.local<boolean>(),policy=b.local<{exhaust:boolean;ownEffects:boolean;replacementDraws:number}>(),plan=b.local<{piles:CardPilesState;amount:number;available:number}>();

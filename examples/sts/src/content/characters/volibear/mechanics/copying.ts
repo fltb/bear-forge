@@ -1,3 +1,4 @@
+import {describeProgram} from '../../../cards/shared/program-facts.ts';
 import {z} from 'zod';
 import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
@@ -36,5 +37,7 @@ export const volibearCopying=rules.defineRules({requires:[battles,cardInstances,
       b.return(copy),
     );
   });
-  return {exports:{copyToHand,copied:copied.public}};
+  const text='复制所选牌加入手牌，继承升级、永久费用及本战成长；不继承临时费用、一次免费或单次保留。复制成长事件在加入手牌前提交，复制不使牌自动消耗。';
+  describeProgram(copyToHand,text);
+  return {exports:{copyToHand,copied:copied.public,text}};
 }});

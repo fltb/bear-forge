@@ -32,7 +32,9 @@ const fixtureRules=defineRules({requires:[cardPiles,logger],build(){
     b.assign(reply,call(choose,b.read(v=>({...v.get(query(view,{piles:v.input.event.piles,log:v.input.owner})),card:v.get(query(cardInstances.exports.current,v.input.source)).uniqueId,queueSize:v.get(ruleModules.queueSize(actionQueue))})))),
     call(cardInstances.exports.overrideTurnCost,{entity:b.read(v=>v.input.source),amount:reply}),
   );})});
-  return{exports:{view,card:defineEntity(cardInstances.exports.kind,{id:'ANGER',metadata:cards.ANGER,use:defineEffect<CardUse,void>(b=>b.return(undefined)),canUpgrade:upgradeOnce(cards.ANGER),upgrade:standardUpgrade(cards.ANGER),created:registerCardAbilities(pause)})}};
+  // The pile fixture only pauses on draw; its noop use has no attack damage.
+  const metadata={...cards.ANGER,variants:[{...cards.ANGER.variants[0],damage:-1},{...cards.ANGER.variants[1],damage:-1}] as const};
+  return{exports:{view,card:defineEntity(cardInstances.exports.kind,{id:'ANGER',metadata,use:defineEffect<CardUse,void>(b=>b.return(undefined)),canUpgrade:upgradeOnce(metadata),upgrade:standardUpgrade(metadata),created:registerCardAbilities(pause)})}};
 }});
 const actor=defineEntity(resources.exports.actor,{side:0}),unbounded=defineEntity(zones.exports.kind,{capacity:null}),hand=defineEntity(zones.exports.kind,{capacity:10}),stream=defineEntity(random.exports.stream,undefined),pile=defineEntity(cardPiles.exports.kind,undefined),log=defineEntity(logger.exports.kind,undefined);
 const entry=defineEffect<void,unknown>(b=>{

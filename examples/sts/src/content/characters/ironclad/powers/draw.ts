@@ -9,7 +9,7 @@ import {resources} from "../../../../rules/resources.ts";
 import {turns} from "../../../../rules/turns.ts";
 import {actionQueue} from "../../../../rules/combat-actions.ts";
 import type {PileCard} from "../../../../rules/card-piles.types.ts";
-import {counterPolicies,attachAbilities} from "../../../powers/utils.ts";
+import {counterPolicies,defineDescribedPower,describedAbility} from "../../../powers/utils.ts";
 const {defineRules,defineQuery,defineEffect,defineEntity,modify,on,sequence,call,query,when,enqueue}=rules;
 
 export const ironcladDrawPowers=defineRules({requires:[cardPiles,powers,turns],build(){
@@ -19,12 +19,10 @@ export const ironcladDrawPowers=defineRules({requires:[cardPiles,powers,turns],b
     return on(event,{condition,order:cardPiles.exports.stages.power,effect:defineEffect<rules.ReactionContext<PileCard>,void>(b=>enqueue(cardPiles.exports.draw,{piles:b.read(v=>v.input.event.piles),count:query(powers.exports.level,b.read(v=>v.input.source))},
       {queue:actionQueue,source:b.read(v=>v.input.source),lifetime:b.read(v=>v.query(cardPiles.exports.bindings,v.input.event.piles).actionScope),eligible:'captured'}))});
   }
-  const Evolve=defineEntity(powers.exports.kind,{presentation:{key:PS.EVOLVE,flag:false},...counterPolicies({bits:16,resetWhenInactive:true,zeroIsNoop:true}),attach:attachAbilities(queuedDraw(cardPiles.exports.drawing,statusDrawn))});
-  const DarkEmbrace=defineEntity(powers.exports.kind,{presentation:{key:PS.DARK_EMBRACE,flag:false},...counterPolicies({bits:16,resetWhenInactive:true,zeroIsNoop:true}),attach:attachAbilities(queuedDraw(cardPiles.exports.exhausting,ownsCard))});
+  const Evolve=defineDescribedPower('进化',{presentation:{key:PS.EVOLVE,flag:false},...counterPolicies({bits:16,resetWhenInactive:true,zeroIsNoop:true})},describedAbility('自身抽到状态牌时，排队抽取层数对应的牌。',queuedDraw(cardPiles.exports.drawing,statusDrawn)));
+  const DarkEmbrace=defineDescribedPower('黑暗之拥',{presentation:{key:PS.DARK_EMBRACE,flag:false},...counterPolicies({bits:16,resetWhenInactive:true,zeroIsNoop:true})},describedAbility('自身消耗牌时，排队抽取层数对应的牌。',queuedDraw(cardPiles.exports.exhausting,ownsCard)));
   const feel=on(cardPiles.exports.exhausting,{condition:ownsCard,order:{phase:cardPiles.exports.stages.power,priority:10},effect:defineEffect<rules.ReactionContext<PileCard>,void>(b=>enqueue(resources.exports.gainBlock,{entity:b.read(v=>v.input.owner),amount:b.read(v=>Math.max(0,v.query(powers.exports.level,v.input.source)))},
     {queue:actionQueue,source:b.read(v=>v.input.source),lifetime:b.read(v=>v.query(cardPiles.exports.bindings,v.input.event.piles).actionScope),eligible:'captured'}))});
-  const FeelNoPain=defineEntity(powers.exports.kind,{presentation:{key:PS.FEEL_NO_PAIN,flag:false},...counterPolicies({bits:16,resetWhenInactive:true,zeroIsNoop:true}),attach:attachAbilities(feel)});
-  return{exports:{Evolve,
-    DarkEmbrace,
-    FeelNoPain}};
+  const FeelNoPain=defineDescribedPower('无惧疼痛',{presentation:{key:PS.FEEL_NO_PAIN,flag:false},...counterPolicies({bits:16,resetWhenInactive:true,zeroIsNoop:true})},describedAbility('自身消耗牌时，排队获得层数对应的非负格挡。',feel));
+  return{exports:{Evolve:Evolve.definition,DarkEmbrace:DarkEmbrace.definition,FeelNoPain:FeelNoPain.definition,programs:{Evolve,DarkEmbrace,FeelNoPain},statusTexts:{EVOLVE:Evolve.text,DARK_EMBRACE:DarkEmbrace.text,FEEL_NO_PAIN:FeelNoPain.text}}};
 }});

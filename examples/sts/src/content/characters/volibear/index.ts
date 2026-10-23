@@ -14,3 +14,5 @@ export {createVolibearOptionalEngageCards} from './cards/optional-engage.ts';
 export {createVolibearSelectionCards,type VolibearSelectionScreens} from './cards/selections.ts';
 export {volibearStart} from './start.ts';
 export {createVolibearCatalog} from './catalog.ts';
+export {volibearStormCards} from './cards/storm.ts';
+export {stormCharge} from './mechanics/storm-charge.ts';

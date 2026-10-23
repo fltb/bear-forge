@@ -16,7 +16,7 @@ import {ReferenceClient} from './reference/client.ts';
 import {assertSameState} from './reference/compare.ts';
 const {defineRules,defineQuery,defineEntity,defineEffect,sequence,spawnEntity,call,query,when}=rules;
 const p=basicPowers.exports;
-const definitions=Object.values(p),playerDef=defineEntity(resources.exports.actor,{side:0}),enemyDef=defineEntity(resources.exports.actor,{side:1}),registryDef=defineEntity(powers.exports.registryKind,undefined);
+const definitions=Object.values(p.programs).map(program=>program.definition),playerDef=defineEntity(resources.exports.actor,{side:0}),enemyDef=defineEntity(resources.exports.actor,{side:1}),registryDef=defineEntity(powers.exports.registryKind,undefined);
 const bases=[-3,0,1,5,6,8,17,16777217];
 const playerBindings:{definition:PowerDefinition;id:number;field?:'strength'|'dexterity'|'focus'|'artifact'}[]=[
   {definition:p.Strength,id:PS.STRENGTH,field:'strength'},{definition:p.Dexterity,id:PS.DEXTERITY,field:'dexterity'},{definition:p.Focus,id:PS.FOCUS,field:'focus'},{definition:p.PlayerArtifact,id:PS.ARTIFACT,field:'artifact'},

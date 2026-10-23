@@ -1,10 +1,75 @@
-/** Shared glossary. Stack amounts and remaining turns come from the observation. */
-export const statusTexts:Record<string,string>={
-DOUBLE_DAMAGE:'下一次攻击伤害翻倍。',DRAW_REDUCTION:'下回合少抽牌。',FRAIL:'卡牌格挡减少25%。',INTANGIBLE:'每次受到伤害最多1。',VULNERABLE:'受到攻击伤害增加50%。',WEAK:'攻击伤害减少25%。',CONFUSED:'抽牌时费用随机为0–3。',CONSTRICTED:'回合结束受到层数伤害。',ENTANGLED:'本回合不能打出攻击。',HEX:'打出非攻击时向抽牌堆加入晕眩。',LOSE_DEXTERITY:'回合结束失去对应敏捷。',LOSE_STRENGTH:'回合结束失去对应力量。',NO_BLOCK:'不能从卡牌获得格挡。',NO_DRAW:'本回合不能抽牌。',BARRICADE:'回合开始保留格挡。',CORRUPTION:'技能0费，打出后消耗。',SURROUNDED:'受到背后攻击伤害提高50%，单体攻击改变朝向。',PEN_NIB:'下一张攻击伤害翻倍。',BUFFER:'阻止下一次生命损失。',DOUBLE_TAP:'接下来的攻击重复结算。',DUPLICATION:'接下来的牌重复结算。',FREE_ATTACK_POWER:'下一张攻击免费。',BRUTALITY:'每回合开始失去1生命并额外抽牌。',COMBUST:'回合结束失去生命并对全体造成伤害。',DARK_EMBRACE:'消耗牌时抽牌。',DEMON_FORM:'每回合开始获得力量。',DRAW_CARD_NEXT_TURN:'下回合额外抽牌。',ENERGIZED:'下回合额外能量。',EVOLVE:'抽到状态时额外抽牌。',FEEL_NO_PAIN:'消耗牌时获得格挡。',FIRE_BREATHING:'抽到状态或诅咒时对全体造成伤害。',FLAME_BARRIER:'本回合受到攻击时反伤。',FOCUS:'改变充能球效果。',JUGGERNAUT:'获得格挡时对随机敌人造成伤害。',MAGNETISM:'回合开始生成随机无色牌。',MAYHEM:'回合开始打出抽牌堆顶牌。',METALLICIZE:'回合结束获得格挡。',NEXT_TURN_BLOCK:'下回合获得格挡。',OMEGA:'回合结束对全体造成伤害。',PANACHE:'每回合每打出5张牌对全体造成伤害。',PLATED_ARMOR:'回合结束获得格挡；受到未完全格挡的攻击时层数减1。',RAGE:'本回合打出攻击时获得格挡。',REGEN:'回合结束按层数治疗。玩家再生随后层数减1；敌人再生不递减。',RITUAL:'回合结束获得力量。',RUPTURE:'因卡牌失去生命时获得力量。',SADISTIC:'施加负面状态时造成伤害。',THORNS:'受到攻击时反伤。',VIGOR:'下一张攻击每段固定伤害提高。',ARTIFACT:'抵消接下来的负面状态。',DEXTERITY:'改变从卡牌获得的格挡。',STRENGTH:'改变攻击每段伤害。',THE_BOMB:'倒计时后对全体造成伤害。',BLOCK_RETURN:'行动后恢复本次消耗的格挡。',POISON:'回合开始失去层数生命，随后层数减1。',SHACKLED:'回合结束恢复被临时移除的力量。',ANGRY:'受到攻击时获得力量。',BEAT_OF_DEATH:'玩家每打出1张牌受到伤害。',CURIOSITY:'玩家打出能力牌后获得力量。',CURL_UP:'首次受到攻击后获得格挡。',ENRAGE:'玩家打出技能后获得力量。',FADING:'倒计时结束死亡。',FLIGHT:'受到攻击伤害减半；被攻击命中后减少层数，清空则眩晕。',GENERIC_STRENGTH_UP:'按敌人能力定期获得力量。',MALLEABLE:'受到攻击后获得格挡，本回合触发越多格挡越高。',MODE_SHIFT:'累计受到攻击伤害达到阈值时切换模式。',SLOW:'本回合玩家每打出1张牌提高受到的攻击伤害。',SPORE_CLOUD:'死亡时对玩家施加易伤。',THIEVERY:'攻击偷取金币，逃跑后不归还。',TIME_WARP:'每累计打出12张牌强制结束回合并获得力量。',INVINCIBLE:'限制本回合生命损失总量。',REACTIVE:'受到攻击后改变意图。',SHARP_HIDE:'玩家攻击时反伤。',ASLEEP:'休眠；受到生命伤害时唤醒。',MINION:'随从，不触发需要真正击杀的成长或奖励。',MINION_LEADER:'主敌人死亡后随从离场。',PAINFUL_STABS:'造成生命伤害时将伤口加入弃牌堆。',REGROW:'倒下后若伙伴未全部倒下则复活。',SHIFTING:'受到伤害时失去力量，回合结束恢复。',STASIS:'暂时扣留玩家牌，死亡后归还。',
-};
-export const volibearMechanics={
-迎战:'立即让选定敌人完成本轮的一次行动。已行动的敌人不会再次行动；正常敌人阶段跳过本轮已行动者。可选迎战会另开确认决策。',
-雷伤:'独立的非攻击伤害批次；不是打出攻击，不吃普通攻击力量加成。相关雷击能力可修改数值与触发后续效果。',
-领域:'持续期间抑制敌人除力量外的正面状态，负面状态仍有效。领域到期时间由牌面决定。',
-准备:'保留、减费、加伤、复制和重复效果按各张牌说明作用；当前费用与战斗成长以观察数据为准。',
-};
+import {basicPowers} from './attributes.ts';
+import {defensePowers} from './defense.ts';
+import {drawPowers} from './draw.ts';
+import {shackledPower} from './shackled.ts';
+import {relicPowers} from './relics.ts';
+import {potionPowers} from '../potions/powers.ts';
+import {ironcladPowers} from '../characters/ironclad/powers/definitions.ts';
+import {ironcladDrawPowers} from '../characters/ironclad/powers/draw.ts';
+import {combatPowers} from '../characters/ironclad/powers/combat.ts';
+import {turnPowers} from '../characters/ironclad/powers/turn.ts';
+import {ironcladAdditionalPowers} from '../characters/ironclad/powers/combust.ts';
+import {permanentCards} from '../characters/ironclad/cards/permanent.ts';
+import {colorlessAdditionalPowers} from '../cards/colorless/power-effects.ts';
+import {enemyPowers} from '../enemies/shared/powers.ts';
+import {enemyDefensePowers} from '../enemies/shared/defense-powers.ts';
+import {combatEnemyPowers} from '../enemies/shared/combat-powers.ts';
+import {enemyTurnPowers} from '../enemies/shared/ritual.ts';
+import {cityPowers} from '../enemies/city/powers.ts';
+import {beyondPowers} from '../enemies/beyond/powers.ts';
+import {finalPowers} from '../enemies/ending/powers.ts';
+import {exordiumBosses} from '../enemies/exordium/bosses.ts';
+import {exordiumHumanoids} from '../enemies/exordium/humanoids.ts';
+import {bronzeOrb} from '../enemies/city/bronze-orb.ts';
+import {beyondBosses} from '../enemies/beyond/bosses.ts';
+import {writhingMass} from '../enemies/beyond/writhing-mass.ts';
+import {stormCharge} from '../characters/volibear/mechanics/storm-charge.ts';
+import {lightning} from '../characters/volibear/mechanics/lightning.ts';
+import {volibearEngage} from '../characters/volibear/mechanics/engage.ts';
+import {volibearDomain} from '../characters/volibear/mechanics/domain.ts';
+import {volibearPreparation} from '../characters/volibear/mechanics/preparation.ts';
+
+/** Public compatibility identities with no installed status owner, not a second rule catalog. */
+const unassembled=Object.fromEntries(['DOUBLE_DAMAGE','FREE_ATTACK_POWER','DRAW_CARD_NEXT_TURN','ENERGIZED','OMEGA','BLOCK_RETURN','POISON'].map(key=>[key,'当前实现未装配该状态规则。']));
+/** Every implemented entry projects the same fragments that install the actual abilities. */
+export const statusTexts:Record<string,string>=Object.freeze({
+  ...unassembled,
+  ...basicPowers.exports.statusTexts,
+  ...defensePowers.exports.statusTexts,
+  ...drawPowers.exports.statusTexts,
+  ...shackledPower.exports.statusTexts,
+  ...relicPowers.exports.statusTexts,
+  ...ironcladPowers.exports.statusTexts,
+  ...ironcladDrawPowers.exports.statusTexts,
+  ...combatPowers.exports.statusTexts,
+  ...turnPowers.exports.statusTexts,
+  ...ironcladAdditionalPowers.exports.statusTexts,
+  ...colorlessAdditionalPowers.exports.statusTexts,
+  ...potionPowers.exports.statusTexts,
+  ...enemyPowers.exports.statusTexts,
+  ...enemyDefensePowers.exports.statusTexts,
+  ...combatEnemyPowers.exports.statusTexts,
+  ...enemyTurnPowers.exports.statusTexts,
+  ...cityPowers.exports.statusTexts,
+  ...beyondPowers.exports.statusTexts,
+  ...finalPowers.exports.statusTexts,
+  ...exordiumBosses.exports.statusTexts,
+  ...exordiumHumanoids.exports.statusTexts,
+  ...bronzeOrb.exports.statusTexts,
+  ...beyondBosses.exports.statusTexts,
+  ...writhingMass.exports.statusTexts,
+  // Shared public identities have different actual player/enemy lifecycles.
+  BARRICADE:`玩家：${permanentCards.exports.barricadeProgram.text}敌人：${enemyDefensePowers.exports.programs.Barricade.text}`,
+  METALLICIZE:`玩家：${combatPowers.exports.programs.Metallicize.text}敌人：${combatEnemyPowers.exports.programs.Metallicize.text}`,
+  PLATED_ARMOR:`玩家：${potionPowers.exports.programs.PlatedArmor.text}敌人：${enemyDefensePowers.exports.programs.PlatedArmor.text}`,
+  REGEN:`玩家：${potionPowers.exports.programs.Regeneration.text}敌人：${finalPowers.exports.programs.Regen.text}`,
+  RITUAL:`玩家：${potionPowers.exports.programs.Ritual.text}敌人：${enemyTurnPowers.exports.programs.EnemyRitual.text}`,
+  THORNS:`玩家：${potionPowers.exports.programs.Thorns.text}敌人：${beyondPowers.exports.programs.Thorns.text}`,
+});
+export const volibearMechanics=Object.freeze({
+  蓄雷:stormCharge.exports.text+lightning.exports.chargeText,
+  迎战:volibearEngage.exports.text,
+  雷伤:lightning.exports.text,
+  领域:volibearDomain.exports.text,
+  准备:volibearPreparation.exports.text,
+});

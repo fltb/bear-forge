@@ -1,4 +1,16 @@
-export const potionTexts:Record<string,string>={
-ANCIENT_POTION:'获得1人工制品。',ATTACK_POTION:'从3张攻击中选择1张，本回合0费。',BLESSING_OF_THE_FORGE:'升级全部手牌，持续本战。',BLOCK_POTION:'获得12格挡。',BLOOD_POTION:'回复最大生命20%（持神圣树皮时40%），向下取整。',COLORLESS_POTION:'从3张无色牌中选择1张，本回合0费。',CULTIST_POTION:'每回合结束获得1力量。',DEXTERITY_POTION:'获得2敏捷。',DISTILLED_CHAOS:'打出抽牌堆顶3张牌。',DUPLICATION_POTION:'下一张牌额外打出1次。',ELIXIR_POTION:'消耗任意张手牌。',ENERGY_POTION:'获得2能量。',ENTROPIC_BREW:'填满空药水槽。',ESSENCE_OF_STEEL:'获得4金属化护甲。',EXPLOSIVE_POTION:'对全体造成10伤害。',FAIRY_POTION:'致死时自动复活并回复生命；不可主动使用。',FEAR_POTION:'目标获得3易伤。',FIRE_POTION:'目标受到20伤害。',FLEX_POTION:'本回合获得5力量。',FOCUS_POTION:'获得2集中。',FRUIT_JUICE:'最大生命+5。',GAMBLERS_BREW:'弃置任意张手牌，抽同样数量。',GHOST_IN_A_JAR:'获得1无实体。',HEART_OF_IRON:'获得6金属化。',LIQUID_BRONZE:'获得3荆棘。',LIQUID_MEMORIES:'回收1张弃牌，本回合0费。',POWER_POTION:'从3张能力中选择1张，本回合0费。',REGEN_POTION:'获得5再生。',SKILL_POTION:'从3张技能中选择1张，本回合0费。',SMOKE_BOMB:'当前实现：消耗药水，无逃跑效果。',SNECKO_OIL:'抽5张牌，将手牌费用随机为0–3。',SPEED_POTION:'本回合获得5敏捷。',STRENGTH_POTION:'获得2力量。',SWIFT_POTION:'抽3张牌。',WEAK_POTION:'目标获得3虚弱。',EMPTY_POTION_SLOT:'空槽。',INVALID:'无药水。',
-};
-Object.assign(potionTexts,{AMBROSIA:'进入神格。当前角色未装配此药水。',BOTTLED_MIRACLE:'获得2张奇迹。当前角色未装配此药水。',CUNNING_POTION:'获得3张升级小刀。当前角色未装配此药水。',ESSENCE_OF_DARKNESS:'空球位填充黑暗球。当前角色未装配此药水。',POISON_POTION:'施加6中毒。当前角色未装配此药水。',POTION_OF_CAPACITY:'获得2球位。当前角色未装配此药水。',STANCE_POTION:'选择愤怒或平静。当前角色未装配此药水。'});
+import {potionPrograms} from './programs.ts';
+
+/** Read-only projection of the executable compositions, never a parallel rule catalog. */
+export const potionTexts:Readonly<Record<string,string>>=Object.freeze({
+  ...Object.fromEntries(Object.entries(potionPrograms).map(([name,program])=>[name,program.text])),
+  EMPTY_POTION_SLOT:'空槽。', INVALID:'无药水。',
+  // These identities have no executing implementation for the current characters.
+  // Keep the reference information explicit rather than pretend it is an executable rule.
+  AMBROSIA:'未装配；参考效果（非本实现规则）：进入神格。',
+  BOTTLED_MIRACLE:'未装配；参考效果（非本实现规则）：获得2张奇迹。',
+  CUNNING_POTION:'未装配；参考效果（非本实现规则）：获得3张升级小刀。',
+  ESSENCE_OF_DARKNESS:'未装配；参考效果（非本实现规则）：空球位填充黑暗球。',
+  POISON_POTION:'未装配；参考效果（非本实现规则）：施加6中毒。',
+  POTION_OF_CAPACITY:'未装配；参考效果（非本实现规则）：获得2球位。',
+  STANCE_POTION:'未装配；参考效果（非本实现规则）：选择愤怒或平静。',
+});

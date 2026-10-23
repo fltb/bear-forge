@@ -1,3 +1,5 @@
+import {describeProgram,programText} from '../../rules/program-descriptions.ts';
+import {modifyProgram} from './reaction-programs.ts';
 import { typedValue } from '../../rules/value.schemas.ts';
 import {z} from 'zod';
 import {rules} from '../../rules/execution.ts';
@@ -45,7 +47,38 @@ export function attachAbilities(...abilities:(rules.Ability|PowerAbility)[]):rul
   });
   return defineEffect(b=>rules.sequence(...guarded.map(ability=>install({ability,source:b.read(v=>v.input.entity),owner:b.read(v=>v.input.setup.actor),environment:{},lifetime:b.read(v=>v.input.scope)}))));
 }
+/** Atomic semantic owners may describe one opaque callback; compositions must project children. */
+export function describedAbility(text:string,...abilities:(rules.Ability|PowerAbility)[]){
+  if(abilities.length===1){const item=abilities[0]!;describeProgram('ability' in item?item.ability:item,text);}
+  return abilities.length===1?powerAbilities(...abilities):{text:undefined,abilities};
+}
+export function composePowerProgram<T extends object>(program:T,...children:object[]):T{
+  const texts=children.map(programText);
+  return describeProgram(program,texts.every(text=>text!==undefined)?texts.filter(Boolean).join(''):undefined);
+}
+export function sequencePowerPrograms<I>(...children:rules.Effect<I,void>[]){
+  return composePowerProgram(defineEffect<I,void>(b=>rules.sequence(...children.map(child=>rules.call(child,b.input)))),...children);
+}
+export function powerAbilities(...abilities:(rules.Ability|PowerAbility)[]){
+  const texts=abilities.map(item=>programText('ability' in item?item.ability:item));
+  return {text:texts.every(text=>text!==undefined)?texts.filter(Boolean).join(''):undefined,abilities};
+}
+export function powerDescription(parts:readonly {text:string|undefined}[],...lifecycle:(object|undefined)[]){
+  const texts=[...parts.map(part=>part.text),...lifecycle.filter((child):child is object=>child!==undefined).map(programText)];
+  const complete=texts.every(text=>text!==undefined);
+  return {text:complete?texts.filter(Boolean).join(''):'规则说明尚未完整。',complete};
+}
+export function defineDescribedPower(name:string,config:Omit<PowerConfig,'attach'>,...parts:ReturnType<typeof describedAbility>[]){
+  return defineDescribedPowerWithLifecycle(name,config,{},...parts);
+}
+export function defineDescribedPowerWithLifecycle(name:string,config:Omit<PowerConfig,'attach'>,options:{components?:readonly rules.Component<any>[];attach?:(abilities:rules.Effect<PowerLifecycle,void>)=>rules.Effect<PowerLifecycle,void>;display?:boolean},...parts:ReturnType<typeof describedAbility>[]){
+  const {text,complete}=powerDescription(parts,options.attach,config.merged,config.detach);
+  const abilities=attachAbilities(...parts.flatMap(part=>part.abilities));
+  const attach=options.attach?options.attach(abilities):abilities;
+  return Object.freeze({name,definition:rules.defineEntity(powers.exports.kind,{...config,...(options.display?{display:{name,text}}:{}),attach},options.components?{components:options.components}:{}),text,complete});
+}
 export function scalarBonus(target:rules.Query<number,number>):rules.Ability{
-  const condition=defineQuery({input:typedValue<rules.ModifierContext<number,number>>(),output:z.boolean(),base:(_r,c)=>c.input===c.owner});
-  return rules.modify(target,{condition,dependencies:[powers.exports.level],transform:(r,c)=>(c.value+r.query(powers.exports.level,c.source))|0});
+  const condition=describeProgram(defineQuery({input:typedValue<rules.ModifierContext<number,number>>(),output:z.boolean(),base:(_r,c)=>c.input===c.owner}),'查询对象为持有者');
+  const transform=describeProgram((r:rules.QueryRead,c:rules.ModifierContext<number,number>)=>(c.value+r.query(powers.exports.level,c.source))|0,'增加当前层数并按32位有符号整数保存。');
+  return modifyProgram(target,{condition,dependencies:[powers.exports.level],transform});
 }

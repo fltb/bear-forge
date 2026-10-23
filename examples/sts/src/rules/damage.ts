@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {rules} from './execution.ts';
+import {describeProgram} from './program-descriptions.ts';
 import {resources,HpLossOrigin} from './resources.ts';
 import {attributes} from './attributes.ts';
 import {entityId} from './resources.schemas.ts';
@@ -12,6 +13,9 @@ const emptyHit=(request:HitRequest):HitResult=>({battle:request.battle,source:re
 /** Shared damage flow; limits, prevention, reactions and relic behavior are registered content. */
 export const damage=defineRules({requires:[resources,attributes],build(m){
   const prevention={},retaliation={},minimum={},reduction={},limit={},after={},stages={prevention,retaliation,minimum,reduction,limit,after};
+  describeProgram(prevention,'伤害阻止阶段');describeProgram(retaliation,'伤害反击阶段');
+  describeProgram(minimum,'伤害下限阶段');describeProgram(reduction,'伤害减免阶段');
+  describeProgram(limit,'伤害限制阶段');describeProgram(after,'伤害后续阶段');
   const order={phases:[{phase:prevention,before:[retaliation]},{phase:retaliation,before:[minimum]},{phase:minimum,before:[reduction]},{phase:reduction,before:[limit]},{phase:limit,before:[after]},{phase:after}],default:reduction};
   const beforeDamage=m.own(defineCheckpoint({input:hitRequestSchema,output:hitRequestSchema}));
   const beforeHpDamage=m.own(defineCheckpoint({input:hpDamageSchema,output:hpDamageSchema,order}));
@@ -57,5 +61,8 @@ export const damage=defineRules({requires:[resources,attributes],build(m){
   const attack=defineEffect<{battle:number;source:number;target:number;base:number;card:number|null},HitResult>(b=>{const result=b.local<HitResult>();return sequence(
     b.assign(result,call(hit,{battle:b.read(v=>v.input.battle),source:b.read(v=>v.input.source),target:b.read(v=>v.input.target),amount:query(attributes.exports.attackAmount,b.read(v=>({source:v.input.source,target:v.input.target,base:v.input.base,card:v.input.card}))),attack:true,selfDamage:false})),b.return(result),
   );});
+  describeProgram(beforeDamage.public,'伤害开始前');describeProgram(beforeHpDamage.public,'格挡结算后、生命伤害前');
+  describeProgram(started.public,'伤害开始时');describeProgram(blocked.public,'格挡结算后');describeProgram(resolved.public,'伤害结算后');
+  describeProgram(blockConsumption,'吸收伤害时消耗的格挡量');
   return{exports:{hit,attack,blockConsumption,beforeDamage:beforeDamage.public,beforeHpDamage:beforeHpDamage.public,started:started.public,blocked:blocked.public,resolved:resolved.public,stages}};
 }});

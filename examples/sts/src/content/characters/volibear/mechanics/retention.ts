@@ -1,3 +1,4 @@
+import {describeProgram} from '../../../cards/shared/program-facts.ts';
 import {z} from 'zod';
 import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
@@ -16,5 +17,7 @@ export const volibearRetention=rules.defineRules({requires:[battles,cardInstance
     ability:retained,source:b.read(v=>v.input.card),owner:b.read(v=>v.input.owner),environment:{},
     lifetime:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
   }));
-  return {exports:{remember}};
+  const text='所选牌本场战斗获得保留。';
+  describeProgram(remember,text);
+  return {exports:{remember,text}};
 }});

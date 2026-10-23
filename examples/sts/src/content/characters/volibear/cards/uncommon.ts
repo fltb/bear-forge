@@ -1,3 +1,9 @@
+import {deployPower,openDomain,conditional} from './operations.ts';
+import {describeProgram,describeAmount,programText} from '../../../cards/shared/program-facts.ts';
+import {describeAmounts} from '../../../cards/shared/programs.ts';
+import {inheritPrograms} from '../../../cards/shared/program-facts.ts';
+import {volibearStormPowers} from '../powers/storm.ts';
+import {attributes as stormAttributes} from '../../../../rules/attributes.ts';
 import {volibearRepeat} from '../mechanics/repeat.ts';
 import {volibearConduction} from '../powers/conduction.ts';
 import {rules} from '../../../../rules/execution.ts';
@@ -14,7 +20,7 @@ import {volibearCardPrograms,card,attack,block,compose,queued,draw,thunder} from
 import {volibearLightningPowers} from '../powers/lightning.ts';
 import {volibearStanding} from '../powers/standing.ts';
 import {volibearStrength} from '../mechanics/strength.ts';
-import {volibearPreparation} from '../mechanics/preparation.ts';
+import {volibearDomain} from '../mechanics/domain.ts';
 import {volibearPlayCounts} from '../mechanics/play-counts.ts';
 import {volibearFury} from '../powers/fury.ts';
 import {volibearPrey} from '../powers/prey.ts';
@@ -22,55 +28,43 @@ import {volibearEngagePreparation} from '../mechanics/engage-preparation.ts';
 import {cardAmount,type CardAmount} from '../../../cards/shared/programs.ts';
 import type {PowerDefinition} from '../../../../rules/powers.types.ts';
 
-export const volibearUncommonCards=rules.defineRules({requires:[volibearRepeat,volibearConduction,volibearCardPrograms,basicPowers,volibearLightningPowers,volibearStanding,volibearStrength,volibearPreparation,volibearPlayCounts,volibearFury,volibearEngagePreparation,volibearPrey],build(){
+export const volibearUncommonCards=rules.defineRules({requires:[volibearStormPowers,volibearRepeat,volibearConduction,volibearCardPrograms,basicPowers,volibearLightningPowers,volibearStanding,volibearStrength,volibearDomain,volibearPlayCounts,volibearFury,volibearEngagePreparation,volibearPrey],build(){
+  const maximumDiscount=2;
   const mountainDiscount=rules.modify(battles.exports.cost,{
     condition:rules.defineQuery({input:z.custom<rules.ModifierContext<CardUse,number>>(),output:z.boolean(),base:(_r,c)=>c.input.card===c.source&&c.value>=0}),
     dependencies:[volibearPlayCounts.exports.beforeTarget],
-    transform:(r,c)=>Math.max(0,c.value-Math.min(2,r.query(volibearPlayCounts.exports.beforeTarget,c.input))),
+    transform:(r,c)=>Math.max(0,c.value-Math.min(maximumDiscount,r.query(volibearPlayCounts.exports.beforeTarget,c.input))),
   });
-  const deploy=(definition:PowerDefinition,amount:CardAmount=[2,3])=>rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
-    definition,registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
-    scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
-    actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),amount:b.read(v=>cardAmount(amount,v)),debuff:false,
-  }));
-  const doubleStrength=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
-    registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
-    scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
-    actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),definition:basicPowers.exports.Strength,
-    amount:b.read(v=>Math.max(0,v.get(rules.query(attributes.exports.strength,v.input.owner)))),debuff:false,
-  }));
+  const primal=deployPower(volibearStormPowers.exports.programs.PrimalThunder,describeAmount((v:rules.ReadView<CardUse>)=>Math.max(0,v.query(stormAttributes.exports.strength,v.input.owner)),'当前正力量'));
+  const weakAmount=[1,2] as const;
   const weak=rules.defineEffect<CardUse,void>(b=>rules.forEach(rules.query(battles.exports.targets,b.read(v=>v.input.battle)),target=>rules.call(powers.exports.apply,{
     registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
     scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
     actor:target,source:b.read(v=>v.input.owner),definition:basicPowers.exports.EnemyWeak,
-    amount:b.read(v=>v.input.state.upgraded?2:1),debuff:true,
+    amount:b.read(v=>cardAmount(weakAmount,v)),debuff:true,
   })));
-  const unstoppable=rules.defineEffect<CardUse,void>(b=>{
-    const ready=b.local<boolean>();
-    return rules.sequence(
-      b.assign(ready,b.read(v=>v.get(rules.query(volibearPlayCounts.exports.count,{
-        battle:v.input.battle,turn:v.get(rules.query(battles.exports.current,v.input.battle)).turn,target:null,
-      }))>=2)),
-      rules.call(attack([10,14]),b.input),
-      rules.when(ready,rules.call(queued(rules.defineEffect<CardUse,void>(b=>rules.call(resources.exports.gainEnergy,{entity:b.read(v=>v.input.owner),amount:2}))),b.input)),
-    );
-  });
+  describeAmounts(weak,[weakAmount],n=>`对全体敌人施加${n}虚弱。`);
+  const priorAttacks=2,energyGain=2;
+  const unstoppableAttack=attack([10,14]);
+  const enoughAttacks=describeProgram((v:rules.ReadView<CardUse>)=>v.query(volibearPlayCounts.exports.count,{battle:v.input.battle,turn:v.query(battles.exports.current,v.input.battle).turn,target:null})>=priorAttacks,`本回合此前已打出至少${priorAttacks}张攻击，`);
+  const energyReward=describeProgram(rules.defineEffect<CardUse,void>(b=>rules.call(resources.exports.gainEnergy,{entity:b.read(v=>v.input.owner),amount:energyGain})),`获得${energyGain}能量。`);
+  const unstoppable=conditional(enoughAttacks,queued(energyReward),undefined,unstoppableAttack);
   return {exports:{
     StormReturns:card(cards.U11,queued(volibearRepeat.exports.prepare)),
-    StormConduction:card(cards.U02,compose(thunder(6),queued(deploy(volibearConduction.exports.StormConduction,1)))),
-    Standing:card(cards.U03,queued(deploy(volibearStanding.exports.Standing,1))),
-    MountainLift:card(cards.U05,attack(v=>v.get(rules.query(resources.exports.current,v.input.owner)).block,1,false,false)),
-    SavageBite:card(cards.U06,attack([7,9],3)),
-    MountainCollapse:card(cards.U07,attack([28,36]),{created:registerCardAbilities(mountainDiscount)}),
-    PrimalStrength:card(cards.U12,queued(doubleStrength)),
+    StormConduction:card(cards.U02,compose(thunder([6,9]),queued(deployPower(volibearConduction.exports.programs.StormConduction,1)))),
+    Standing:card(cards.U03,compose(block([8,12]),queued(deployPower(volibearStanding.exports.programs.Standing,[12,8])))),
+    MountainLift:card(cards.U05,attack(describeAmount((v:rules.ReadView<CardUse>)=>v.get(rules.query(resources.exports.current,v.input.owner)).block,'当前格挡（不消耗格挡）'),1,false,false)),
+    SavageBite:card(cards.U06,attack([8,11],3)),
+    MountainCollapse:card(cards.U07,attack([28,36]),{created:describeProgram(registerCardAbilities(mountainDiscount),`本回合此前对该目标每打出一张指定单体攻击减费，最多减${maximumDiscount}，最终费用不低于0。`)}),
+    PrimalStrength:card(cards.U12,compose(queued(primal),draw([1,2]))),
     StrengthReclaimed:card(cards.U13,queued(volibearStrength.exports.reclaim)),
     EngagePreparation:card(cards.U14,compose(block([5,8]),queued(volibearEngagePreparation.exports.prepare))),
-    Prepared:card(cards.U16,queued(volibearPreparation.exports.prepare)),
+    Prepared:card(cards.U16,compose(queued(openDomain(1)),draw([2,3]))),
     Unstoppable:card(cards.U20,unstoppable),
-    ThunderAftershock:card(cards.U21,queued(deploy(volibearLightningPowers.exports.ThunderAftershock))),
-    WindRoar:card(cards.U23,compose(queued(weak),block([7,10]))),
-    PreyStillStands:card(cards.U25,compose(queued(deploy(volibearPrey.exports.PreyStillStands,[1,2])),draw(1))),
-    GrowingFury:card(cards.U26,compose(queued(deploy(volibearFury.exports.GrowingFury,[1,2])),queued(deploy(basicPowers.exports.Strength,1)))),
-    GatheringThunder:card(cards.U29,queued(deploy(volibearLightningPowers.exports.GatheringThunder))),
+    ThunderAftershock:card(cards.U21,queued(deployPower(volibearLightningPowers.exports.programs.ThunderAftershock,[2,3]))),
+    WindRoar:card(cards.U23,compose(queued(weak),block([9,12]))),
+    PreyStillStands:card(cards.U25,compose(queued(deployPower(volibearPrey.exports.programs.PreyStillStands,[1,2])),draw(1))),
+    GrowingFury:card(cards.U26,compose(queued(deployPower(volibearFury.exports.programs.GrowingFury,[1,2])),queued(deployPower(basicPowers.exports.programs.Strength,1)))),
+    GatheringThunder:card(cards.U29,queued(deployPower(volibearLightningPowers.exports.programs.GatheringThunder,[2,3]))),
   }};
 }});

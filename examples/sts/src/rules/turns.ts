@@ -1,4 +1,5 @@
 import { typedValue } from './value.schemas.ts';
+import {describeProgram} from './program-descriptions.ts';
 import {z} from 'zod';
 import {rules} from './execution.ts';
 import {ruleModules} from '@bear-forge/card-engine';
@@ -24,6 +25,7 @@ export const turns=defineRules({requires:[enemies],build(m){
   const forBattle=defineQuery({input:entityId,output:entityId.nullable(),reads:[state],base:(r,battle)=>{const ids=r.entities(state).filter(id=>r.component(id,state)?.battle===battle);if(ids.length>1)throw Error('Duplicate turn controller');return ids[0]??null;}});
   const actor=defineQuery({input:entityId,output:turnActorSchema,dependencies:[current,battles.exports.current,battles.exports.status],base:(r,controller)=>{const s=r.query(current,controller);return{controller,battle:s.battle,actor:r.query(battles.exports.status,s.battle).actor};}});
   const content={},stages={content};
+  describeProgram(content,'回合内容响应阶段');
   const event=()=>m.own(defineEvent({payload:turnActorSchema,dispatch:'immediate',order:{phases:[{phase:content}],default:content}}));
   const playerEndRelics=event(),playerEndPreCards=event(),playerEndPowers=event(),enemyStart=event(),enemyEnd=event(),playerRoundEnd=event(),enemyRoundEnd=event(),playerStartRelics=event(),playerStartPowers=event(),playerPostDrawRelics=event(),playerPostDrawPowers=event(),afterRecharge=event(),idle=event();
   const beforeBlockReset=m.own(defineCheckpoint({input:resourceAmountSchema,output:resourceAmountSchema}));
@@ -116,6 +118,6 @@ export const turns=defineRules({requires:[enemies],build(m){
   const commitEnemies=m.atom({input:rosterInput.extend({extent:z.int32().min(0).max(5)}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){const before=r.component(i.controller,state);if(before===null)throw Error('Missing turn controller');return{writes:[{entity:i.controller,component:state,value:{...before,enemies:[...i.enemies],extent:i.extent}}],events:[],result:undefined};}});
   const setEnemies=defineEffect<z.infer<typeof rosterInput>,void>(b=>call(commitEnemies,query(rosterUpdate,b.input)));
 
-  return{exports:{setEnemies,seekEnemy,kind,current,forBattle,actor,stages,endTurn,settle,drawCount,rechargeAmount,retainedEnergy,idle:idle.public,discardRemaining,beforeBlockReset:beforeBlockReset.public,
-    playerEndRelics:playerEndRelics.public,playerEndPreCards:playerEndPreCards.public,playerEndPowers:playerEndPowers.public,enemyStart:enemyStart.public,enemyEnd:enemyEnd.public,playerRoundEnd:playerRoundEnd.public,enemyRoundEnd:enemyRoundEnd.public,playerStartRelics:playerStartRelics.public,playerStartPowers:playerStartPowers.public,playerPostDrawRelics:playerPostDrawRelics.public,playerPostDrawPowers:playerPostDrawPowers.public,afterRecharge:afterRecharge.public}};
+  return{exports:{setEnemies,seekEnemy,kind,current,forBattle,actor,stages,endTurn,settle,drawCount:describeProgram(drawCount,'玩家每回合抽牌数量'),rechargeAmount:describeProgram(rechargeAmount,'每回合能量补充量'),retainedEnergy:describeProgram(retainedEnergy,'留到下回合的能量'),idle:describeProgram(idle.public,'玩家回合结算队列空闲阶段'),discardRemaining:describeProgram(discardRemaining,'回合结束是否弃置剩余手牌'),beforeBlockReset:describeProgram(beforeBlockReset.public,'回合开始格挡重置前'),
+    playerEndRelics:describeProgram(playerEndRelics.public,'玩家回合结束的遗物阶段'),playerEndPreCards:describeProgram(playerEndPreCards.public,'玩家回合结束的手牌处理前阶段'),playerEndPowers:describeProgram(playerEndPowers.public,'玩家回合结束的能力阶段'),enemyStart:describeProgram(enemyStart.public,'敌人回合开始'),enemyEnd:describeProgram(enemyEnd.public,'敌人回合结束'),playerRoundEnd:describeProgram(playerRoundEnd.public,'敌人行动后玩家整轮结束阶段'),enemyRoundEnd:describeProgram(enemyRoundEnd.public,'敌人行动后敌方整轮结束阶段'),playerStartRelics:describeProgram(playerStartRelics.public,'玩家回合开始的遗物阶段'),playerStartPowers:describeProgram(playerStartPowers.public,'玩家回合开始的能力阶段'),playerPostDrawRelics:describeProgram(playerPostDrawRelics.public,'回合抽牌入队后的遗物阶段'),playerPostDrawPowers:describeProgram(playerPostDrawPowers.public,'回合抽牌入队后的能力阶段'),afterRecharge:describeProgram(afterRecharge.public,'能量补充完成后')}};
 }});

@@ -1,5 +1,5 @@
-import {EffectKind} from './effect-policy.ts';
 import {fromSource,OriginKind} from './effect-trace.ts';
+import {describeProgram} from './program-descriptions.ts';
 import {componentPart} from './component-parts.ts';
 import {z} from 'zod';
 import {rules} from './execution.ts';
@@ -44,6 +44,8 @@ export const battles=defineRules({requires:[cardPiles,powers,attributes,damage],
   const pendingCompletion=defineQuery({input:entityId,output:completionSchema,reads:[completion],base:(r,id)=>r.component(id,completion)});
   const setCompletion=m.atom({input:z.object({battle:entityId,value:completionSchema}),output:z.undefined(),reads:[],writes:[completion],emits:[],run:(_r,i)=>({writes:[{entity:i.battle,component:completion,value:i.value}],events:[],result:undefined})});
   const power={},relic={},enemy={},after={},stages={power,relic,enemy,after};
+  describeProgram(power,'能力响应阶段');describeProgram(relic,'遗物响应阶段');
+  describeProgram(enemy,'敌人响应阶段');describeProgram(after,'后续响应阶段');
   const order={phases:[{phase:power,before:[relic]},{phase:relic,before:[enemy]},{phase:enemy,before:[after]},{phase:after}],default:power};
   const using=m.own(defineEvent({payload:cardUseSchema,dispatch:'immediate',order})),used=m.own(defineEvent({payload:cardUseSchema,dispatch:'immediate',order}));
   const otherCardPlayed=m.own(defineEvent({payload:cardUseSchema,dispatch:'immediate',order})),afterUse=m.own(defineEvent({payload:cardUseSchema,dispatch:'immediate',order}));
@@ -174,7 +176,7 @@ export const battles=defineRules({requires:[cardPiles,powers,attributes,damage],
   ));
   const earlyEndCommit=m.atom({input:entityId,output:z.undefined(),reads:[state,plays],writes:[state,plays],emits:[],run(r,entity){const s=r.component(entity,state),p=r.component(entity,plays);if(s===null||p===null||s.outcome!==0)throw Error('Cannot end a terminal battle turn');return{writes:[{entity,component:state,value:{...s,endTurnQueued:true}},{entity,component:plays,value:{...p,queue:[{kind:1 as const,id:p.nextPlay}],nextPlay:p.nextPlay+1}}],events:[],result:undefined};}});
   /** Drain queued opportunities through their normal cleanup, then claim the turn boundary. */
-  const endTurnEarly=defineEffect<number,void>({effect:EffectKind.Special},b=>sequence(
+  const endTurnEarly=defineEffect<number,void>(b=>sequence(
     forEach(b.read(v=>v.query(opportunities.current,v.input).queue.flatMap(item=>item.kind===0&&item.play.autoplay&&!item.play.purgeOnUse?[item.play]:[])),play=>enqueue(cleanupCanceledAutoplay,{battle:b.input,play},{queue:actionQueue,lifetime:b.read(v=>v.query(status,v.input).scope),eligible:'captured'})),
     call(earlyEndCommit,b.input),
   ));
@@ -246,6 +248,6 @@ call(markUsed,b.read(v=>({...v.get(use),type:v.query(cardInstances.exports.metad
   }});
   const advanceTurn=m.atom({input:entityId,output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,entity){const s=r.component(entity,state);if(s===null)throw Error('Missing battle');return{writes:[{entity,component:state,value:{...s,turn:s.turn+1}}],events:[],result:undefined};}});
   const resetTurn=m.atom({input:z.object({battle:entityId,turn:z.int32().positive()}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){const before=r.component(i.battle,state);if(before===null)throw Error('Missing battle');return{writes:[{entity:i.battle,component:state,value:{...before,turn:i.turn,cardsPlayed:0,attacksPlayed:0,skillsPlayed:0,endTurnQueued:false}}],events:[],result:undefined};}});
-  return{exports:{previewPayment,effectRepetitions,kind,current,status,opportunities:opportunities.current,forActor,presentForActor,forRegistry,start,announceOpeningQueued,active,context,targetable,targets,victoryTargets,victoryDeferred,recoveredGold,rewardEligible,freeToPlay,waivedPayment,cost,intrinsic,canUse,canQueue,playAllowed,canContinue,payment,initialExhaust,exhaustAfterUse,expectedOutcome,checkOutcome,hit,queueCard,queueFromHand,endTurn,consumeEndTurn,clearCardQueue,close,playNext,settle,setExhaust,setPlayState,setEnergyOnUse,setEnemies,advanceTurn,resetTurn,
-    endTurnEarly,beforePlay:beforePlay.public,disposing:disposing.public,using:using.public,used:used.public,otherCardPlayed:otherCardPlayed.public,afterUse:afterUse.public,finished:finished.public,endTurnCards:endTurnCards.public,exiting:exiting.public,started:started.public,openingQueued:openingQueued.public,stages}};
+  return{exports:{previewPayment,effectRepetitions:describeProgram(effectRepetitions,'出牌效果额外重复次数'),kind,current,status,opportunities:opportunities.current,forActor,presentForActor,forRegistry,start,announceOpeningQueued,active,context,targetable,targets,victoryTargets,victoryDeferred,recoveredGold,rewardEligible,freeToPlay:describeProgram(freeToPlay,'本次出牌免费标记'),waivedPayment:describeProgram(waivedPayment,'本次出牌免支付许可'),cost:describeProgram(cost,'本次出牌能量费用'),intrinsic:describeProgram(intrinsic,'卡牌自身的使用条件'),canUse:describeProgram(canUse,'本次出牌是否可用'),canQueue,playAllowed,canContinue,payment:describeProgram(payment,'本次出牌实际支付能量'),initialExhaust:describeProgram(initialExhaust,'出牌初始消耗标记'),exhaustAfterUse:describeProgram(exhaustAfterUse,'使用后追加消耗标记'),expectedOutcome,checkOutcome,hit,queueCard,queueFromHand,endTurn,consumeEndTurn,clearCardQueue,close,playNext,settle,setExhaust,setPlayState,setEnergyOnUse,setEnemies,advanceTurn,resetTurn,
+    endTurnEarly,beforePlay:describeProgram(beforePlay.public,'出牌前检查'),disposing:describeProgram(disposing.public,'出牌后卡牌去向处理'),using:describeProgram(using.public,'开始使用牌'),used:describeProgram(used.public,'牌的使用程序返回后'),otherCardPlayed:describeProgram(otherCardPlayed.public,'出牌的其他卡牌响应阶段'),afterUse:describeProgram(afterUse.public,'使用后处理阶段'),finished:describeProgram(finished.public,'本次出牌结算完成'),endTurnCards:describeProgram(endTurnCards.public,'结束回合手牌处理'),exiting:describeProgram(exiting.public,'战斗退出结算'),started:describeProgram(started.public,'战斗开始'),openingQueued:describeProgram(openingQueued.public,'开场效果已入队'),stages}};
 }});

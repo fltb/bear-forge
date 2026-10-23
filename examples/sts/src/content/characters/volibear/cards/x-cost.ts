@@ -1,3 +1,4 @@
+import {inheritPrograms,describeProgram,programText} from '../../../cards/shared/program-facts.ts';
 import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {resources} from '../../../../rules/resources.ts';
@@ -23,5 +24,7 @@ export const volibearXCards=rules.defineRules({requires:[xCost,volibearCardProgr
       rules.forEach(b.read(v=>Array.from({length:v.get(count)},(_,i)=>i)),()=>rules.call(wave,use)),
     );
   });
+  inheritPrograms(trample,wave);
+  describeProgram(trample,`支付实际X费用，按X结算次数（含修正）重复：${programText(wave)}不重复打出；效果重复沿用已支付X。`);
   return {exports:{iterations,ThunderTrample:card(cards.U31,trample)}};
 }});

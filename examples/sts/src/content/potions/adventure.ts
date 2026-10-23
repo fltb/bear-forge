@@ -1,16 +1,15 @@
-import {potionRelics} from './relics.ts';
-import {bloodPotionHealing} from './metadata.ts';
+import {potionRelics,sacredBark} from './relics.ts';
+import {potionVitality} from './vitality.ts';
 import { typedValue } from '../../rules/value.schemas.ts';
 import {z} from 'zod';
 import {rules} from '../../rules/execution.ts';
 import {adventures} from "../../rules/adventures.ts";
 import {potions} from "../../rules/potions.ts";
-import {resources} from "../../rules/resources.ts";
 import {adventureChoices} from "../../adapters/ports.ts";
 import {adventureDraws} from "../rewards/draws.ts";
 import {potionId,eventId} from "../../identifiers.ts";
 const {defineRules,defineQuery,defineEffect,sequence,when,forEach,call,query,modify,on,install}=rules;
-export const adventurePotions=defineRules({requires:[potionRelics,adventureChoices,adventureDraws],build(){
+export const adventurePotions=defineRules({requires:[potionRelics,potionVitality,adventureChoices,adventureDraws],build(){
   const options=modify(adventureChoices.exports.additional,{condition:defineQuery({input:typedValue<rules.ModifierContext<number,number[]>>(),output:z.boolean(),base:(_r,c)=>c.input===c.owner}),dependencies:[adventures.exports.current,potions.exports.current,adventures.exports.status],transform:(r,c)=>{
     const run=r.query(adventures.exports.status,c.input);if(run.screen==='EVENT_SCREEN'&&run.event===eventId.WE_MEET_AGAIN)return c.value;const s=r.query(potions.exports.current,run.potions),out=[...c.value];for(let index=0;index<s.capacity;index++){
       const id=s.slots[index];if(id===potionId.EMPTY_POTION_SLOT||id===potionId.INVALID)continue;
@@ -19,8 +18,8 @@ export const adventurePotions=defineRules({requires:[potionRelics,adventureChoic
   }});
   const drink=defineEffect<{run:number;bits:number},void>(b=>{const potion=b.local<number>(),drawn=b.local<number>(),bark=b.local<boolean>();return sequence(
     b.assign(potion,call(potions.exports.remove,{inventory:b.read(v=>v.query(adventures.exports.bindings,v.input.run).potions),index:b.read(v=>v.input.bits&255)})),when(b.read(v=>!!(v.input.bits&0x40000000)),b.return(undefined)),call(potionRelics.exports.used,b.read(v=>v.input.run)),b.assign(bark,query(adventures.exports.hasRelic,{run:b.read(v=>v.input.run),id:'SACRED_BARK'})),
-    when(b.read(v=>v.get(potion)===potionId.BLOOD_POTION),call(resources.exports.heal,b.read(v=>{const entity=v.query(adventures.exports.bindings,v.input.run).actor;return{entity,amount:bloodPotionHealing(v.query(resources.exports.vitality,entity).maxHp,v.get(bark)?2:1)};})),
-      when(b.read(v=>v.get(potion)===potionId.FRUIT_JUICE),call(resources.exports.raiseMaxHp,{entity:b.read(v=>v.query(adventures.exports.bindings,v.input.run).actor),amount:b.read(v=>v.get(bark)?10:5)}),
+    when(b.read(v=>v.get(potion)===potionId.BLOOD_POTION),call(potionVitality.exports.blood,{actor:b.read(v=>v.query(adventures.exports.bindings,v.input.run).actor),multiplier:b.read(v=>sacredBark.multiplier(v.get(bark)))}),
+      when(b.read(v=>v.get(potion)===potionId.FRUIT_JUICE),call(potionVitality.exports.fruit,{actor:b.read(v=>v.query(adventures.exports.bindings,v.input.run).actor),multiplier:b.read(v=>sacredBark.multiplier(v.get(bark)))}),
         when(b.read(v=>v.get(potion)===potionId.ENTROPIC_BREW),forEach(b.read(v=>Array.from({length:v.query(potions.exports.current,v.query(adventures.exports.bindings,v.input.run).potions).capacity},(_,index)=>index)),index=>sequence(b.assign(drawn,call(adventureDraws.exports.rewardPotion,b.read(v=>v.query(adventures.exports.bindings,v.input.run).streams.potion))),when(b.read(v=>v.query(potions.exports.current,v.query(adventures.exports.bindings,v.input.run).potions).slots[v.get(index)]===potionId.EMPTY_POTION_SLOT),call(potions.exports.fillAt,{inventory:b.read(v=>v.query(adventures.exports.bindings,v.input.run).potions),index,potion:drawn})))),b.return(b.read(()=>{throw Error('Potion cannot be drunk outside combat');}))))),
   );});
   const consumed=on(adventureChoices.exports.accepted,{condition:defineQuery({input:typedValue<rules.ReactionContext<{run:number;bits:number}>>(),output:z.boolean(),base:(_r,c)=>c.event.run===c.owner&&!!(c.event.bits&0x80000000)}),effect:defineEffect<rules.ReactionContext<{run:number;bits:number}>,void>(b=>call(drink,b.read(v=>v.input.event)))});

@@ -14,7 +14,8 @@ import {relics} from '../src/rules/relics.ts';
 import {SetupSchema,type Setup} from '../src/game.schemas.ts';
 import type {IroncladStart,StartStream,RelicTier} from "../src/content/characters/ironclad/start.types.ts";
 import {relicId} from '../src/identifiers.ts';
-import {neowDescriptions} from '../src/pools.ts';
+// Independent C++ wire expectations, not production presentation metadata.
+const neowDescriptions=["Choose a card to obtain.","Obtain a random rare card.","Remove a card.","Upgrade a card.","Transform a card.","Choose a colorless card to obtain.","Obtain three potions.","Obtain a random common relic.","Max Hp +10%.","Obtain Neow's Lament.","Obtain 100 gold.","Choose a rare colorless card to obtain.","Remove two cards.","Obtain a random rare relic.","Choose a rare card to obtain.","Obtain 250 gold.","Transform two cards in your cards.","Max Hp +20%.","Obtain a random boss relic.","INVALID"] as const;
 import {ReferenceClient} from './reference/client.ts';
 import {assertSameState} from './reference/compare.ts';
 const {defineRules,defineQuery,defineEffect,sequence,call,query}=rules;

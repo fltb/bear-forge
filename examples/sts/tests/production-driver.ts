@@ -4,8 +4,8 @@ import {cardDefinition} from '../src/card.ts';
 import type {Frame} from '../src/game.schemas.ts';
 const program=new CardProgram(cardDefinition);
 /** Drives the real production entry; observations remain the actual decision payload. */
-export function productionDriver(seed:string,character:'ironclad'|'volibear'='ironclad'){
-  const root=program.initial({seed,character},100_000_000),storage=privateCardGraph(root),machine=new CardMachine(program,storage);
+export function productionDriver(seed:string,character:'ironclad'|'volibear'='ironclad',detailedEvents=false){
+  const root=program.initial({seed,character,detailedEvents},100_000_000),storage=privateCardGraph(root),machine=new CardMachine(program,storage);
   let stop=machine.advance();
   function frame():Frame{
     while(stop.kind==='call'&&stop.call.port==='event'){stop=machine.advance(null);}

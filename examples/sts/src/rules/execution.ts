@@ -140,6 +140,7 @@ function defineRules<E>(spec:Parameters<typeof core.defineRules<E>>[0]):core.Rul
  * dispatcher and task queue; no scheduler or interpreter is duplicated here. */
 export const rules={...core,call,query,snapshot,forEach,readComponent,entityEffect,restrict,defineEffect,defineRules,defineEvent,on,replace,install,modify,guardAbility,enqueue,schedule,emit};
 export namespace rules {
+  export type Statement=core.Statement;
   export type Ability<E={}>=core.Ability<E>;
   export type Borrowed<T>=core.Borrowed<T>;
   export type Builder<I,O>=core.Builder<I,O>;

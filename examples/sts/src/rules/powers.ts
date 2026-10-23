@@ -2,6 +2,7 @@ import {effectTrace,causeSchema} from './effect-trace.ts';
 import { typedValue } from './value.schemas.ts';
 import {z} from 'zod';
 import {rules} from './execution.ts';
+import {describeProgram} from './program-descriptions.ts';
 import {entityId} from './resources.schemas.ts';
 import {effectPolicy,effectKindSchema,EffectKind} from './effect-policy.ts';
 import {powerChangeSchema,powerMutableSchema,powerStateSchema,powerSetupSchema,powerDefinitionSchema,powerEntrySchema,registrySchema,powerApplySchema,powerMergeSchema,powerReductionSchema,powerChangedSchema,polaritySchema} from './powers.schemas.ts';
@@ -29,6 +30,7 @@ export const powers=defineRules({requires:[effectPolicy],build(m){
   const announceApplied=m.atom({input:z.object({entity:entityId,application:powerApplySchema}),output:z.undefined(),reads:[],writes:[],emits:[applied],run(_r,payload){return{writes:[],events:[{event:applied,payload}],result:undefined};}});
   const attached=m.own(defineEvent({payload:z.object({entity:entityId,state:powerStateSchema}),dispatch:'immediate'}));
   const immunity={},consumption={},transform={},stages={immunity,consumption,transform};
+  describeProgram(immunity,'状态免疫阶段');describeProgram(consumption,'状态抵消消耗阶段');describeProgram(transform,'状态应用变换阶段');
   const beforeApply=m.own(defineCheckpoint({input:powerApplySchema,output:powerApplySchema,order:{phases:[{phase:immunity,before:[consumption]},{phase:consumption,before:[transform]},{phase:transform}],default:transform}}));
   const emptyDetach=defineEffect<PowerRemoval,void>(b=>b.return(undefined)),emptyMerged=defineEffect<PowerMerged,void>(b=>b.return(undefined));
   const register=m.atom({input:z.object({entity:entityId,definition:powerDefinitionSchema,state:powerStateSchema}),output:z.undefined(),reads:[registry,raw],writes:[registry,raw],emits:[],run(r,input){
@@ -71,7 +73,7 @@ export const powers=defineRules({requires:[effectPolicy],build(m){
   const defaultRemoval=defineQuery({input:powerStateSchema,output:powerMutableSchema,base:(_r,c)=>({level:c.level,active:false,justApplied:c.justApplied})});
   const removeSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>c.remove??defaultRemoval};
   const admitSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>c.admit??alwaysAdmit};
-  const grantKinds=[EffectKind.Attack,EffectKind.Block,EffectKind.Strength,EffectKind.Special].map(effect=>defineQuery({input:z.undefined(),output:effectKindSchema,base:()=>effect}));
+  const grantKinds=[EffectKind.Attack,EffectKind.Block,EffectKind.Strength,EffectKind.Special,EffectKind.BattleFact].map(effect=>defineQuery({input:z.undefined(),output:effectKindSchema,base:()=>effect}));
   const grantSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>grantKinds[c.grantEffect??EffectKind.Special]!};
   const grantAllowed=defineQuery({input:powerApplySchema,output:z.boolean(),selections:[grantSelection],dependencies:[effectPolicy.exports.allowed,effectTrace.exports.current],base:(r,i)=>r.query(effectPolicy.exports.allowed,{actor:i.source??r.query(effectTrace.exports.current,undefined).at(-1)?.owner??i.actor,effect:r.selectedDefinition(grantSelection,i.definition,undefined),polarity:1})});
   const admitted=defineQuery({input:powerApplySchema,output:z.boolean(),selections:[admitSelection],base:(r,input)=>r.selectedDefinition(admitSelection,input.definition,{actor:input.actor,change:{amount:input.amount,source:input.source,debuff:input.debuff}})});
@@ -112,19 +114,24 @@ export const powers=defineRules({requires:[effectPolicy],build(m){
   const remove=defineEffect<number,void>(b=>call(patch,{entity:b.input,next:query(removalValue,b.input)}));
   const clearJustApplied=defineEffect<number,void>(b=>call(patch,{entity:b.input,next:b.read(v=>{const state=v.query(current,v.input);return{level:state.level,active:state.active,justApplied:false};})}));
   const set=defineEffect<{entity:number;next:PowerMutable},void>(b=>call(patch,b.input));
-  const apply=defineEffect<PowerApplication,number|null>(b=>{
+  function application(qualify:boolean){return defineEffect<PowerApplication,number|null>(b=>{
     const checked=b.local<rules.ReplacementResult<PowerApplication>>(),request=b.local<PowerApplication>(),existing=b.local<number|null>(),created=b.local<number>();
-    return sequence(when(b.read(v=>!v.query(grantAllowed,v.input)||!v.query(admitted,v.input)),b.return(null)),b.assign(checked,m.resolve(beforeApply,b.input)),when(b.read(v=>v.get(checked).kind==='cancel'),b.return(null)),
+    return sequence(when(b.read(v=>qualify&&!v.query(grantAllowed,v.input)||!v.query(admitted,v.input)),b.return(null)),b.assign(checked,m.resolve(beforeApply,b.input)),when(b.read(v=>v.get(checked).kind==='cancel'),b.return(null)),
       b.assign(request,b.read(v=>{const result=v.get(checked);if(result.kind==='cancel')throw Error('Canceled status application');if(!v.query(accepting,result.value.registry))throw Error('Status registry is closing');return result.value;})),
-      when(b.read(v=>!v.query(grantAllowed,v.get(request))||!v.query(admitted,v.get(request))),b.return(null)),b.assign(existing,query(find,{registry:b.read(v=>v.get(request).registry),actor:b.read(v=>v.get(request).actor),definition:b.read(v=>v.get(request).definition)})),
+      when(b.read(v=>qualify&&!v.query(grantAllowed,v.get(request))||!v.query(admitted,v.get(request))),b.return(null)),b.assign(existing,query(find,{registry:b.read(v=>v.get(request).registry),actor:b.read(v=>v.get(request).actor),definition:b.read(v=>v.get(request).definition)})),
       when(b.read(v=>v.get(existing)!==null),sequence(call(merge,{entity:b.read(v=>v.get(existing)!),change:b.read(v=>{const r=v.get(request);return{amount:r.amount,source:r.source,debuff:r.debuff,skipFirstDecay:r.skipFirstDecay};})}),call(announceApplied,{entity:b.read(v=>v.get(existing)!),application:request}),b.return(existing))),
       b.assign(created,spawnEntity({kind,definition:b.read(v=>v.get(request).definition),owner:b.read(v=>v.get(request).actor),scope:b.read(v=>v.get(request).scope),setup:b.read(v=>{const r=v.get(request);return{registry:r.registry,actor:r.actor,amount:r.amount,source:r.source,debuff:r.debuff,skipFirstDecay:r.skipFirstDecay};})})),call(announceApplied,{entity:created,application:request}),b.return(created),
     );
-  });
+  });}
+  const apply=application(true);
+  // Intrinsic restoration is only called inside an already admitted compound
+  // lifecycle operation; immunity and content admission still run normally.
+  const restore=application(false);
   const stopRegistry=m.atom({input:entityId,output:z.undefined(),reads:[registry],writes:[registry],emits:[],run(r,entity){return{writes:[{entity,component:registry,value:{...r.component(entity,registry),accepting:false}}],events:[],result:undefined};}});
   const registryKind=m.kind({config:z.undefined(),components:[registry],dispose:defineEffect<rules.EntityLifecycle&{reason:unknown},void>(b=>sequence(
     call(stopRegistry,b.read(v=>v.input.entity)),forEach(query(entries,b.read(v=>v.input.entity)),entry=>despawnEntity({entity:b.read(v=>v.get(entry).entity),reason:{registryClosed:true}})),
     b.return(b.read(v=>{if(v.query(entries,v.input.entity).length!==0)throw Error('Status registry cleanup did not finish');return undefined;})),
   ))});
-  return{exports:{provenance,contributes,kind,registryKind,current,presentation,display,enabled,level,polarity,entries,find,apply,merge,decrement,deactivate,remove,clearJustApplied,set,changed:changed.public,attached:attached.public,applied:applied.public,beforeApply:beforeApply.public,stages}};
+  describeProgram(beforeApply.public,'施加状态前');describeProgram(changed.public,'状态变化后');describeProgram(attached.public,'状态附着后');describeProgram(applied.public,'施加状态后');
+  return{exports:{provenance,contributes,kind,registryKind,current,presentation,display,enabled,level,polarity,entries,find,apply,restore,merge,decrement,deactivate,remove,clearJustApplied,set,changed:changed.public,attached:attached.public,applied:applied.public,beforeApply:beforeApply.public,stages}};
 }});

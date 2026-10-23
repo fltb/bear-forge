@@ -4,14 +4,32 @@ requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CardProgram,CardMachine} from '@bear-forge/card-engine';
-import {cards} from '../src/cards.ts';
+import {rules} from '../src/rules/execution.ts';
+import {cardInstances} from '../src/rules/card-instances.ts';
+import type {CardMetadata} from '../src/rules/card-instances.types.ts';
+import {adventureContent} from '../src/program/adventure.ts';
 import {relicId,type RelicId} from '../src/identifiers.ts';
 import {deckCaseFixture,type DeckCaseStep} from './adventure-case-fixture.ts';
 import {ReferenceClient} from './reference/client.ts';
 import {assertSameState} from './reference/compare.ts';
 
 test('every admitted card metadata variant matches the source rule helpers',async()=>{
-  const reference=await ReferenceClient.create();try{assertSameState(await reference.call({op:'definitions'}),cards,'card metadata');}finally{await reference.close();}
+  const reference=await ReferenceClient.create();try{
+    const expected=await reference.call({op:'definitions'}) as Record<string,CardMetadata>;
+    const definitions=adventureContent.cards.exports.definitions,unsupported=new Set<string>(adventureContent.cards.exports.unsupportedIds);
+    assert.deepEqual(definitions.map(entry=>entry.id).sort(),Object.keys(expected).sort());
+    for(const {id,definition} of definitions){
+      const actual=rules.entityConfiguration(cardInstances.exports.kind,definition).metadata;
+      if(!unsupported.has(id))assertSameState(expected[id],actual,`implemented card metadata ${id}`);
+      else{
+        // These are explicit throwing programs, not implementations whose damage
+        // happens to be zero. Preserve reference coverage of every identity field.
+        const identity=(metadata:CardMetadata)=>({...metadata,variants:metadata.variants.map(({damage,...variant})=>variant)});
+        assertSameState(identity(expected[id]!),identity(actual),`unimplemented card identity ${id}`);
+        assert.deepEqual(actual.variants.map(variant=>variant.damage),[-1,-1],`unimplemented attack capability ${id}`);
+      }
+    }
+  }finally{await reference.close();}
 });
 test('permanent deck preserves source eggs, curses, bottles, copies, Searing Blow and random upgrade semantics',async()=>{
   const reference=await ReferenceClient.create();

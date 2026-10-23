@@ -51,7 +51,7 @@ function fixture(s:Scenario){
   const entry=defineEffect<void,unknown[]>(b=>{
     const player=b.local<number>(),enemy=b.local<number>(),registry=b.local<number>(),tracking=b.local<number>(),last=b.local<number>(),history=b.local<unknown[]>(),catalog=b.local<readonly PowerDefinition[]>(),receipt=b.local<HitResult>();
     const ids={player,enemy,registry,stats:tracking,lastAttack:last};
-    return sequence(b.assign(catalog,Object.values(defensePowers.exports)),b.assign(player,spawnEntity({definition:playerDef,owner:null,scope:0,setup:{hp:80,maxHp:80,block:s.playerBlock??0,energy:0,gold:0}})),
+    return sequence(b.assign(catalog,Object.values(defensePowers.exports.programs).map(program=>program.definition)),b.assign(player,spawnEntity({definition:playerDef,owner:null,scope:0,setup:{hp:80,maxHp:80,block:s.playerBlock??0,energy:0,gold:0}})),
       b.assign(enemy,spawnEntity({definition:enemyDef,owner:null,scope:0,setup:{hp:s.enemyHp??100,maxHp:s.enemyHp??100,block:s.enemyBlock??0,energy:0,gold:0}})),
       b.assign(registry,spawnEntity({definition:registryDef,owner:player,scope:0})),b.assign(tracking,spawnEntity({definition:tracker,owner:player,scope:0,setup:player})),b.assign(last,0),
       ...[s.buffer?call(powers.exports.apply,{registry,actor:player,definition:defensePowers.exports.Buffer,amount:s.buffer,source:null,debuff:false,scope:0}):null,

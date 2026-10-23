@@ -6,10 +6,16 @@ export type StsTypes={setup:Setup;ports:Ports;programResult:Frame;view:Frame;
   actions:{action:{request:{screen:string};action:Action;description:never}};
   player:'0';observation:Observation;event:StsEvent;playerEvent:StsEvent;result:Result;control:never};
 type ReadonlyData<T>=T extends object?{readonly [K in keyof T]:ReadonlyData<T[K]>}:T;
+export const runicDomePublication=Object.freeze({
+  text:'持有时，隐藏敌人意图。',
+  project(frame:ReadonlyData<Frame>){
+    const hidden=frame.game.relics.some(r=>r.id==='RUNIC_DOME');
+    return frame.battle&&hidden?{...frame.battle,intentHidden:true,intents:[],monsters:frame.battle.monsters.map(m=>({...m,moves:[],damage:0,hits:0}))}:frame.battle;
+  },
+});
 /** Borrow only the stable player publication; the execution graph is never exposed. */
 export function observe(frame:ReadonlyData<Frame>):Observation {
-  const hidden=frame.game.relics.some(r=>r.id==='RUNIC_DOME');
-  const battle=frame.battle&&hidden?{...frame.battle,intentHidden:true,intents:[],monsters:frame.battle.monsters.map(m=>({...m,moves:[],damage:0,hits:0}))}:frame.battle;
+  const battle=runicDomePublication.project(frame);
   return {game:frame.game as Frame['game'],battle:battle as Frame['battle'],history:frame.history as Frame['history'],heartDefeated:frame.heartDefeated};
 }
 export const contract:GameContract<StsTypes>={

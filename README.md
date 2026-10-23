@@ -1,6 +1,6 @@
 # Bear Forge
 
-正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；受控执行采用共享 Program 与独立 Context，分支及恢复不重新初始化程序；完整验收进度见 docs/plan.md。训练入口包含现成 DouZero 学习器及两游戏共用的自研 Transformer/PPO，模型通过同一 Policy 和 Card Core 执行。STS/Card Core 的[三层整体优化设计与计划](docs/card-core-spec.md#whole-stack-optimization)已写定，实施与验收状态见 docs/plan.md；玩家搜索和 Rust 迁移继续后置。
+正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；受控执行采用共享 Program 与独立 Context，分支及恢复不重新初始化程序；完整验收进度见 docs/plan.md。训练入口包含现成 DouZero 学习器及两游戏共用的自研 Transformer/PPO，模型通过同一 Policy 和 Card Core 执行。STS/Card Core 的[三层整体优化设计与计划](docs/card-core-spec.md#whole-stack-optimization)已写定，实施与验收状态见 docs/plan.md；玩家搜索已有[下一阶段完整实施方案](docs/player-search-spec.md)，当前仅完成规划，尚未实施或运行；Rust 迁移继续后置。
 
 完整介绍与审核入口：[项目介绍](docs/project-overview.md)。
 

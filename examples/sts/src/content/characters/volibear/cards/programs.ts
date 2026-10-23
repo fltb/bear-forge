@@ -1,3 +1,4 @@
+import {volibearDamageTraining} from '../mechanics/damage-training.ts';
 import {cardTargets} from '../../../../rules/card-targets.ts';
 import {cardEffects} from '../../../../rules/card-effects.ts';
 import {z} from 'zod';
@@ -14,9 +15,10 @@ import type {HitResult} from '../../../../rules/damage.types.ts';
 import type {CardUse,CardConfig} from '../../../../rules/card-instances.types.ts';
 import {standardUpgrade,upgradeOnce,registerCardAbilities} from '../../../cards/shared/lifecycle.ts';
 import {volibearTraining} from '../mechanics/training.ts';
-import {cardAmount,type CardAmount} from '../../../cards/shared/programs.ts';
+import {cardAmount,cardRuleText,describeAmounts,type CardAmount} from '../../../cards/shared/programs.ts';
 import {lightning} from '../mechanics/lightning.ts';
 import type {VolibearCardDescription} from './metadata.ts';
+import {attackProgram,inheritPrograms,hasFixedAttack,programMetadata,programText,describeProgram} from '../../../cards/shared/program-facts.ts';
 
 const {defineRules,defineQuery,defineEffect,sequence,call,when,query,forEach,enqueue}=rules;
 
@@ -24,36 +26,41 @@ const {defineRules,defineQuery,defineEffect,sequence,call,when,query,forEach,enq
  * Fixed per-segment growth is separate from dynamic damage (e.g. current block).
  * Single-target expansion never changes the original CardUse.target.
  */
-export const volibearCardPrograms=defineRules({requires:[cardTargets,cardEffects,battles,attributes,resources,lightning,volibearTraining],build(){
+export const volibearCardPrograms=defineRules({requires:[volibearDamageTraining,cardTargets,cardEffects,battles,attributes,resources,lightning,volibearTraining],build(){
   const fixedBonus=defineQuery({input:cardUseSchema,output:z.int32(),dependencies:[volibearTraining.exports.permanentBonus],base:(r,use)=>r.query(volibearTraining.exports.permanentBonus,use.card)});
   const singleTargets=cardTargets.exports.enemies;
   return {exports:{fixedBonus,singleTargets}};
 }});
 
 export function compose(...effects:rules.Effect<CardUse,void>[]):rules.Effect<CardUse,void>{
-  return defineEffect<CardUse,void>(b=>sequence(...effects.map(effect=>when(
+  return inheritPrograms(defineEffect<CardUse,void>(b=>sequence(...effects.map(effect=>when(
     b.read(v=>v.get(query(battles.exports.current,v.input.battle)).outcome===0),call(effect,b.input),
-  ))));
+  )))),...effects);
 }
 
 /** Keep the ordinary combat queue and lifetime; do not call an alternate executor. */
-export function card(description:VolibearCardDescription,use:rules.Effect<CardUse,void>,policies:Partial<Pick<CardConfig,'canUse'|'created'|'returned'|'removed'>>={}){
-  const fixed=description.metadata.type===0&&description.metadata.variants[0].damage>0;
+export function cardConfig(description:VolibearCardDescription,use:rules.Effect<CardUse,void>,policies:Partial<Pick<CardConfig,'canUse'|'created'|'returned'|'removed'>>={}):CardConfig{
+  const fixed=hasFixedAttack(use),metadata=programMetadata(description.metadata,use);
   const created=rules.defineEffect<rules.EntityLifecycle<import('../../../../rules/card-instances.types.ts').CardSetup>,void>(b=>sequence(
     ...(policies.created?[call(policies.created,b.input)]:[]),
     ...(fixed?[call(registerCardAbilities(volibearTraining.exports.fixedAttack),b.input)]:[]),
   ));
-  return rules.defineEntity(cardInstances.exports.kind,{
-    id:description.id,metadata:description.metadata,use,
-    canUpgrade:upgradeOnce(description.metadata),upgrade:standardUpgrade(description.metadata),...policies,created,
-  });
+  const createdText=policies.created?programText(policies.created):'';
+  if(createdText!==undefined)describeProgram(created,createdText);
+  return {
+    id:description.id,metadata,text:cardRuleText(description.metadata,use,created,...[policies.canUse,policies.returned,policies.removed].filter((effect):effect is NonNullable<typeof effect>=>effect!==undefined)),use,
+    canUpgrade:upgradeOnce(metadata),upgrade:standardUpgrade(metadata),...policies,created,
+  };
+}
+export function card(description:VolibearCardDescription,use:rules.Effect<CardUse,void>,policies:Partial<Pick<CardConfig,'canUse'|'created'|'returned'|'removed'>>={}){
+  return rules.defineEntity(cardInstances.exports.kind,cardConfig(description,use,policies));
 }
 
 export function queued(effect:rules.Effect<CardUse,void>):rules.Effect<CardUse,void>{
-  return defineEffect<CardUse,void>(b=>enqueue(effect,b.input,{
+  return inheritPrograms(defineEffect<CardUse,void>(b=>enqueue(effect,b.input,{
     queue:actionQueue,source:b.read(v=>v.input.card),
     lifetime:b.read(v=>v.get(query(battles.exports.current,v.input.battle)).actionScope),eligible:'captured',
-  }));
+  })),effect);
 }
 
 export type CardHitReceipt={use:CardUse;target:number;hpBefore:number;result:HitResult};
@@ -79,29 +86,31 @@ export function attack(base:CardAmount,count:CardAmount=1,all=false,fixed=true,a
   });
   // Each segment is a queue task: front-queued retaliation resolves before the
   // next segment, and death/victory can cancel remaining work normally.
-  return defineEffect<CardUse,void>(b=>forEach(b.read(v=>Array.from({length:cardAmount(count,v)},(_,i)=>i)),()=>
+  const effect=attackProgram(defineEffect<CardUse,void>(b=>forEach(b.read(v=>Array.from({length:cardAmount(count,v)},(_,i)=>i)),()=>
     forEach(all?query(battles.exports.targets,b.read(v=>v.input.battle)):query(volibearCardPrograms.exports.singleTargets,b.input),target=>
       enqueue(hit,{use:b.input,target},{queue:actionQueue,source:b.read(v=>v.input.card),
         lifetime:b.read(v=>v.get(query(battles.exports.current,v.input.battle)).actionScope),eligible:'captured'}),
     ),
-  ));
+  )),base,fixed);
+  const afterText=afterHit?programText(afterHit):'';
+  return afterText===undefined?effect:describeAmounts(effect,[base,count],(amount,hits)=>`对${all?'全体敌人':'目标'}造成${amount}攻击伤害${hits==='1'?'':`，重复${hits}次`}。${afterText}`);
 }
 
 export function block(base:CardAmount):rules.Effect<CardUse,void>{
-  return queued(defineEffect<CardUse,void>(b=>call(cardEffects.exports.gainBlock,{
+  return describeAmounts(queued(defineEffect<CardUse,void>(b=>call(cardEffects.exports.gainBlock,{
     use:b.input,amount:b.read(v=>Math.max(0,v.get(query(attributes.exports.blockAmount,{actor:v.input.owner,base:cardAmount(base,v)})))),
-  })));
+  }))),[base],amount=>`获得${amount}格挡。`);
 }
 
 export function thunder(base:CardAmount):rules.Effect<CardUse,void>{
-  return queued(defineEffect<CardUse,void>(b=>call(lightning.exports.strike,{
-    battle:b.read(v=>v.input.battle),owner:b.read(v=>v.input.owner),base:b.read(v=>cardAmount(base,v)),exclude:null,
-  })));
+  return describeAmounts(queued(defineEffect<CardUse,void>(b=>call(lightning.exports.strike,{
+    battle:b.read(v=>v.input.battle),owner:b.read(v=>v.input.owner),base:b.read(v=>Math.max(0,cardAmount(base,v)+v.query(volibearDamageTraining.exports.permanentBonus,v.input.card))),exclude:null,
+  }))),[base],amount=>`对全体敌人造成${amount}雷伤。`);
 }
 
 export function draw(count:CardAmount):rules.Effect<CardUse,void>{
-  return queued(defineEffect<CardUse,void>(b=>call(cardPiles.exports.draw,{
+  return describeAmounts(queued(defineEffect<CardUse,void>(b=>call(cardPiles.exports.draw,{
     piles:b.read(v=>v.get(query(battles.exports.current,v.input.battle)).piles),
     count:b.read(v=>Math.max(0,cardAmount(count,v))),
-  })));
+  }))),[count],amount=>`抽${amount}张牌。`);
 }

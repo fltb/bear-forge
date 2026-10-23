@@ -8,6 +8,7 @@ const setup=z.object({battle:z.int32(),card:z.int32(),turn:z.int32()});
 const coupon=setup.extend({play:z.int32().nullable()});
 /** One shared coupon kind makes C15/U25/R10 non-stacking by construction. */
 export const volibearNextPlayDiscount=rules.defineRules({requires:[battles],build(m){
+  const reductionAmount=1;
   const state=m.own(rules.defineComponent({schema:coupon.nullable(),initial:()=>null}));
   const find=rules.defineQuery({input:setup,output:z.int32().nullable(),reads:[state],base:(r,i)=>r.entities(state).find(id=>{
     const s=r.component(id,state);return s!==null&&s.battle===i.battle&&s.card===i.card&&s.turn===i.turn&&s.play===null;
@@ -20,7 +21,7 @@ export const volibearNextPlayDiscount=rules.defineRules({requires:[battles],buil
       const s=r.component(c.source,state);
       return s!==null&&s.battle===c.input.battle&&s.card===c.input.card&&s.turn===r.query(battles.exports.current,s.battle).turn&&(s.play===null||s.play===c.input.play)&&c.value>=0;
     }}),
-    transform:(_r,c)=>Math.max(0,c.value-1),
+    transform:(_r,c)=>Math.max(0,c.value-reductionAmount),
   });
   const consume=m.atom({input:z.object({entity:z.int32(),use:cardUseSchema}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){
     const s=r.component(i.entity,state);if(s===null)throw Error('Missing next-play discount');
@@ -56,5 +57,6 @@ export const volibearNextPlayDiscount=rules.defineRules({requires:[battles],buil
     );
   });
   const pending=rules.defineQuery({input:z.object({battle:z.int32(),card:z.int32()}),output:z.boolean(),dependencies:[find,battles.exports.status],base:(r,i)=>r.query(find,{...i,turn:r.query(battles.exports.status,i.battle).turn})!==null});
-  return {exports:{pending,grant}};
+  const text=`本回合下次实际打出减${reductionAmount}费，最低0；同类效果不叠加，该次重复效果共享减费。`;
+  return {exports:{pending,grant,text}};
 }});

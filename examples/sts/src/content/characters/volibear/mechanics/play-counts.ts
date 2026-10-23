@@ -1,3 +1,4 @@
+import {describeProgram} from '../../../cards/shared/program-facts.ts';
 import {z} from 'zod';
 import {volibearTraining} from './training.ts';
 import {rules} from '../../../../rules/execution.ts';
@@ -17,6 +18,7 @@ const stateSchema=setup.extend({turn:z.int32(),lastPlay:z.int32().nullable(),las
 export const volibearPlayCounts=rules.defineRules({requires:[battles,cardInstances,volibearTraining],build(m){
   const state=m.own(rules.defineComponent({schema:stateSchema.nullable(),initial:()=>null}));
   const counted=m.own(rules.defineEvent({payload:z.object({use:cardUseSchema,ordinal:z.number().int().positive(),targetOrdinal:z.number().int().nonnegative()}),dispatch:'immediate'}));
+  describeProgram(counted.public,'实际攻击牌计数后');
   const find=rules.defineQuery({input:entityId,output:entityId.nullable(),reads:[state],base:(r,battle)=>{
     const ids=r.entities(state).filter(id=>r.component(id,state)?.battle===battle);
     if(ids.length>1)throw Error('Duplicate Volibear battle counter');return ids[0]??null;
@@ -81,5 +83,7 @@ export const volibearPlayCounts=rules.defineRules({requires:[battles,cardInstanc
   const trackBattles=rules.defineEffect<{actor:number;scope:number},void>(b=>rules.install({
     ability:startCounting,source:b.read(v=>v.input.actor),owner:b.read(v=>v.input.actor),environment:{},lifetime:b.read(v=>v.input.scope),
   }));
-  return {exports:{ensure,count,beforeTarget,fixedCount,counted:counted.public,startCounting,trackBattles}};
+  const text='仅记录自身实际打出的非清除攻击牌；每次打出计一次，效果重复和攻击段数不额外计数。指定单体目标计数按牌面目标声明，固定攻击资格由执行构造器声明。';
+  describeProgram(trackBattles,text);
+  return {exports:{ensure,count,beforeTarget,fixedCount,counted:counted.public,startCounting,trackBattles,text}};
 }});

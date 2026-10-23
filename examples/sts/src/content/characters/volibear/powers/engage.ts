@@ -1,4 +1,3 @@
-import {volibearCardDescriptions as descriptions} from '../cards/metadata.ts';
 import {z} from 'zod';
 import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
@@ -7,7 +6,7 @@ import {powers} from '../../../../rules/powers.ts';
 import {resources} from '../../../../rules/resources.ts';
 import type {EnemyActionReceipt} from '../../../../rules/enemies.types.ts';
 import {basicPowers} from '../../../powers/attributes.ts';
-import {counterPolicies,attachAbilities} from '../../../powers/utils.ts';
+import {counterPolicies,defineDescribedPowerWithLifecycle as defineDescribedPower,describedAbility} from '../../../powers/utils.ts';
 import {volibearEngage,type EngageReceipt} from '../mechanics/engage.ts';
 
 export const volibearEngagePowers=rules.defineRules({requires:[volibearEngage,enemies,powers,resources,basicPowers],build(){
@@ -30,9 +29,8 @@ export const volibearEngagePowers=rules.defineRules({requires:[volibearEngage,en
   const grow=rules.on(volibearEngage.exports.completed,{condition:firstAbsorption,effect:rules.defineEffect<rules.ReactionContext<EngageReceipt>,void>(b=>rules.sequence(
     rules.call(consume,b.input),rules.call(resources.exports.gainBlock,{entity:b.read(v=>v.input.owner),amount:b.read(v=>v.input.event.action.absorbed*v.query(powers.exports.level,v.input.source))}),
   ))});
-  return {exports:{
-    ThunderForged:rules.defineEntity(powers.exports.kind,{display:{name:descriptions.U01.metadata.name,text:descriptions.U01.text},...counterPolicies({bits:32,flag:true}),attach:attachAbilities(restore)}),
-    BattleScars:rules.defineEntity(powers.exports.kind,{display:{name:descriptions.U04.metadata.name,text:descriptions.U04.text},...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(scar)},{components:[triggeredTurn]}),
-    EndlessBattle:rules.defineEntity(powers.exports.kind,{display:{name:descriptions.R03.metadata.name,text:descriptions.R03.text},...counterPolicies({bits:32,zeroIsNoop:true}),attach:attachAbilities(grow)},{components:[triggeredTurn]}),
-  }};
+  const ThunderForged=defineDescribedPower('雷霆铸躯',counterPolicies({bits:32,flag:true}),{display:true},describedAbility('敌人完整行动结束且自身存活时，恢复该次行动中攻击实际消耗的格挡；重复获得此状态不重复恢复。',restore));
+  const BattleScars=defineDescribedPower('战痕',counterPolicies({bits:32,zeroIsNoop:true}),{display:true,components:[triggeredTurn]},describedAbility('每回合首次迎战实际吸收伤害且自身存活后，按层数获得力量；未吸收不消耗机会。',scar));
+  const EndlessBattle=defineDescribedPower('战无止境',counterPolicies({bits:32,zeroIsNoop:true}),{display:true,components:[triggeredTurn]},describedAbility('每回合首次迎战实际吸收伤害且自身存活后，获得吸收量乘层数的格挡；未吸收不消耗机会。',grow));
+  return {exports:{ThunderForged:ThunderForged.definition,BattleScars:BattleScars.definition,EndlessBattle:EndlessBattle.definition,programs:{ThunderForged,BattleScars,EndlessBattle},statusTexts:{ThunderForged:ThunderForged.text,BattleScars:BattleScars.text,EndlessBattle:EndlessBattle.text}}};
 }});

@@ -11,7 +11,7 @@ import {shops} from "../rules/shops.ts";
 import {battlePublications} from "./battle-publications.ts";
 import {PublicGameSchema,GameViewSchema} from "../game.schemas.ts";
 import {cardId,relicId,eventId} from "../identifiers.ts";
-import {eventNames,neowDescriptions} from "../pools.ts";
+import {eventNames} from "../pools.ts";
 import type {CardPreview} from "../rules/adventures.types.ts";
 
 const {defineRules,defineQuery}=rules;
@@ -32,13 +32,16 @@ export const adventureViews=defineRules({requires:[adventures,shops,battlePublic
       const card=(c:CardPreview)=>({id:r.definitionConfiguration(c.definition,cardInstances.exports.kind).id,misc:c.misc,upgraded:c.upgraded});
       const selected=(c:typeof s.selection.cards[number])=>({card:card(c.card),deckIndex:c.deckIndex});
       const shopId=r.query(shops.exports.forRun,run),shop=shopId===null?null:r.query(shops.exports.current,shopId);
+      const optionDetails=r.query(adventures.exports.optionDetails,run);
+      // Event publications also occur between nested choices; only publish an assembled menu.
+      const neowReady=s.neow.every((_,index)=>optionDetails?.[String(index)]!==undefined);
       return {
         ascension:s.ascension,act:s.act,floor:s.floor,screen:s.screen,outcome:s.outcome,room:s.room,eventName:eventNames[s.event]!,boss:s.boss,x:s.x,y:s.y,
         hp:p.hp,maxHp:p.maxHp,gold:p.gold,keys:s.keys,deck:deck.deck,bottles:deck.bottles,
         relics:r.query(relics.exports.owned,s.actor).map(id=>r.query(relics.exports.view,id)),potions:belt.slots.slice(0,belt.capacity),
         map:{nodes:s.map.nodes,burningEliteX:s.map.burningEliteX,burningEliteY:s.map.burningEliteY},
         ...(s.screen==='EVENT_SCREEN'&&r.query(adventures.exports.optionDetails,run)?{optionDetails:r.query(adventures.exports.optionDetails,run)!}:{}),
-        ...(s.screen==='EVENT_SCREEN'&&s.event===eventId.NEOW?{neow:s.neow.map(o=>({...o,description:neowDescriptions[o.bonus]!}))}:{}),
+        ...(s.screen==='EVENT_SCREEN'&&s.event===eventId.NEOW&&neowReady?{neow:s.neow.map((o,index)=>({...o,description:optionDetails![String(index)]!}))}:{}),
         ...(s.screen==='CARD_SELECT'?{select:{type:s.selection.type,remaining:s.selection.count,cards:s.selection.cards.map(selected),selected:s.selection.selected.map(selected)}}:{}),
         ...(s.screen==='REWARDS'?{rewards:{...s.rewards,cards:s.rewards.cards.map(list=>list.map(card)),relics:s.rewards.relics.map(def=>relicNumber(r.definitionConfiguration(def,relics.exports.kind).id,r.query(adventures.exports.catalog,run).catalog.relics))}}:{}),
         ...(s.screen==='SHOP_ROOM'&&shop?{shop:{prices:shop.prices,removeCost:shop.removeCost,cards:shop.cards.map(card),potions:shop.potions,relics:shop.relics.map(def=>relicNumber(r.definitionConfiguration(def,relics.exports.kind).id,r.query(adventures.exports.catalog,run).catalog.relics))}}:{}),

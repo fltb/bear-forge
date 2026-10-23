@@ -1,3 +1,4 @@
+import {describeProgram} from '../../../cards/shared/program-facts.ts';
 import {z} from 'zod';
 import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
@@ -5,6 +6,7 @@ import type {CardUse} from '../../../../rules/card-instances.types.ts';
 
 const setup=z.object({battle:z.int32(),turn:z.int32()});
 export const volibearEngagePreparation=rules.defineRules({requires:[battles],build(m){
+  const reduction=1;
   const eligible=rules.defineQuery({input:z.int32(),output:z.boolean(),base:()=>false});
   const declaresEngage=rules.modify(eligible,{
     condition:rules.defineQuery({input:z.custom<rules.ModifierContext<number,boolean>>(),output:z.boolean(),base:(_r,c)=>c.input===c.source}),transform:()=>true,
@@ -17,7 +19,7 @@ export const volibearEngagePreparation=rules.defineRules({requires:[battles],bui
     condition:rules.defineQuery({input:z.custom<rules.ModifierContext<CardUse,number>>(),output:z.boolean(),reads:[state],dependencies:[eligible,battles.exports.current],base:(r,c)=>{
       const s=r.component(c.source,state);return c.input.owner===c.owner&&c.value>=0&&s.battle===c.input.battle&&s.turn===r.query(battles.exports.current,s.battle).turn&&
         (s.play===null||s.play===c.input.play)&&r.query(eligible,c.input.card);
-    }}),transform:(_r,c)=>Math.max(0,c.value-1),
+    }}),transform:(_r,c)=>Math.max(0,c.value-reduction),
   });
   const consume=rules.on(battles.exports.using,{
     condition:rules.defineQuery({input:z.custom<rules.ReactionContext<CardUse>>(),output:z.boolean(),reads:[state],dependencies:[eligible,battles.exports.current],base:(r,c)=>{
@@ -49,5 +51,7 @@ export const volibearEngagePreparation=rules.defineRules({requires:[battles],bui
     );
   });
   const pending=rules.defineQuery({input:z.int32(),output:z.int32(),reads:[state],dependencies:[battles.exports.status],base:(r,battle)=>r.entities(state).filter(id=>{const s=r.component(id,state);return s.battle===battle&&s.turn===r.query(battles.exports.status,battle).turn&&s.play===null;}).length});
-  return {exports:{pending,eligible,declaresEngage,prepare}};
+  const text=`本回合下一张声明迎战效果的牌减${reduction}费，最低0；不叠加，实际打出即消费，放弃可选迎战仍消费。`;
+  describeProgram(prepare,text);
+  return {exports:{pending,eligible,declaresEngage,prepare,text}};
 }});

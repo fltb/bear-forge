@@ -1,3 +1,4 @@
+import {programMetadata} from './shared/program-facts.ts';
 import {ironcladCardPools} from '../characters/ironclad/pools.ts';
 import {basicCards} from "../characters/ironclad/cards/basic.ts";
 import {colorlessBasicCards} from "./colorless/basic.ts";
@@ -46,6 +47,9 @@ export function createCardCatalog(selection:ReturnType<typeof createSelectionCar
   Object.assign(implemented,{DROPKICK:advancedAttacks.exports.Dropkick,FEED:advancedAttacks.exports.Feed,FIEND_FIRE:advancedAttacks.exports.FiendFire,HAND_OF_GREED:colorlessAdvancedAttacks.exports.HandOfGreed,PERFECTED_STRIKE:advancedAttacks.exports.PerfectedStrike,RAMPAGE:advancedAttacks.exports.Rampage,RITUAL_DAGGER:colorlessAdvancedAttacks.exports.RitualDagger,SEVER_SOUL:advancedAttacks.exports.SeverSoul,WHIRLWIND:advancedAttacks.exports.Whirlwind});
   Object.assign(implemented,{DEEP_BREATH:colorlessGenerated.exports.DeepBreath,DISCOVERY:colorlessGenerated.exports.Discovery,HAVOC:generated.exports.Havoc,INFERNAL_BLADE:generated.exports.InfernalBlade,JACK_OF_ALL_TRADES:colorlessGenerated.exports.JackOfAllTrades,CHRYSALIS:colorlessGenerated.exports.Chrysalis,METAMORPHOSIS:colorlessGenerated.exports.Metamorphosis,SPOT_WEAKNESS:generated.exports.SpotWeakness,TRANSMUTATION:colorlessGenerated.exports.Transmutation,VIOLENCE:colorlessGenerated.exports.Violence,DARK_SHACKLES:colorlessSkillCards.exports.DarkShackles});
   Object.assign(implemented,{COMBUST:powerCards.exports.Combust,THE_BOMB:colorlessPowerCards.exports.TheBomb,PANACHE:colorlessPowerCards.exports.Panache,MAYHEM:colorlessPowerCards.exports.Mayhem,MAGNETISM:colorlessPowerCards.exports.Magnetism,SADISTIC_NATURE:colorlessPowerCards.exports.SadisticNature,CLUMSY:curseCards.exports.Clumsy,DECAY:curseCards.exports.Decay,DOUBT:curseCards.exports.Doubt,SHAME:curseCards.exports.Shame,INJURY:curseCards.exports.Injury,NORMALITY:curseCards.exports.Normality,PAIN:curseCards.exports.Pain,PRIDE:curseCards.exports.Pride,WRITHE:curseCards.exports.Writhe});
-  const definitions=(Object.keys(cards) as (keyof typeof cards)[]).map(id=>({id,definition:implemented[id]??rules.defineEntity(cardInstances.exports.kind,{id,metadata:cards[id],use:unsupported,canUpgrade:upgradeOnce(cards[id]),upgrade:standardUpgrade(cards[id])})}));
-  return{exports:{definitions,cardPools:ironcladCardPools}};
+  // Unimplemented entries remain explicit throwing programs; -1 means no admitted
+  // attack capability, not an invented zero-damage implementation.
+  const definitions=(Object.keys(cards) as (keyof typeof cards)[]).map(id=>({id,definition:implemented[id]??rules.defineEntity(cardInstances.exports.kind,{id,metadata:programMetadata(cards[id],unsupported),text:'此牌尚未实现，不能作为已实现规则使用。',use:unsupported,canUpgrade:upgradeOnce(cards[id]),upgrade:standardUpgrade(cards[id])})}));
+  const unsupportedIds=(Object.keys(cards) as (keyof typeof cards)[]).filter(id=>implemented[id]===undefined);
+  return{exports:{definitions,unsupportedIds,cardPools:ironcladCardPools}};
 }});}

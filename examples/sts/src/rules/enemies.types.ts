@@ -2,7 +2,9 @@ import type {rules} from './execution.ts';
 export type EnemySetup={actor:number;battle:number;aiRng:number;ascension:number;slot?:number|undefined;hpRng?:number|undefined;parameters?:number[]|undefined;deferInitialRoll?:boolean|undefined};
 export type EnemyHealth={minimum:number;maximum:number;draw:boolean;discard:{minimum:number;maximum:number}[];parameters:{minimum:number;maximum:number}[]};
 export type EnemyState=EnemySetup&{history:[number,number];opportunityTurn:number;claimed:boolean;prepared:boolean;escaped:boolean;halfDead:boolean};
-export type EnemyIntent={attack:boolean;damage:number;hits:number};
+/** Internal projection: damage is the declared base; attackDamage is the sampled
+ * hit amount before block/reduction, including non-attack damage such as blasts. */
+export type EnemyIntent={attack:boolean;damage:number;attackDamage:number;hits:number};
 export type EnemyAction={enemy:number;actor:number;battle:number;turn:number;move:number;attack:boolean};
 export type EnemyRoll={enemy:number;roll:number};
 export type EnemyConfig={

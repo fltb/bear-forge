@@ -1,3 +1,4 @@
+import {describeProgram} from '../../../cards/shared/program-facts.ts';
 import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {powers} from '../../../../rules/powers.ts';
@@ -10,8 +11,9 @@ import type {CardUse} from '../../../../rules/card-instances.types.ts';
  * Strength Reclaimed cancel only this character's temporary strength.
  */
 export const volibearStrength=rules.defineRules({requires:[battles,powers,basicPowers,ironcladPowers],build(){
+  const temporary=[4,6] as const,reclaimed=[2,3] as const;
   const charge=rules.defineEffect<CardUse,void>(b=>{
-    const amount=b.read(v=>v.input.state.upgraded?6:4);
+    const amount=b.read(v=>temporary[v.input.state.upgraded?1:0]);
     const common={registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
       actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),amount,
       scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope)};
@@ -25,7 +27,7 @@ export const volibearStrength=rules.defineRules({requires:[battles,powers,basicP
     return rules.sequence(
       rules.call(powers.exports.apply,{
         registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
-        actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),amount:b.read(v=>v.input.state.upgraded?3:2),
+        actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),amount:b.read(v=>reclaimed[v.input.state.upgraded?1:0]),
         scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),definition:basicPowers.exports.Strength,debuff:false,
       }),
       b.assign(recovery,rules.query(powers.exports.find,{
@@ -35,5 +37,8 @@ export const volibearStrength=rules.defineRules({requires:[battles,powers,basicP
       rules.when(b.read(v=>v.get(recovery)!==null),rules.call(powers.exports.deactivate,b.read(v=>v.get(recovery)!))),
     );
   });
-  return {exports:{charge,reclaim}};
+  const chargeText=`获得${temporary[0]}（${temporary[1]}）力量，并登记回合结束回收相同数量的力量。`;
+  const reclaimText=`获得${reclaimed[0]}（${reclaimed[1]}）力量，取消当前已登记的临时力量回收。`;
+  describeProgram(charge,chargeText);describeProgram(reclaim,reclaimText);
+  return {exports:{charge,reclaim,chargeText,reclaimText}};
 }});

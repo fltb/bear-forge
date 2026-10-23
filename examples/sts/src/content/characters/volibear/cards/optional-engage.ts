@@ -1,3 +1,4 @@
+import {describeProgram} from '../../../cards/shared/program-facts.ts';
 import {z} from 'zod';
 import {cardUseSchema} from '../../../../rules/card-instances.schemas.ts';
 import {rules} from '../../../../rules/execution.ts';
@@ -32,10 +33,11 @@ export function createVolibearOptionalEngageCards<W,R>(adapter:rules.ChoiceAdapt
           rules.forEach(targets,target=>rules.call(volibearEngage.exports.execute,{use:b.input,target}))),
       );
     });
-    const declaration={created:registerCardAbilities(volibearEngagePreparation.exports.declaresEngage)};
+    describeProgram(optional,'若目标存活且尚有本轮行动机会，可以选择迎战目标；放弃不执行迎战。'+volibearEngage.exports.text);
+    const declaration={created:describeProgram(registerCardAbilities(volibearEngagePreparation.exports.declaresEngage),'')};
     return {exports:{requesting:requesting.public,selected:selected.public,
-      FirstToStrike:card(cards.C04,compose(attack([10,14]),queued(optional)),declaration),
-      FaceTheEnemy:card(cards.C11,compose(block([9,12]),queued(optional)),declaration),
+      FirstToStrike:card(cards.C04,compose(attack([12,16]),queued(optional)),declaration),
+      FaceTheEnemy:card(cards.C11,compose(block([11,14]),queued(optional)),declaration),
     }};
   }});
 }

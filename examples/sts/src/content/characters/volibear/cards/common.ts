@@ -1,3 +1,10 @@
+import {gainCharge,openDomain,amountFormula,conditional} from './operations.ts';
+import {describeProgram,programText} from '../../../cards/shared/program-facts.ts';
+import {cardAmount,describeAmounts} from '../../../cards/shared/programs.ts';
+import {inheritPrograms} from '../../../cards/shared/program-facts.ts';
+import {volibearDomain} from '../mechanics/domain.ts';
+import {volibearThunderGuard} from '../mechanics/thunder-guard.ts';
+import {stormCharge} from '../mechanics/storm-charge.ts';
 import {rules} from '../../../../rules/execution.ts';
 import {attributes} from '../../../../rules/attributes.ts';
 import {battles} from '../../../../rules/battles.ts';
@@ -12,20 +19,10 @@ import {volibearOpportunities} from '../mechanics/opportunities.ts';
 import {volibearStrength} from '../mechanics/strength.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
 
-export const volibearCommonCards=rules.defineRules({requires:[volibearCardPrograms,basicPowers,volibearOpportunities,volibearStrength],build(){
-  const press=rules.defineEffect<CardUse,void>(b=>{
-    const defending=b.local<boolean>();
-    return rules.sequence(
-      b.assign(defending,rules.query(volibearOpportunities.exports.awaitingAttack,b.input)),
-      rules.call(attack([8,11]),b.input),
-      rules.when(defending,rules.call(block([6,8]),b.input),rules.call(draw(1),b.input)),
-    );
-  });
-  const pursue=rules.defineEffect<CardUse,void>(b=>{
-    const acted=b.local<boolean>();
-    return rules.sequence(b.assign(acted,rules.query(volibearOpportunities.exports.acted,b.input)),
-      rules.call(attack([10,14]),b.input),rules.when(acted,rules.call(draw(1),b.input)));
-  });
+export const volibearCommonCards=rules.defineRules({requires:[volibearDomain,volibearThunderGuard,stormCharge,volibearCardPrograms,basicPowers,volibearOpportunities,volibearStrength],build(){
+  const pressAttack=attack([8,11]),pressBlock=block([6,8]),pressDraw=draw(1);
+  const awaitingAttack=describeProgram((v:rules.ReadView<CardUse>)=>v.query(volibearOpportunities.exports.awaitingAttack,v.input),volibearOpportunities.exports.awaitingAttackText);
+  const press=conditional(awaitingAttack,pressBlock,pressDraw,pressAttack);
   const retrieve=queued(rules.defineEffect<CardUse,void>(b=>{
     const selected=b.local<number|null>(),piles=b.local<number>();
     return rules.sequence(
@@ -37,29 +34,32 @@ export const volibearCommonCards=rules.defineRules({requires:[volibearCardProgra
       rules.when(b.read(v=>v.get(selected)!==null),rules.call(cardPiles.exports.moveToHand,{piles,card:b.read(v=>v.get(selected)!)})),
     );
   }));
+  describeProgram(retrieve,'将抽牌堆最靠顶部的攻击移至手牌，不改变其他牌顺序。');
+  const vulnerableAmount=[1,2] as const;
   const vulnerable=rules.defineEffect<CardUse,void>(b=>rules.forEach(rules.query(volibearCardPrograms.exports.singleTargets,b.input),target=>
     rules.when(rules.query(attributes.exports.damageable,target),rules.call(powers.exports.apply,{
       definition:basicPowers.exports.EnemyVulnerable,
       registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
       scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
-      actor:target,source:b.read(v=>v.input.owner),amount:b.read(v=>v.input.state.upgraded?2:1),debuff:true,
+      actor:target,source:b.read(v=>v.input.owner),amount:b.read(v=>cardAmount(vulnerableAmount,v)),debuff:true,
     })),
   ));
+  describeAmounts(vulnerable,[vulnerableAmount],n=>`对目标施加${n}易伤。`);
   const wave=compose(attack([5,7],1,true),thunder([2,3]));
   return {exports:{
-    Approach:card(cards.C01,attack([5,8])),
+    Approach:card(cards.C01,attack([6,9])),
     TwinClaws:card(cards.C02,attack([5,7],2)),
-    ThunderSmash:card(cards.C03,compose(attack([16,21]),thunder([5,7]))),
-    LightningClaw:card(cards.C05,compose(attack([7,10]),thunder([3,4]))),
+    ThunderSmash:card(cards.C03,compose(attack([20,26]),thunder([5,7]))),
+    LightningClaw:card(cards.C05,compose(attack([10,14]),queued(gainCharge(2)))),
     PressForward:card(cards.C06,press),
     FollowScent:card(cards.C07,compose(attack([8,11]),retrieve)),
     TearWound:card(cards.C08,compose(attack([8,10]),queued(vulnerable))),
     ThunderSweep:card(cards.C09,compose(attack([6,8],1,true),thunder([3,4]))),
-    ThickFur:card(cards.C12,block(v=>(v.input.state.upgraded?11:8)+Math.max(0,v.get(rules.query(attributes.exports.strength,v.input.owner))))),
-    ThunderGuard:card(cards.C14,compose(block([8,11]),thunder([3,4]))),
+    ThickFur:card(cards.C12,block(amountFormula([10,13],(base,v)=>base+Math.max(0,v.get(rules.query(attributes.exports.strength,v.input.owner))),base=>`${base}+正力量`))),
+    ThunderGuard:card(cards.C14,compose(queued(openDomain(1)),queued(volibearThunderGuard.exports.apply))),
     Charge:card(cards.C17,queued(volibearStrength.exports.charge)),
-    Pursuit:card(cards.C20,pursue),
-    HoldGround:card(cards.C21,block(v=>(v.input.state.upgraded?11:8)+(v.get(rules.query(volibearOpportunities.exports.acted,v.input))?4:0))),
+    Pursuit:card(cards.C20,compose(attack([10,14]),draw(1))),
+    HoldGround:card(cards.C21,compose(block([8,11]),queued(openDomain(1)),draw(1))),
     ThunderShock:card(cards.C22,compose(wave,wave)),
   }};
 }});

@@ -1,3 +1,5 @@
+import {concreteCard,cardBlock} from '../../../cards/shared/programs.ts';
+import {programMetadata,describeProgram,amountText} from '../../../cards/shared/program-facts.ts';
 import {cardEffects} from '../../../../rules/card-effects.ts';
 import { typedValue } from '../../../../rules/value.schemas.ts';
 import {z} from 'zod';
@@ -15,8 +17,8 @@ import {registerCardAbilities,standardUpgrade,upgradeOnce} from "../../../cards/
 const {defineRules,defineQuery,defineEntity,defineEffect,on,call,query,enqueue}=rules;
 export const ironcladPileCards=defineRules({requires:[cardEffects,cardPiles,attributes,battles],build(){
   const self=defineQuery({input:typedValue<rules.ReactionContext<PileCard>>(),output:z.boolean(),base:(_r,c)=>c.event.card===c.source});
-  const sentinelExhaust=on(cardPiles.exports.exhausting,{condition:self,order:cardPiles.exports.stages.card,effect:defineEffect<rules.ReactionContext<PileCard>,void>(b=>call(resources.exports.gainEnergy,{entity:b.read(v=>v.input.owner),amount:b.read(v=>v.query(cardInstances.exports.current,v.input.source).upgraded?3:2)}))});
-  const sentinelUse=defineEffect<CardUse,void>(b=>enqueue(cardEffects.exports.gainBlock,{use:b.input,amount:query(attributes.exports.blockAmount,b.read(v=>({actor:v.input.owner,base:v.input.state.upgraded?8:5})))},
-    {queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));
-  return{exports:{Sentinel:defineEntity(cardInstances.exports.kind,{id:'SENTINEL',metadata:cards.SENTINEL,use:sentinelUse,canUpgrade:upgradeOnce(cards.SENTINEL),upgrade:standardUpgrade(cards.SENTINEL),created:registerCardAbilities(sentinelExhaust)})}};
+  const exhaustEnergy=[2,3] as const;
+  const sentinelExhaust=describeProgram(on(cardPiles.exports.exhausting,{condition:self,order:cardPiles.exports.stages.card,effect:defineEffect<rules.ReactionContext<PileCard>,void>(b=>call(resources.exports.gainEnergy,{entity:b.read(v=>v.input.owner),amount:b.read(v=>exhaustEnergy[v.query(cardInstances.exports.current,v.input.source).upgraded?1:0])}))}),`本牌被消耗时获得${amountText(exhaustEnergy)}能量。`);
+  const sentinelUse=cardBlock([5,8]);
+  return{exports:{Sentinel:concreteCard('SENTINEL',sentinelUse,{created:registerCardAbilities(sentinelExhaust)})}};
 }});

@@ -36,7 +36,7 @@ export const cardInstances=defineRules({requires:[zones],build(m){
     );
   });
   const kind:rules.EntityKind<CardConfig,CardSetup>=m.kind({config:z.object({
-    id:z.string(),metadata:metadataSchema,use:typedValue<CardConfig['use']>(),canUpgrade:typedValue<CardConfig['canUpgrade']>(),upgrade:typedValue<CardConfig['upgrade']>(),
+    id:z.string(),metadata:metadataSchema,text:z.string().optional(),use:typedValue<CardConfig['use']>(),canUpgrade:typedValue<CardConfig['canUpgrade']>(),upgrade:typedValue<CardConfig['upgrade']>(),
     returned:typedValue<NonNullable<CardConfig['returned']>>().optional(),canTransform:typedValue<NonNullable<CardConfig['canTransform']>>().optional(),canUse:typedValue<NonNullable<CardConfig['canUse']>>().optional(),endTurn:typedValue<NonNullable<CardConfig['endTurn']>>().optional(),
     upgradeCount:typedValue<NonNullable<CardConfig['upgradeCount']>>().optional(),
     created:typedValue<NonNullable<CardConfig['created']>>().optional(),removed:typedValue<NonNullable<CardConfig['removed']>>().optional(),

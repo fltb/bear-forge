@@ -29,7 +29,9 @@ const fixtureRules=defineRules({requires:[logger,cardInstances],build(){
     call(logger.exports.save,{entity:b.read(v=>v.input.owner!),value:query(cardInstances.exports.current,b.read(v=>v.input.entity))}),
   );});
   const use=defineEffect<CardUse,void>(b=>b.return(undefined));
-  return{exports:{card:defineEntity(cardInstances.exports.kind,{id:'BASH',metadata:cards.BASH,use,canUpgrade:upgradeOnce(cards.BASH),upgrade:standardUpgrade(cards.BASH),created,removed})}};
+  // This lifecycle-only fixture has no attack behavior; do not duplicate production damage values.
+  const metadata={...cards.BASH,variants:[{...cards.BASH.variants[0],damage:-1},{...cards.BASH.variants[1],damage:-1}] as const};
+  return{exports:{card:defineEntity(cardInstances.exports.kind,{id:'BASH',metadata,use,canUpgrade:upgradeOnce(metadata),upgrade:standardUpgrade(metadata),created,removed})}};
 }});
 const entry=defineEffect<void,CardState|null>(b=>{const log=b.local<number>(),card=b.local<number>();return sequence(
   b.assign(log,spawnEntity({definition:logDefinition,owner:null,scope:0})),b.assign(card,spawnEntity({definition:fixtureRules.exports.card,owner:log,scope:0,setup:{mode:CardMode.Permanent,master:null,uniqueId:-1,specialData:5,upgraded:false}})),

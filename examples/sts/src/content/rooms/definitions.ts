@@ -18,6 +18,19 @@ import type {AdventureRewards,CardPreview,RelicTier} from "../../rules/adventure
 import type {Room} from "../../map.types.ts";
 import type {RelicId} from "../../identifiers.ts";
 import {eventId} from "../../identifiers.ts";
+import {describeProgram,programText} from '../cards/shared/program-facts.ts';
+
+/** These combinators execute their children; an opaque child stays executable but
+ * prevents claiming a complete description of the parent. */
+export function roomSequence(...children:rules.Effect<number,void>[]){
+  const effect=rules.defineEffect<number,void>(b=>rules.sequence(...children.map(child=>rules.call(child,b.input))));
+  const texts=children.map(programText);
+  return texts.every(text=>text!==undefined)?describeProgram(effect,texts.join('，')):effect;
+}
+function roomText(effect:rules.Effect<number,void>,prefix:string){
+  const text=programText(effect);
+  return text===undefined?{}:{text:prefix+text+'。'};
+}
 
 export type AdventureEventExports={open:rules.Effect<number,void>;resolve:rules.Effect<number,Room>};
 const {defineRules,defineQuery,defineEffect,defineEntity,sequence,when,forEach,call,query}=rules;
@@ -42,29 +55,78 @@ export function createAdventureRooms(ui:rules.RuleModule<AdventureChoiceExports>
       call(battleReward,b.input),call(adventures.exports.incrementFloor,{run:b.input}),call(adventureProgression.exports.reseedFloor,b.input),call(adventures.exports.notifyEntered,{run:b.input,room:'BOSS_TREASURE'}),call(adventures.exports.setRoom,{run:b.input,room:'BOSS_TREASURE',event:eventId.INVALID}),b.assign(offered,[]),
       forEach([0,1,2],()=>sequence(b.assign(relic,call(acquisition.exports.draw,{run:b.input,tier:'boss',shop:false,front:true,screenless:false})),b.assign(offered,b.read(v=>[...v.get(offered),v.get(relic)])))),call(adventures.exports.setBossRelics,{run:b.input,relics:offered}),b.assign(chosen,call(ui.exports.choose,{run:b.input,actions:[0,1,2,3]})),when(b.read(v=>(v.get(chosen)&255)<3),call(acquisition.exports.give,{run:b.input,definition:b.read(v=>v.get(offered)[v.get(chosen)&255]!)})),call(adventureProgression.exports.nextAct,b.input),
     );});
-    const rest=defineEffect<number,void>(b=>{const choice=b.local<number>(),cards=b.local<CardPreview[]>(),rank=b.local<RelicTier>(),relic=b.local<RelicDefinition>();return sequence(
-      call(adventures.exports.setScene,{run:b.input,screen:'REST_ROOM',continuation:true}),b.assign(choice,call(ui.exports.choose,{run:b.input,actions:b.read(v=>{const s=v.query(adventures.exports.status,v.input),out:number[]=[];if(!v.query(adventures.exports.hasRelic,{run:v.input,id:'COFFEE_DRIPPER'}))out.push(0);if(!v.query(adventures.exports.hasRelic,{run:v.input,id:'FUSION_HAMMER'})&&v.query(permanentDecks.exports.current,s.deck).upgradeable>0)out.push(1);if(!s.keys.red)out.push(2);if(v.query(adventures.exports.hasRelic,{run:v.input,id:'GIRYA'})&&v.query(relicData,{run:v.input,id:'GIRYA'})!==3)out.push(3);if(v.query(adventures.exports.hasRelic,{run:v.input,id:'PEACE_PIPE'}))out.push(4);if(v.query(adventures.exports.hasRelic,{run:v.input,id:'SHOVEL'}))out.push(5);return out.length?out:[6];})})),b.assign(choice,b.read(v=>v.get(choice)&255)),
-      when(b.read(v=>v.get(choice)===0),sequence(
-        call(resources.exports.heal,b.read(v=>{const entity=v.query(adventures.exports.bindings,v.input).actor;return{entity,amount:Math.trunc(Math.fround(Math.fround(v.query(resources.exports.vitality,entity).maxHp)*Math.fround(.3)))+(v.query(adventures.exports.hasRelic,{run:v.input,id:'REGAL_PILLOW'})?15:0)};})),
-        when(query(adventures.exports.hasRelic,{run:b.input,id:'DREAM_CATCHER'}),sequence(b.assign(cards,call(adventureDraws.exports.reward,{run:b.input,room:'REST'})),call(reward,{run:b.input,reward:{...emptyAdventureRewards(),cards:[cards]}}))),
-      )),
+    function disallowRest(id:'COFFEE_DRIPPER'|'FUSION_HAMMER',action:string){return{
+      allowed:defineQuery({input:z.number(),output:z.boolean(),dependencies:[adventures.exports.hasRelic],base:(r,run)=>!r.query(adventures.exports.hasRelic,{run,id})}),text:`篝火不能${action}。`,
+    };}
+    const coffeeDripper=disallowRest('COFFEE_DRIPPER','休息'),fusionHammer=disallowRest('FUSION_HAMMER','升级牌');
+    function owned(id:RelicId,child:rules.Effect<number,void>){
+      const effect=defineEffect<number,void>(b=>when(query(adventures.exports.hasRelic,{run:b.input,id}),call(child,b.input)));
+      const text=programText(child);return text===undefined?effect:describeProgram(effect,text);
+    }
+    function heal(amount:number){return describeProgram(defineEffect<number,void>(b=>call(resources.exports.heal,{entity:b.read(v=>v.query(adventures.exports.bindings,v.input).actor),amount})),`自身回复${amount}生命`);}
+    // The bonus is part of the same heal call, not a second heal/event.
+    function restHealing(bonus:number){
+      const bonusAmount=defineQuery({input:z.number(),output:z.number(),dependencies:[adventures.exports.hasRelic],base:(r,run)=>r.query(adventures.exports.hasRelic,{run,id:'REGAL_PILLOW'})?bonus:0});
+      return {effect:defineEffect<number,void>(b=>call(resources.exports.heal,b.read(v=>{const entity=v.query(adventures.exports.bindings,v.input).actor;return{entity,amount:Math.trunc(Math.fround(Math.fround(v.query(resources.exports.vitality,entity).maxHp)*Math.fround(.3)))+v.query(bonusAmount,v.input)};}))),text:`篝火休息时额外回复${bonus}生命。`};
+    }
+    const regalPillow=restHealing(15);
+    function cardReward(room:Room){return describeProgram(defineEffect<number,void>(b=>{const cards=b.local<CardPreview[]>();return sequence(b.assign(cards,call(adventureDraws.exports.reward,{run:b.input,room})),call(reward,{run:b.input,reward:{...emptyAdventureRewards(),cards:[cards]}}));}),'获得1组卡牌奖励');}
+    function afterRestHealing(healing:rules.Effect<number,void>,child:rules.Effect<number,void>){return {effect:roomSequence(healing,child),...roomText(child,'篝火休息后，')};}
+    const dreamCatcher=afterRestHealing(regalPillow.effect,owned('DREAM_CATCHER',cardReward('REST')));
+    function campfireOption(id:'GIRYA'|'PEACE_PIPE'|'SHOVEL',action:string,child:rules.Effect<number,void>,maximum?:number){return{
+      available:defineQuery({input:z.number(),output:z.boolean(),dependencies:[adventures.exports.hasRelic,relicData],base:(r,run)=>r.query(adventures.exports.hasRelic,{run,id})&&(maximum===undefined||r.query(relicData,{run,id})!==maximum)}),
+      effect:child,...roomText(child,`篝火可选择${action}，`),
+    };}
+    const girya=campfireOption('GIRYA','举重',describeProgram(defineEffect<number,void>(b=>call(interact,{run:b.input,id:'GIRYA'})),acquisition.exports.counterPrograms.GIRYA.text),acquisition.exports.counterPrograms.GIRYA.maximum);
+    function pipePreparation(count:number){return describeProgram(defineEffect<number,void>(b=>call(acquisition.exports.selections.exports.prepare,{run:b.input,type:4,count,provided:null,stream:b.read(v=>v.query(adventures.exports.selection,v.input).selection.transformStream)})),`准备移除${count}张牌；当前流程仅准备选牌，不执行删除`);}
+    const peacePipe=campfireOption('PEACE_PIPE','准备移除牌',pipePreparation(1));
+    const digRelic=describeProgram(defineEffect<number,void>(b=>{const rank=b.local<RelicTier>(),relic=b.local<RelicDefinition>();return sequence(b.assign(rank,call(loot.exports.tier,{run:b.input,elite:false})),b.assign(relic,call(acquisition.exports.draw,{run:b.input,tier:rank,shop:false,front:true,screenless:false})),call(reward,{run:b.input,reward:{...emptyAdventureRewards(),relics:[relic]}}));}),'获得1件随机遗物');
+    const shovel=campfireOption('SHOVEL','挖掘',digRelic);
+    const rest=defineEffect<number,void>(b=>{const choice=b.local<number>();return sequence(
+      call(adventures.exports.setScene,{run:b.input,screen:'REST_ROOM',continuation:true}),b.assign(choice,call(ui.exports.choose,{run:b.input,actions:b.read(v=>{const s=v.query(adventures.exports.status,v.input),out:number[]=[];if(v.query(coffeeDripper.allowed,v.input))out.push(0);if(v.query(fusionHammer.allowed,v.input)&&v.query(permanentDecks.exports.current,s.deck).upgradeable>0)out.push(1);if(!s.keys.red)out.push(2);if(v.query(girya.available,v.input))out.push(3);if(v.query(peacePipe.available,v.input))out.push(4);if(v.query(shovel.available,v.input))out.push(5);return out.length?out:[6];})})),b.assign(choice,b.read(v=>v.get(choice)&255)),
+      when(b.read(v=>v.get(choice)===0),call(dreamCatcher.effect,b.input)),
       when(b.read(v=>v.get(choice)===1),call(acquisition.exports.selections.exports.select,{run:b.input,type:3,count:1,provided:null,stream:b.read(v=>v.query(adventures.exports.selection,v.input).selection.transformStream)})),
       when(b.read(v=>v.get(choice)===2),call(adventures.exports.setKeys,{run:b.input,keys:b.read(v=>({...v.query(adventures.exports.position,v.input).keys,red:true}))})),
-      when(b.read(v=>v.get(choice)===3),call(interact,{run:b.input,id:'GIRYA'})),
-      when(b.read(v=>v.get(choice)===4),call(acquisition.exports.selections.exports.prepare,{run:b.input,type:4,count:1,provided:null,stream:b.read(v=>v.query(adventures.exports.selection,v.input).selection.transformStream)})),
-      when(b.read(v=>v.get(choice)===5),sequence(b.assign(rank,call(loot.exports.tier,{run:b.input,elite:false})),b.assign(relic,call(acquisition.exports.draw,{run:b.input,tier:rank,shop:false,front:true,screenless:false})),call(reward,{run:b.input,reward:{...emptyAdventureRewards(),relics:[relic]}}))),
+      when(b.read(v=>v.get(choice)===3),call(girya.effect,b.input)),
+      when(b.read(v=>v.get(choice)===4),call(peacePipe.effect,b.input)),
+      when(b.read(v=>v.get(choice)===5),call(shovel.effect,b.input)),
       call(mapKeep,b.input),
     );});
-    const treasure=defineEffect<number,void>(b=>{const size=b.local<number>(),roll=b.local<number>(),choice=b.local<number>(),rank=b.local<RelicTier>(),relic=b.local<RelicDefinition>(),rewardValue=b.local<AdventureRewards>(),card=b.local<CardPreview>(),coin=b.local<boolean>();return sequence(
+    type ChestInput={run:number;rewards:AdventureRewards};
+    function chestRelicDraw(commonChance:number){return describeProgram(defineEffect<number,RelicDefinition>(b=>{const coin=b.local<boolean>(),rank=b.local<RelicTier>(),relic=b.local<RelicDefinition>();return sequence(
+      b.assign(coin,call(random.exports.chance,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input).streams.relic),chance:commonChance})),b.assign(rank,b.read(v=>v.get(coin)?'common':'uncommon')),b.assign(relic,call(acquisition.exports.draw,{run:b.input,tier:rank,shop:false,front:true,screenless:false})),b.return(relic),
+    );}),`遗物（普通概率${commonChance*100}%，否则罕见）`);}
+    function extraChestRelic(draw:rules.Effect<number,RelicDefinition>){
+      const effect=defineEffect<ChestInput,AdventureRewards>(b=>{const relic=b.local<RelicDefinition>();return sequence(
+        when(b.read(v=>v.query(relicData,{run:v.input.run,id:'MATRYOSHKA'})<=0),b.return(b.read(v=>v.input.rewards))),
+        b.assign(relic,call(draw,b.read(v=>v.input.run))),call(interact,{run:b.read(v=>v.input.run),id:'MATRYOSHKA'}),b.return(b.read(v=>({...v.input.rewards,relics:[v.get(relic)]}))),
+      );});
+      const text=programText(draw),initial=acquisition.exports.counterPrograms.MATRYOSHKA.initial;
+      return {effect,text:text===undefined?undefined:initial===0?'当前实现初始可用次数为0，不提供额外宝箱遗物。':`接下来${initial}个打开的非Boss宝箱额外获得1件${text}。`};
+    }
+    const matryoshka=extraChestRelic(chestRelicDraw(.75));
+    function obtainCurse(count:number){return describeProgram(defineEffect<number,void>(b=>{const card=b.local<CardPreview>();return sequence(b.assign(card,call(adventureDraws.exports.curse,b.input)),call(permanentDecks.exports.obtain,{deck:b.read(v=>v.query(adventures.exports.bindings,v.input).deck),definition:b.read(v=>v.get(card).definition),upgraded:false,specialData:0,count,upgrade:false}));}),`获得${count}张随机诅咒`);}
+    const curseEffect=owned('CURSED_KEY',obtainCurse(1));
+    const cursedKey={effect:curseEffect,...roomText(curseEffect,'打开非Boss宝箱时，')};
+    function baseChestRelic(id:'NLOTHS_HUNGRY_FACE'){return {effect:defineEffect<ChestInput&{relic:RelicDefinition},AdventureRewards>(b=>sequence(
+      when(b.read(v=>v.query(relicData,{run:v.input.run,id})>0),sequence(call(interact,{run:b.read(v=>v.input.run),id}),b.return(b.read(v=>v.input.rewards)))),
+      b.return(b.read(v=>({...v.input.rewards,relics:[...v.input.rewards.relics,v.input.relic]}))),
+    )),text:`接下来${acquisition.exports.counterPrograms[id].initial}个打开的非Boss宝箱不给基础遗物（不影响额外遗物）。`};}
+    const hungryFace=baseChestRelic('NLOTHS_HUNGRY_FACE');
+    const treasure=defineEffect<number,void>(b=>{const size=b.local<number>(),roll=b.local<number>(),choice=b.local<number>(),relic=b.local<RelicDefinition>(),rewardValue=b.local<AdventureRewards>();return sequence(
       b.assign(roll,call(random.exports.int,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input).streams.treasure),start:0,end:99})),b.assign(size,b.read(v=>v.get(roll)<50?0:v.get(roll)<83?1:2)),b.assign(roll,call(random.exports.int,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input).streams.treasure),start:0,end:99})),call(adventures.exports.setChest,{run:b.input,chest:b.read(v=>{const sizeValue=v.get(size),rollValue=v.get(roll),common=[75,35,0][sizeValue]!,uncommon=[25,50,75][sizeValue]!;return{size:sizeValue,haveGold:rollValue<[50,35,50][sizeValue]!,tier:rollValue<common?'common' as const:rollValue<common+uncommon?'uncommon' as const:'rare' as const};})}),
       b.assign(choice,call(ui.exports.choose,{run:b.input,actions:[0,1]})),when(b.read(v=>(v.get(choice)&255)!==0),sequence(call(mapKeep,b.input),b.return(undefined))),b.assign(rewardValue,emptyAdventureRewards()),
-      when(b.read(v=>v.query(relicData,{run:v.input,id:'MATRYOSHKA'})>0),sequence(b.assign(coin,call(random.exports.chance,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input).streams.relic),chance:.75})),b.assign(rank,b.read(v=>v.get(coin)?'common':'uncommon')),b.assign(relic,call(acquisition.exports.draw,{run:b.input,tier:rank,shop:false,front:true,screenless:false})),b.assign(rewardValue,b.read(v=>({...v.get(rewardValue),relics:[v.get(relic)]}))),call(interact,{run:b.input,id:'MATRYOSHKA'}))),
-      when(query(adventures.exports.hasRelic,{run:b.input,id:'CURSED_KEY'}),sequence(b.assign(card,call(adventureDraws.exports.curse,b.input)),call(permanentDecks.exports.obtain,{deck:b.read(v=>v.query(adventures.exports.bindings,v.input).deck),definition:b.read(v=>v.get(card).definition),upgraded:false,specialData:0,count:1,upgrade:false}))),
+      b.assign(rewardValue,call(matryoshka.effect,{run:b.input,rewards:rewardValue})),
+      call(cursedKey.effect,b.input),
       when(b.read(v=>v.query(adventures.exports.rewards,v.input).chest!.haveGold),sequence(b.assign(roll,call(random.exports.floatRange,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input).streams.treasure),start:b.read(v=>Math.fround([25,50,75][v.get(size)]!*Math.fround(.9))),end:b.read(v=>Math.fround([25,50,75][v.get(size)]!*Math.fround(1.1)))})),b.assign(rewardValue,b.read(v=>({...v.get(rewardValue),gold:[Math.round(v.get(roll))]}))))),
-      b.assign(relic,call(acquisition.exports.draw,{run:b.input,tier:b.read(v=>v.query(adventures.exports.rewards,v.input).chest!.tier),shop:false,front:true,screenless:false})),when(b.read(v=>v.query(relicData,{run:v.input,id:'NLOTHS_HUNGRY_FACE'})>0),call(interact,{run:b.input,id:'NLOTHS_HUNGRY_FACE'}),b.assign(rewardValue,b.read(v=>({...v.get(rewardValue),relics:[...v.get(rewardValue).relics,v.get(relic)]})))),b.assign(rewardValue,b.read(v=>({...v.get(rewardValue),sapphireKey:!v.query(adventures.exports.position,v.input).keys.blue}))),call(reward,{run:b.input,reward:rewardValue}),call(mapKeep,b.input),
+      b.assign(relic,call(acquisition.exports.draw,{run:b.input,tier:b.read(v=>v.query(adventures.exports.rewards,v.input).chest!.tier),shop:false,front:true,screenless:false})),b.assign(rewardValue,call(hungryFace.effect,{run:b.input,rewards:rewardValue,relic})),b.assign(rewardValue,b.read(v=>({...v.get(rewardValue),sapphireKey:!v.query(adventures.exports.position,v.input).keys.blue}))),call(reward,{run:b.input,reward:rewardValue}),call(mapKeep,b.input),
     );});
-    const shop=defineEffect<number,void>(b=>sequence(when(query(adventures.exports.hasRelic,{run:b.input,id:'MEAL_TICKET'}),call(resources.exports.heal,{entity:b.read(v=>v.query(adventures.exports.bindings,v.input).actor),amount:15})),call(merchant.exports.open,b.input),call(adventures.exports.setScene,{run:b.input,screen:'MAP_SCREEN',continuation:true})));
+    function onShopEntry(child:rules.Effect<number,void>){return {
+      effect:defineEffect<number,void>(b=>sequence(call(child,b.input),call(merchant.exports.open,b.input),call(adventures.exports.setScene,{run:b.input,screen:'MAP_SCREEN',continuation:true}))),
+      ...roomText(child,'进入商店时，'),
+    };}
+    const mealTicket=onShopEntry(owned('MEAL_TICKET',heal(15))),shop=mealTicket.effect;
     const room=(key:Room,enter:rules.Effect<number,void>)=>({key,definition:defineEntity(rooms.exports.kind,{enter:defineEffect<{run:number;room:number},void>(b=>call(enter,b.read(v=>v.input.run)))})});
-    return{exports:{definitions:[room('MONSTER',ordinaryFight),room('ELITE',ordinaryFight),room('BOSS',boss),room('REST',rest),room('TREASURE',treasure),room('SHOP',shop),room('EVENT',events.exports.open)],resolveEvent:events.exports.resolve}};
+    return{exports:{definitions:[room('MONSTER',ordinaryFight),room('ELITE',ordinaryFight),room('BOSS',boss),room('REST',rest),room('TREASURE',treasure),room('SHOP',shop),room('EVENT',events.exports.open)],resolveEvent:events.exports.resolve,loot,relicTexts:Object.freeze(Object.fromEntries(Object.entries({COFFEE_DRIPPER:coffeeDripper.text,FUSION_HAMMER:fusionHammer.text,REGAL_PILLOW:regalPillow.text,DREAM_CATCHER:dreamCatcher.text,GIRYA:girya.text,PEACE_PIPE:peacePipe.text,SHOVEL:shovel.text,MATRYOSHKA:matryoshka.text,CURSED_KEY:cursedKey.text,NLOTHS_HUNGRY_FACE:hungryFace.text,MEAL_TICKET:mealTicket.text}).filter((entry):entry is [string,string]=>entry[1]!==undefined)))}};
   }});
 }

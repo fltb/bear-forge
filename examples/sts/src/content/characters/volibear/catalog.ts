@@ -1,3 +1,4 @@
+import {volibearStormCards as storm} from './cards/storm.ts';
 import type {CharacterCardPools} from '../../../rules/adventures.types.ts';
 import {combatColorlessPool} from '../../../pools.ts';
 import {volibearBasicCards as basic} from './cards/basic.ts';
@@ -21,8 +22,27 @@ import {createVolibearOptionalEngageCards} from './cards/optional-engage.ts';
  * definition references exclusively. The host provides real choice ports. */
 export function createVolibearCatalog<W,R>(choices:rules.RuleModule<CardChoiceExports>,screens:VolibearSelectionScreens,engageAdapter:rules.ChoiceAdapter<boolean,CardUse,W,R>,requires:readonly rules.RuleModule<unknown>[]){
   const selections=createVolibearSelectionCards(choices,screens),optional=createVolibearOptionalEngageCards(engageAdapter,requires);
-  return rules.defineRules({requires:[basic,common,uncommon,rare,engage,domain,growth,lethal,x_cost,selections,optional],build(){
+  return rules.defineRules({requires:[storm,basic,common,uncommon,rare,engage,domain,growth,lethal,x_cost,selections,optional],build(){
     const byCode:Record<keyof typeof descriptions,PermanentCardDefinition>={
+    C23:storm.exports.GatheringClouds,
+    C24:storm.exports.Thunderbolt,
+    C25:storm.exports.LightningSeed,
+    U32:storm.exports.WelcomeThunder,
+    U33:storm.exports.Embers,
+    U34:storm.exports.ThunderArmor,
+    U35:storm.exports.ThunderChallenge,
+    U36:storm.exports.GatherCharge,
+    U37:storm.exports.ConvergingStorm,
+    U38:storm.exports.StormRush,
+    R17:storm.exports.ThunderJudgment,
+    R18:storm.exports.ThunderPool,
+    R19:storm.exports.UnendingStorm,
+    R20:storm.exports.ThunderLance,
+    R21:storm.exports.ThunderAvatar,
+    R23:storm.exports.RendSky,
+    R24:storm.exports.ThunderSurge,
+    R25:storm.exports.StormReborn,
+    R22:selections.exports.ThunderHunt,
     B01:basic.exports.Strike,
     B02:basic.exports.Defend,
     B03:basic.exports.ThunderClaw,

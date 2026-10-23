@@ -1,3 +1,4 @@
+import {describeProgram} from '../../../cards/shared/program-facts.ts';
 import {z} from 'zod';
 import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
@@ -47,5 +48,7 @@ export const volibearNextAttack=rules.defineRules({requires:[battles,cardInstanc
     rules.spawnEntity({definition,setup:b.input,owner:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).actor),scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope)}),
   ));
   const pendingBonus=rules.defineQuery({input:z.int32(),output:z.int32(),reads:[state],base:(r,card)=>r.entities(state).reduce((total,id)=>{const s=r.component(id,state);return total+(s.card===card&&s.play===null?s.amount:0);},0)});
-  return {exports:{pendingBonus,prepare}};
+  const describe=(amount:string)=>`此牌本回合末保留；下次实际打出每段固定攻击伤害增加${amount}，覆盖该次全部重复效果；完整结算后消费加伤。`;
+  describeProgram(prepare,describe('传入数量'));
+  return {exports:{pendingBonus,prepare,describe}};
 }});

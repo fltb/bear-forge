@@ -1,6 +1,8 @@
 import type {rules} from './execution.ts';
 export type CardVariant={cost:number;damage:number;innate:boolean;ethereal:boolean;exhaust:boolean;retain:boolean;target:boolean};
 export type CardMetadata={name:string;type:number;color:number;rarity:number;strike:boolean;variants:readonly [CardVariant,CardVariant]};
+/** Authored identity/play policy; damage is projected from the use program. */
+export type CardIdentity=Omit<CardMetadata,'variants'>&{variants:readonly [Omit<CardVariant,'damage'>,Omit<CardVariant,'damage'>]};
 export type CardMutable={specialData:number;cost:number;costForTurn:number;upgraded:boolean;freeToPlayOnce:boolean;retain:boolean};
 export type CardState=CardMutable&{mode:0|1;master:number|null;uniqueId:number};
 export type CardSetup={mode:0|1;master:number|null;uniqueId:number;specialData:number;upgraded:boolean};
@@ -10,6 +12,7 @@ export type CardReturn={battle:number;card:number;master:number};
 export type CardConfig={
   returned?:rules.Effect<CardReturn,void>|undefined;
   id:string;metadata:CardMetadata;
+  text?:string|undefined;
   use:rules.Effect<CardUse,void>;
   canUse?:rules.Query<CardUse,boolean>|undefined;
   endTurn?:rules.Effect<CardUse,void>|undefined;

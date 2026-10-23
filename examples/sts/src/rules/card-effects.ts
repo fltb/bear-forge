@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {rules} from './execution.ts';
+import {describeProgram} from './program-descriptions.ts';
 import {typedValue} from './value.schemas.ts';
 import {battles} from './battles.ts';
 import {resources} from './resources.ts';
@@ -32,5 +33,6 @@ export const cardEffects=rules.defineRules({requires:[battles,resources,damage,a
     b.assign(amount,rules.call(resources.exports.gainBlock,{entity:b.read(v=>v.input.use.owner),amount:b.read(v=>v.input.amount)})),
     rules.when(b.read(v=>v.get(amount)>0),rules.call(announceBlock,{use:b.read(v=>v.input.use),amount})),
   );});
+  describeProgram(hitResolved.public,'卡牌直接伤害结算后');describeProgram(blockGranted.public,'卡牌实际获得格挡后');
   return{exports:{resolveHit,hit,gainBlock,hitResolved:hitResolved.public,blockGranted:blockGranted.public}};
 }});

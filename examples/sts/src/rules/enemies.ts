@@ -2,6 +2,7 @@ import {fromSource,OriginKind} from './effect-trace.ts';
 import { typedValue } from './value.schemas.ts';
 import {z} from 'zod';
 import {rules} from './execution.ts';
+import {describeProgram} from './program-descriptions.ts';
 import {ruleModules} from '@bear-forge/card-engine';
 import {damage} from './damage.ts';
 import {actionQueue} from './combat-actions.ts';
@@ -17,6 +18,11 @@ const {defineRules,defineComponent,defineEvent,defineQuery,defineCheckpoint,defi
 
 /** Enemy programs are static definitions; opportunity ownership and AI draws are generic operations. */
 export const enemies=defineRules({requires:[battles,random,resources,attributes,damage],build(m){
+  // Opportunity consumption also happens for newly deployed enemies; only this
+  // fact records a turn actually entered through the common action executor.
+  const revivalCount=m.own(defineComponent({schema:z.int32().nonnegative(),initial:()=>0}));
+  const revivals=defineQuery({input:entityId,output:z.int32().nonnegative(),reads:[revivalCount],base:(r,id)=>r.component(id,revivalCount)});
+  const actedRound=m.own(defineComponent({schema:z.int32().nonnegative(),initial:()=>0}));
   const actionTotals=m.own(defineComponent({schema:enemyActionReceiptSchema.nullable(),initial:()=>null}));
   const receipt=defineQuery({input:entityId,output:enemyActionReceiptSchema,reads:[actionTotals],base:(r,id)=>r.component(id,actionTotals)??{action:null,performed:false,absorbed:0,blockSpent:0}});
   const restoration={},growth={},completionStages={restoration,growth};
@@ -36,6 +42,8 @@ export const enemies=defineRules({requires:[battles,random,resources,attributes,
   const prepared=m.own(defineEvent({payload:entityId,dispatch:'immediate'}));
   const state=m.own(defineComponent({schema:enemyStateSchema.nullable(),initial:()=>null}));
   const current=defineQuery({input:entityId,output:enemyStateSchema,reads:[state],base:(r,id)=>{const value=r.component(id,state);if(value===null)throw Error('Uninitialized enemy');return value;}});
+  const acted=defineQuery({input:entityId,output:z.boolean(),reads:[actedRound],dependencies:[current,battles.exports.status],base:(r,id)=>r.component(id,actedRound)===r.query(battles.exports.status,r.query(current,id).battle).turn});
+  const markActed=m.atom({input:entityId,output:z.undefined(),reads:[state],writes:[actedRound],emits:[],run(r,id){const s=r.component(id,state);if(s===null)throw Error('Uninitialized enemy');return{writes:[{entity:id,component:actedRound,value:s.opportunityTurn}],events:[],result:undefined};}});
   const forActor=defineQuery({input:entityId,output:entityId.nullable(),reads:[state],base:(r,actor)=>{const ids=r.entities(state).filter(id=>r.component(id,state)?.actor===actor);if(ids.length>1)throw Error('Enemy actor already has a controller');return ids[0]??null;}});
   const live=defineQuery({input:entityId,output:z.boolean(),dependencies:[current,resources.exports.current,resources.exports.vitality],base:(r,id)=>{const s=r.query(current,id);return !s.escaped&&!s.halfDead&&r.query(resources.exports.vitality,s.actor).hp>0;}});
   const eligible=defineQuery({input:entityId,output:z.boolean(),dependencies:[current,live],base:(r,id)=>r.query(live,id)||r.query(current,id).halfDead});
@@ -45,7 +53,7 @@ export const enemies=defineRules({requires:[battles,random,resources,attributes,
   const targetability=rules.modify(attributes.exports.damageable,{condition:defineQuery({input:typedValue<rules.ModifierContext<number,boolean>>(),output:z.boolean(),base:(_r,c)=>c.input===c.owner}),dependencies:[current],transform:(r,c)=>{const s=r.query(current,c.source);return c.value&&!s.escaped&&!s.halfDead;}});
   const noInitialize=defineEffect<rules.EntityLifecycle<EnemySetup>,void>(b=>b.return(undefined));
   const initialize:rules.Effect<rules.EntityLifecycle<EnemySetup>,void>=defineEffect<rules.EntityLifecycle<EnemySetup>,void>(b=>{const setup=b.local<EnemySetup>();return sequence(b.assign(setup,query(validate,b.read(v=>v.input.setup))),call(begin,b.read(v=>({...v.get(setup),entity:v.input.entity,turn:v.query(battles.exports.status,v.get(setup).battle).turn}))),rules.install({ability:targetability,source:b.read(v=>v.input.entity),owner:b.read(v=>v.get(setup).actor),environment:{},lifetime:b.read(v=>v.input.scope)}),rules.install({ability:trackDamage,source:b.read(v=>v.input.entity),owner:b.read(v=>v.get(setup).actor),environment:{},lifetime:b.read(v=>v.input.scope)}),call(entityEffect(kind,b.read(v=>v.input.entity),c=>c.initialize??noInitialize),b.input));});
-  const kind:rules.EntityKind<EnemyConfig,EnemySetup>=m.kind({config:z.object({metadata:z.object({id:z.int32(),name:z.string()}).optional(),health:typedValue<NonNullable<EnemyConfig['health']>>().optional(),presentation:typedValue<NonNullable<EnemyConfig['presentation']>>().optional(),intent:typedValue<EnemyConfig['intent']>(),choose:typedValue<EnemyConfig['choose']>(),act:typedValue<EnemyConfig['act']>(),initialize:typedValue<NonNullable<EnemyConfig['initialize']>>().optional()}).strict(),setup:enemySetupSchema,components:[state,actionTotals],initialize});
+  const kind:rules.EntityKind<EnemyConfig,EnemySetup>=m.kind({config:z.object({metadata:z.object({id:z.int32(),name:z.string()}).optional(),health:typedValue<NonNullable<EnemyConfig['health']>>().optional(),presentation:typedValue<NonNullable<EnemyConfig['presentation']>>().optional(),intent:typedValue<EnemyConfig['intent']>(),choose:typedValue<EnemyConfig['choose']>(),act:typedValue<EnemyConfig['act']>(),initialize:typedValue<NonNullable<EnemyConfig['initialize']>>().optional()}).strict(),setup:enemySetupSchema,components:[state,actionTotals,actedRound,revivalCount],initialize});
   const missingHealth=defineQuery({input:z.int32(),output:enemyHealthSchema,base:()=>{throw Error('Enemy has no construction health policy');}});
   const healthPolicy={kind,select:(c:rules.Borrowed<EnemyConfig>)=>c.health??missingHealth};
   const definitionHealth=defineQuery({input:z.object({definition:typedValue<EnemyDefinition>(),ascension:z.int32()}),output:enemyHealthSchema,selections:[healthPolicy],base:(r,i)=>r.selectedDefinition(healthPolicy,i.definition,i.ascension)});
@@ -62,12 +70,16 @@ export const enemies=defineRules({requires:[battles,random,resources,attributes,
   const replaceMove=m.atom({input:z.object({enemy:entityId,move:z.int32()}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){const s=r.component(i.enemy,state);if(s===null)throw Error('Uninitialized enemy');return{writes:[{entity:i.enemy,component:state,value:{...s,history:[i.move,s.history[1]] as [number,number]}}],events:[],result:undefined};}});
   const prepare=m.atom({input:entityId,output:z.undefined(),reads:[state],writes:[state],emits:[prepared],run(r,entity){const s=r.component(entity,state);if(s===null||s.prepared)throw Error('Enemy preparation must occur exactly once');return{writes:[{entity,component:state,value:{...s,prepared:true}}],events:[{event:prepared,payload:entity}],result:undefined};}});
   const setFlags=m.atom({input:z.object({enemy:entityId,escaped:z.boolean().optional(),halfDead:z.boolean().optional()}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){const before=r.component(i.enemy,state);if(before===null)throw Error('Missing enemy controller');const enemy=i.enemy,flags={...(i.escaped===undefined?{}:{escaped:i.escaped}),...(i.halfDead===undefined?{}:{halfDead:i.halfDead})};return{writes:[{entity:enemy,component:state,value:{...before,...flags}}],events:[],result:undefined};}});
+  const finishRevival=m.atom({input:z.object({enemy:entityId,move:z.int32().nullable()}),output:z.undefined(),reads:[state,revivalCount],writes:[state,revivalCount],emits:[],run(r,i){
+    const before=r.component(i.enemy,state);if(before===null||!before.halfDead||before.escaped)throw Error('Revival needs a pending enemy');
+    return{writes:[{entity:i.enemy,component:state,value:{...before,halfDead:false,history:i.move===null?before.history:[i.move,before.history[0]] as [number,number]}},{entity:i.enemy,component:revivalCount,value:r.component(i.enemy,revivalCount)+1}],events:[],result:undefined};
+  }});
   const openOpportunity=m.atom({input:z.object({enemy:entityId,turn:z.int32().positive()}),output:z.undefined(),reads:[state],writes:[state],emits:[],run(r,i){const s=r.component(i.enemy,state);if(s===null||i.turn<s.opportunityTurn)throw Error('Cannot reopen an old enemy opportunity');return{writes:i.turn===s.opportunityTurn?[]:[{entity:i.enemy,component:state,value:{...s,opportunityTurn:i.turn,claimed:false}}],events:[],result:undefined};}});
   const claim=m.atom({input:entityId,output:z.boolean(),reads:[state],writes:[state],emits:[],run(r,entity){const s=r.component(entity,state);if(s===null)throw Error('Uninitialized enemy');return{writes:s.claimed?[]:[{entity,component:state,value:{...s,claimed:true}}],events:[],result:!s.claimed};}});
   const stageTurnBody=defineEffect<number,boolean>(b=>{const claimed=b.local<boolean>(),action=b.local<EnemyAction>(),description=b.local<EnemyIntent>(),checked=b.local<rules.ReplacementResult<EnemyAction>>();return sequence(
     when(b.read(v=>!v.query(eligible,v.input)||v.query(current,v.input).claimed),b.return(false)),
     b.assign(description,query(intent,b.input)),b.assign(action,b.read(v=>{const s=v.query(current,v.input);if(s.opportunityTurn!==v.query(battles.exports.status,s.battle).turn)throw Error('Stale enemy opportunity');return{enemy:v.input,actor:s.actor,battle:s.battle,turn:s.opportunityTurn,move:s.history[0],attack:v.get(description).attack};})),b.assign(claimed,call(claim,b.input)),when(b.read(v=>!v.get(claimed)),b.return(false)),
-    call(recordAction,{enemy:b.input,receipt:{action,performed:true,absorbed:0,blockSpent:0}}),b.assign(checked,m.resolve(beforeIntent,action)),when(b.read(v=>v.get(checked).kind==='cancel'),sequence(call(announceStaged,action),b.return(true))),
+    call(markActed,b.input),call(recordAction,{enemy:b.input,receipt:{action,performed:true,absorbed:0,blockSpent:0}}),b.assign(checked,m.resolve(beforeIntent,action)),when(b.read(v=>v.get(checked).kind==='cancel'),sequence(call(announceStaged,action),b.return(true))),
     when(b.read(v=>{const c=v.get(checked);if(c.kind==='cancel')return false;const a=v.get(action);return c.value.enemy!==a.enemy||c.value.actor!==a.actor||c.value.battle!==a.battle||c.value.turn!==a.turn||c.value.move!==a.move||c.value.attack!==a.attack;}),b.return(b.read(()=>{throw Error('Enemy intent identity cannot be replaced');}))),
     call(entityEffect(kind,b.input,c=>c.act),action),call(announceStaged,action),b.return(true),
   );});
@@ -85,5 +97,7 @@ export const enemies=defineRules({requires:[battles,random,resources,attributes,
     ruleModules.runTaskGroup(actionQueue,finishAction,result),b.return(result),
   );});
   const takeTurn=defineEffect<number,boolean>(b=>{const result=b.local<EnemyActionReceipt>();return sequence(b.assign(result,call(takeTurnDetailed,b.input)),b.return(b.read(v=>v.get(result).performed)));});
-  return{exports:{takeTurnDetailed,staged:staged.public,completed:completed.public,completionStages,kind,current,forActor,live,eligible,intent,definitionHealth,metadata,presentation,prepare,prepared:prepared.public,setFlags,replaceMove,claim,choose,setMove,roll,noopRoll,openOpportunity,takeTurn,beforeIntent:beforeIntent.public}};
+  describeProgram(acted,'敌人本轮是否已进入行动');describeProgram(beforeIntent.public,'敌人意图执行前');
+  describeProgram(staged.public,'敌人行动入队阶段结束后');describeProgram(completed.public,'敌人行动结算后');describeProgram(prepared.public,'敌人准备完成后');
+  return{exports:{takeTurnDetailed,staged:staged.public,completed:completed.public,completionStages,kind,current,acted,revivals,finishRevival,forActor,live,eligible,intent,definitionHealth,metadata,presentation,prepare,prepared:prepared.public,setFlags,replaceMove,claim,choose,setMove,roll,noopRoll,openOpportunity,takeTurn,beforeIntent:beforeIntent.public}};
 }});

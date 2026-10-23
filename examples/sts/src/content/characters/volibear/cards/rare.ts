@@ -1,3 +1,6 @@
+import {deployPower,amountFormula} from './operations.ts';
+import {describeProgram,describeAmount,amountText} from '../../../cards/shared/program-facts.ts';
+import {cardAmount,describeAmounts} from '../../../cards/shared/programs.ts';
 import {volibearStormSelf} from '../powers/storm-self.ts';
 import {volibearBattleBody} from '../powers/battle-body.ts';
 import {cardEffects} from '../../../../rules/card-effects.ts';
@@ -17,55 +20,37 @@ import {volibearCardDescriptions as cards} from './metadata.ts';
 import {volibearCardPrograms,card,attack,block,thunder,compose,queued,draw} from './programs.ts';
 
 export const volibearRareCards=rules.defineRules({requires:[volibearStormSelf,volibearBattleBody,volibearCardPrograms,volibearTraining,basicPowers,volibearInscription,volibearHunt,volibearImmovable],build(){
-  const becomeImmovable=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
-    registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
-    scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
-    definition:volibearImmovable.exports.ImmovableBody,actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),debuff:false,amount:1,
-  }));
-  const hunt=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
-    registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
-    scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
-    definition:volibearHunt.exports.EndlessHunt,actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),debuff:false,amount:1,
-  }));
-  const inscribe=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
-    registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
-    scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
-    definition:volibearInscription.exports.ThunderInscription,actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),debuff:false,amount:6,
-  }));
-  const unifyStrength=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
-    registry:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).registry),
-    scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
-    definition:basicPowers.exports.Strength,actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),debuff:false,
-    amount:b.read(v=>v.input.state.upgraded?4:3),
-  }));
+  const becomeImmovable=deployPower(volibearImmovable.exports.programs.ImmovableBody,1);
+  const hunt=deployPower(volibearHunt.exports.programs.EndlessHunt,1);
+  const inscribe=deployPower(volibearInscription.exports.programs.ThunderInscription,[4,6]);
+  const unifyStrength=deployPower(basicPowers.exports.programs.Strength,[3,4]);
+  const handGrowth=[3,4] as const;
   const trainHand=rules.defineEffect<CardUse,void>(b=>rules.forEach(b.read(v=>{
     const piles=v.get(rules.query(cardPiles.exports.current,v.get(rules.query(battles.exports.current,v.input.battle)).piles));
     return v.get(rules.query(zones.exports.members,piles.hand)).filter(id=>v.get(rules.query(volibearTraining.exports.eligible,id)));
-  }),card=>rules.call(volibearTraining.exports.add,{battle:b.read(v=>v.input.battle),card,amount:b.read(v=>v.input.state.upgraded?4:3)})));
+  }),card=>rules.call(volibearTraining.exports.add,{battle:b.read(v=>v.input.battle),card,amount:b.read(v=>cardAmount(handGrowth,v))})));
+  describeAmounts(trainHand,[handGrowth],n=>`手牌中所有固定伤害攻击：${volibearTraining.exports.describe(n)}`);
+  const blockMultiplier=2;
   const tripleBlock=rules.defineEffect<CardUse,void>(b=>rules.call(cardEffects.exports.gainBlock,{
-    use:b.input,amount:b.read(v=>2*v.get(rules.query(resources.exports.current,v.input.owner)).block),
+    use:b.input,amount:b.read(v=>blockMultiplier*v.get(rules.query(resources.exports.current,v.input.owner)).block),
   }));
-  const battleBody=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
-    registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope),
-    definition:volibearBattleBody.exports.BattleBody,actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),debuff:false,amount:1,
-  }));
-  const stormSelf=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{
-    registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope),
-    definition:volibearStormSelf.exports.StormIsMe,actor:b.read(v=>v.input.owner),source:b.read(v=>v.input.owner),debuff:false,amount:1,
-  }));
+  describeProgram(tripleBlock,`额外获得当前格挡×${blockMultiplier}的格挡，不重复计算敏捷或脆弱。`);
+  const upgradedBlock=8;
+  const battleBody=deployPower(volibearBattleBody.exports.programs.BattleBody,1);
+  const stormSelf=deployPower(volibearStormSelf.exports.programs.StormIsMe,1);
   return {exports:{
-    StormIsMe:card(cards.R15,queued(stormSelf)),
-    BattleBody:card(cards.R16,queued(battleBody)),
-    ImmovableBody:card(cards.R02,queued(becomeImmovable)),
+    StormIsMe:card(cards.R15,compose(queued(stormSelf),draw([0,2]))),
+    BattleBody:card(cards.R16,compose(queued(battleBody),describeAmounts(rules.defineEffect<CardUse,void>(b=>rules.when(b.read(v=>v.input.state.upgraded),rules.call(block(upgradedBlock),b.input))),[upgradedBlock],n=>`升级后获得${n}格挡。`))),
+    ImmovableBody:card(cards.R02,compose(queued(becomeImmovable),block([6,12]))),
     ThunderInscription:card(cards.R04,queued(inscribe)),
-    EndlessHunt:card(cards.R14,queued(hunt)),
+    EndlessHunt:card(cards.R14,compose(queued(hunt),draw([0,1]))),
     WholeBodyStrength:card(cards.R05,queued(tripleBlock)),
     HeavenAndMan:card(cards.R06,compose(queued(unifyStrength),block([10,14]),queued(trainHand))),
-    HeavenAndEarth:card(cards.R07,thunder(v=>v.get(rules.query(resources.exports.current,v.input.owner)).block)),
+    HeavenAndEarth:card(cards.R07,thunder(describeAmount((v:rules.ReadView<CardUse>)=>v.get(rules.query(resources.exports.current,v.input.owner)).block,'当前格挡（不消耗格挡）'))),
     ThunderousMight:card(cards.R08,compose(attack([10,13],4),thunder([5,8]))),
-    UnleashInstinct:card(cards.R12,draw(v=>{
+    UnleashInstinct:card(cards.R12,draw(amountFormula([7,9],(maximum,v)=>{
       const battle=v.get(rules.query(battles.exports.current,v.input.battle)),piles=v.get(rules.query(cardPiles.exports.current,battle.piles));
-      return (v.input.state.upgraded?9:7)-v.get(rules.query(zones.exports.members,piles.hand)).length;
-    })),
+      return maximum-v.get(rules.query(zones.exports.members,piles.hand)).length;
+    },maximum=>`max(0,${maximum}−当前手牌数)`))),
   }};
 }});

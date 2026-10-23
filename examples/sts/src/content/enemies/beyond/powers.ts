@@ -1,4 +1,8 @@
-import {EffectKind} from '../../../rules/effect-policy.ts';
+import {enemyOperations} from '../shared/operations.ts';
+import {enemySuicide} from '../shared/cards.ts';
+import type {EnemyAction} from '../../../rules/enemies.types.ts';
+import {describedEnemyAbility,enemyPowerAbilities,defineDescribedEnemyPower,strengthAbility,contribution,settlement} from '../shared/abilities.ts';
+import {afterCardUse,firstEnemyCardUse,blockedHit,ownUnblockedHit,queuedRetaliation,hitBattle,owner,hitAttacker,level,enemyRoundEnd,ownTurn,addCounter,setCounter,incomingPlayerAttackPerLayer,gainStrength,playerEndPowers,turnBattle,noSource,applyPower,hitSource,unblockedAmount,sequencePrograms,wouldDie,ownDeathWithTargets,ownerEnemy,enterRebirth} from '../shared/status-programs.ts';
 import { typedValue } from '../../../rules/value.schemas.ts';
 import {shackledPower} from "../../powers/shackled.ts";
 import {z} from 'zod';
@@ -11,7 +15,7 @@ import {resources} from "../../../rules/resources.ts";
 import {attributes} from "../../../rules/attributes.ts";
 import {damage} from "../../../rules/damage.ts";
 import {basicPowers} from "../../powers/attributes.ts";
-import {counterPolicies,attachAbilities,effectAbility} from "../../powers/utils.ts";
+import {counterPolicies} from "../../powers/utils.ts";
 import {ownsTurn} from "../../powers/turn-hooks.ts";
 import {MS,PS,moveId as mm} from "../../../combat-identifiers.ts";
 import {actionQueue,combatScope} from "../../../rules/combat-actions.ts";
@@ -20,21 +24,36 @@ import type {CardUse} from "../../../rules/card-instances.types.ts";
 import type {HpDamageRequest} from "../../../rules/damage.types.ts";
 const {defineRules,defineEffect,defineQuery,defineEntity,sequence,when,forEach,call,query,on,modify,enqueue}=rules;
 
-export const beyondPowers=defineRules({requires:[powers,battles,enemies,turns,resources,attributes,damage,basicPowers,shackledPower],build(){
-  const strengthEnd=on(turns.exports.enemyRoundEnd,{condition:ownsTurn(),order:{phase:turns.exports.stages.content,priority:100},effect:defineEffect<rules.ReactionContext<TurnActor>,void>(b=>call(powers.exports.apply,{registry:b.read(v=>v.query(powers.exports.current,v.input.source).registry),actor:b.read(v=>v.input.owner),definition:basicPowers.exports.Strength,amount:query(powers.exports.level,b.read(v=>v.input.source)),source:null,debuff:false,scope:rules.scopeOf(b.read(v=>v.input.source),combatScope)}))});
-  const StrengthUp=defineEntity(powers.exports.kind,{presentation:{key:MS.GENERIC_STRENGTH_UP,flag:false,slot:0},...counterPolicies({bits:32}),attach:attachAbilities(effectAbility(strengthEnd,EffectKind.Strength))});
-  const thorns=on(damage.exports.blocked,{condition:defineQuery({input:typedValue<rules.ReactionContext<HpDamageRequest>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.event.request.target===c.owner&&c.event.request.attack&&c.event.request.source!==null&&c.event.facts.unblocked>0&&r.query(powers.exports.enabled,c.source)}),effect:defineEffect<rules.ReactionContext<HpDamageRequest>,void>(b=>enqueue(battles.exports.hit,{battle:b.read(v=>v.input.event.request.battle),source:b.read(v=>v.input.owner),target:b.read(v=>v.input.event.request.source!),amount:query(powers.exports.level,b.read(v=>v.input.source)),attack:false,selfDamage:false},{queue:actionQueue,position:'front',source:b.read(v=>v.input.source),lifetime:b.read(v=>v.query(battles.exports.status,v.input.event.request.battle).actionScope),eligible:'captured'}))});
-  const Thorns=defineEntity(powers.exports.kind,{presentation:{key:MS.THORNS,flag:false,slot:0},...counterPolicies({bits:8}),attach:attachAbilities(thorns)});
-  const constrict=on(turns.exports.playerEndPowers,{condition:ownsTurn(),order:{phase:turns.exports.stages.content,priority:200},effect:defineEffect<rules.ReactionContext<TurnActor>,void>(b=>enqueue(battles.exports.hit,{battle:b.read(v=>v.input.event.battle),source:null,target:b.read(v=>v.input.owner),amount:query(powers.exports.level,b.read(v=>v.input.source)),attack:false,selfDamage:false},{queue:actionQueue,source:b.read(v=>v.input.source),lifetime:b.read(v=>v.query(battles.exports.status,v.input.event.battle).actionScope),eligible:'captured'}))});
-  const Constricted=defineEntity(powers.exports.kind,{presentation:{key:PS.CONSTRICTED,flag:false},...counterPolicies({bits:16,harmful:true}),attach:attachAbilities(constrict)});
-  const afterOwnCard=defineQuery({input:typedValue<rules.ReactionContext<CardUse>>(),output:z.boolean(),dependencies:[powers.exports.enabled,powers.exports.current,battles.exports.current,battles.exports.status],base:(r,c)=>r.query(powers.exports.enabled,c.source)&&r.query(powers.exports.current,c.source).registry===r.query(battles.exports.status,c.event.battle).registry&&r.query(battles.exports.status,c.event.battle).enemies[0]===c.owner&&c.event.triggerOnUse});
-  const slowCount=on(battles.exports.afterUse,{condition:afterOwnCard,effect:defineEffect<rules.ReactionContext<CardUse>,void>(b=>call(powers.exports.set,{entity:b.read(v=>v.input.source),next:b.read(v=>({level:v.query(powers.exports.level,v.input.source)+1,active:true,justApplied:false}))}))});
-  const slowReset=on(turns.exports.enemyRoundEnd,{condition:ownsTurn(),order:{phase:turns.exports.stages.content,priority:50},effect:defineEffect<rules.ReactionContext<TurnActor>,void>(b=>call(powers.exports.set,{entity:b.read(v=>v.input.source),next:{level:0,active:true,justApplied:false}}))});
-  const Slow=defineEntity(powers.exports.kind,{presentation:{key:MS.SLOW,flag:false,slot:0},...counterPolicies({bits:32}),attach:attachAbilities(slowCount,effectAbility(slowReset,null),modify(attributes.exports.playerAttack,{condition:defineQuery({input:typedValue<rules.ModifierContext<{source:number;target:number;base:number;card:number|null},number>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.input.target===c.owner&&r.query(powers.exports.enabled,c.source)}),dependencies:[powers.exports.level],order:{phase:attributes.exports.stages.targetScale,priority:40},transform:(r,c)=>Math.fround(c.value*Math.fround(1+Math.fround(r.query(powers.exports.level,c.source)*Math.fround(.1))))}))});
-  const shift=on(damage.exports.blocked,{condition:defineQuery({input:typedValue<rules.ReactionContext<HpDamageRequest>>(),output:z.boolean(),dependencies:[powers.exports.enabled],base:(r,c)=>c.event.request.target===c.owner&&c.event.facts.unblocked>0&&r.query(powers.exports.enabled,c.source)}),effect:defineEffect<rules.ReactionContext<HpDamageRequest>,void>(b=>sequence(call(powers.exports.apply,{registry:b.read(v=>v.query(powers.exports.current,v.input.source).registry),actor:b.read(v=>v.input.owner),definition:basicPowers.exports.Strength,amount:b.read(v=>-v.input.event.facts.unblocked),source:b.read(v=>v.input.event.request.source),debuff:true,scope:rules.scopeOf(b.read(v=>v.input.source),combatScope)}),call(powers.exports.apply,{registry:b.read(v=>v.query(powers.exports.current,v.input.source).registry),actor:b.read(v=>v.input.owner),definition:shackledPower.exports.Shackled,amount:b.read(v=>v.input.event.facts.unblocked),source:null,debuff:false,scope:rules.scopeOf(b.read(v=>v.input.source),combatScope)})))});
-  const Shifting=defineEntity(powers.exports.kind,{presentation:{key:MS.SHIFTING,flag:true},...counterPolicies({bits:32,flag:true}),attach:attachAbilities(shift)});
-  const Fading=defineEntity(powers.exports.kind,{presentation:{key:MS.FADING,flag:false,slot:0},...counterPolicies({bits:32}),attach:attachAbilities()});
-  const regrow=on(resources.exports.wouldDie,{condition:defineQuery({input:typedValue<rules.ReactionContext<{entity:number}>>(),output:z.boolean(),dependencies:[powers.exports.enabled,powers.exports.current,battles.exports.forRegistry,battles.exports.targets],base:(r,c)=>{if(c.event.entity!==c.owner||!r.query(powers.exports.enabled,c.source))return false;const b=r.query(battles.exports.forRegistry,r.query(powers.exports.current,c.source).registry);return b!==null&&r.query(battles.exports.targets,b).length>0;}}),effect:defineEffect<rules.ReactionContext<{entity:number}>,void>(b=>{const enemy=b.local<number>();return sequence(b.assign(enemy,b.read(v=>{const e=v.query(enemies.exports.forActor,v.input.owner);if(e===null)throw Error('Regrow needs an enemy controller');return e;})),forEach(b.read(v=>v.query(powers.exports.entries,v.query(powers.exports.current,v.input.source).registry).filter(e=>v.query(powers.exports.current,e.entity).actor===v.input.owner).map(e=>e.entity)),entity=>call(powers.exports.set,{entity,next:{level:b.read(v=>{const power=v.query(powers.exports.current,v.get(entity)),strength=v.query(powers.exports.find,{registry:power.registry,actor:power.actor,definition:basicPowers.exports.Strength});return v.get(entity)===strength?0:power.level;}),active:false,justApplied:false}})),call(resources.exports.consumeBlock,{entity:b.read(v=>v.input.owner),amount:b.read(v=>v.query(resources.exports.defense,v.input.owner).block)}),call(enemies.exports.setFlags,{enemy,halfDead:true}),call(enemies.exports.setMove,{enemy,move:mm.DARKLING_REGROW}));})});
-  const Regrow=defineEntity(powers.exports.kind,{presentation:{key:MS.REGROW,flag:true},...counterPolicies({bits:32,flag:true}),attach:attachAbilities(regrow)});
-  return{exports:{StrengthUp,Thorns,Constricted,Slow,Shifting,Fading,Regrow}};
+export const beyondPowers=defineRules({requires:[enemyOperations,powers,battles,enemies,turns,resources,attributes,damage,basicPowers,shackledPower],build(){
+  const slowPerCard=1,slowScale=.1;
+  const strengthEnd=enemyRoundEnd({condition:ownTurn(),order:{phase:turns.exports.stages.content,priority:100},effect:gainStrength(level<TurnActor>())});
+  const StrengthUp=defineDescribedEnemyPower("力量增长",{presentation:{key:MS.GENERIC_STRENGTH_UP,flag:false,slot:0},...counterPolicies({bits:32})},{},enemyPowerAbilities(strengthAbility(strengthEnd)));
+  const thorns=blockedHit({condition:ownUnblockedHit({attackOnly:true,requireSource:true}),effect:queuedRetaliation({battle:hitBattle(),source:owner<HpDamageRequest>(),target:hitAttacker(),amount:level<HpDamageRequest>()},{position:'front',attack:false,selfDamage:false})});
+  const Thorns=defineDescribedEnemyPower("荆棘",{presentation:{key:MS.THORNS,flag:false,slot:0},...counterPolicies({bits:8})},{},enemyPowerAbilities(contribution(thorns)));
+  const constrict=playerEndPowers({condition:ownTurn(),order:{phase:turns.exports.stages.content,priority:200},effect:queuedRetaliation({battle:turnBattle(),source:noSource<TurnActor>(),target:owner<TurnActor>(),amount:level<TurnActor>()},{attack:false,selfDamage:false})});
+  const Constricted=defineDescribedEnemyPower("缠绕",{presentation:{key:PS.CONSTRICTED,flag:false},...counterPolicies({bits:16,harmful:true})},{},enemyPowerAbilities(contribution(constrict)));
+  const slowCount=afterCardUse({condition:firstEnemyCardUse(true),effect:addCounter<CardUse>(slowPerCard)});
+  const slowReset=enemyRoundEnd({condition:ownTurn(),order:{phase:turns.exports.stages.content,priority:50},effect:setCounter<TurnActor>(0)});
+  const Slow=defineDescribedEnemyPower("缓慢",{presentation:{key:MS.SLOW,flag:false,slot:0},...counterPolicies({bits:32,harmful:true})},{},enemyPowerAbilities(contribution(slowCount),settlement(slowReset),contribution(incomingPlayerAttackPerLayer(slowScale,40))));
+  const shift=blockedHit({condition:ownUnblockedHit({attackOnly:false,requireSource:false}),effect:sequencePrograms(
+    applyPower(basicPowers.exports.programs.Strength,{target:owner<HpDamageRequest>(),source:hitSource(),amount:unblockedAmount(true)},true),
+    applyPower(shackledPower.exports.programs.Shackled,{target:owner<HpDamageRequest>(),source:noSource<HpDamageRequest>(),amount:unblockedAmount()},false),
+  )});
+  const Shifting=defineDescribedEnemyPower("变换",{presentation:{key:MS.SHIFTING,flag:true},...counterPolicies({bits:32,flag:true})},{},enemyPowerAbilities(strengthAbility(shift)));
+  // The counter has no passive listener: its owner invokes this continuation
+  // after enqueueing the attack. Keep suicide queued before noop/consumption.
+  const fadingStep=1;
+  const FadingState=defineDescribedEnemyPower("消逝",{presentation:{key:MS.FADING,flag:false,slot:0},...counterPolicies({bits:32})},{});
+  const Fading=Object.freeze({...FadingState,text:`每次攻击行动后层数减少${fadingStep}；行动时剩余${fadingStep}层则在该次攻击后消失，不触发死亡反应。`,afterAttack:defineEffect<EnemyAction,void>(b=>{
+    const fading=b.local<number>();
+    return sequence(
+      b.assign(fading,b.read(v=>{const p=v.query(powers.exports.find,{registry:v.query(battles.exports.status,v.input.battle).registry,actor:v.input.actor,definition:FadingState.definition});if(p===null)throw Error('Transient needs Fading');return p;})),
+      when(b.read(v=>v.query(powers.exports.level,v.get(fading))===fadingStep),call(enemySuicide(false),b.input)),
+      call(enemies.exports.noopRoll,b.read(v=>v.input.enemy)),
+      call(enemyOperations.exports.consumePower,{entity:fading,amount:fadingStep}),
+    );
+  })});
+  const regrow=wouldDie({condition:ownDeathWithTargets(),effect:enterRebirth(ownerEnemy<{entity:number}>('Rebirth needs an enemy'),{move:mm.DARKLING_REGROW,moveName:'再生',clear:'all',remove:[],clearBlock:true,clearCards:false})});
+  const Regrow=defineDescribedEnemyPower("再生",{presentation:{key:MS.REGROW,flag:true},...counterPolicies({bits:32,flag:true})},{},enemyPowerAbilities(contribution(regrow)));
+  return{exports:{StrengthUp:StrengthUp.definition,Thorns:Thorns.definition,Constricted:Constricted.definition,Slow:Slow.definition,Shifting:Shifting.definition,Fading:Fading.definition,Regrow:Regrow.definition,programs:{StrengthUp,Thorns,Constricted,Slow,Shifting,Fading,Regrow},statusTexts:{GENERIC_STRENGTH_UP:StrengthUp.text,THORNS:Thorns.text,CONSTRICTED:Constricted.text,SLOW:Slow.text,SHIFTING:Shifting.text,FADING:Fading.text,REGROW:Regrow.text}}};
 }});

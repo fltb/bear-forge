@@ -1,3 +1,4 @@
+import {attackProgram,describeAmount,describeProgram,programText} from '../shared/program-facts.ts';
 import {rules} from '../../../rules/execution.ts';
 import {battles} from "../../../rules/battles.ts";
 import {cardInstances} from "../../../rules/card-instances.ts";
@@ -8,7 +9,7 @@ import {damage} from "../../../rules/damage.ts";
 import {adventures} from "../../../rules/adventures.ts";
 import {basicPowers} from "../../powers/attributes.ts";
 import {actionQueue} from "../../../rules/combat-actions.ts";
-import {concreteCard,cardAmount,type CardAmount} from "../shared/programs.ts";
+import {concreteCard,cardAmount,describeAmounts,type CardAmount} from "../shared/programs.ts";
 import type {CardUse,CardState} from "../../../rules/card-instances.types.ts";
 
 const {defineRules,defineEffect,sequence,when,forEach,call,query,enqueue}=rules;
@@ -24,9 +25,10 @@ export const colorlessAdvancedAttacks=defineRules({requires:[battles,basicPowers
     when(b.read(v=>v.input.use.target===null||!v.query(battles.exports.targetable,v.input.use.target)),b.return(undefined)),
     call(damage.exports.hit,{battle:b.read(v=>v.input.use.battle),source:b.read(v=>v.input.use.owner),target:b.read(v=>v.input.use.target!),amount:b.read(v=>v.input.amount),attack,selfDamage:false}),
     when(b.read(v=>v.query(resources.exports.vitality,v.input.use.target!).hp===0&&v.query(battles.exports.rewardEligible,{battle:v.input.use.battle,target:v.input.use.target!})),call(reward,b.read(v=>v.input.use))),call(battles.exports.checkOutcome,b.read(v=>v.input.use.battle)),
-  ));return defineEffect<CardUse,void>(b=>enqueue(act,{use:b.input,amount:query(attributes.exports.attackAmount,{source:b.read(v=>v.input.owner),target:b.read(v=>v.input.target!),card:b.read(v=>v.input.card),base:b.read(v=>cardAmount(amount,v))})},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}));}
-  const greed=lethal([20,25],defineEffect<CardUse,void>(b=>call(resources.exports.gainGold,{entity:b.read(v=>v.input.owner),amount:b.read(v=>v.input.state.upgraded?25:20)})),false);
-  const dagger=lethal(v=>v.input.state.specialData,defineEffect<CardUse,void>(b=>call(addSpecial,{use:b.input,amount:b.read(v=>v.input.state.upgraded?5:3),permanent:true})));
+  ));const effect=attackProgram(defineEffect<CardUse,void>(b=>enqueue(act,{use:b.input,amount:query(attributes.exports.attackAmount,{source:b.read(v=>v.input.owner),target:b.read(v=>v.input.target!),card:b.read(v=>v.input.card),base:b.read(v=>cardAmount(amount,v))})},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'})),amount);return programText(reward)===undefined?effect:describeAmounts(effect,[amount],damage=>`对目标造成${damage}${attack?'':'非攻击'}伤害。击杀符合奖励条件的敌人时：${programText(reward)}`);}
+  const greedAmount=[20,25] as const,daggerGrowth=[3,5] as const;
+  const greed=lethal(greedAmount,describeAmounts(defineEffect<CardUse,void>(b=>call(resources.exports.gainGold,{entity:b.read(v=>v.input.owner),amount:b.read(v=>cardAmount(greedAmount,v))})),[greedAmount],gold=>`获得${gold}金币。`),false);
+  const dagger=lethal(describeAmount(v=>v.input.state.specialData,'本牌记录伤害'),describeAmounts(defineEffect<CardUse,void>(b=>call(addSpecial,{use:b.input,amount:b.read(v=>cardAmount(daggerGrowth,v)),permanent:true})),[daggerGrowth],growth=>`本牌记录伤害增加${growth}。`));
   return{exports:{HandOfGreed:concreteCard('HAND_OF_GREED',greed),
-    RitualDagger:concreteCard('RITUAL_DAGGER',dagger,{returned:defineEffect<import('../../../rules/card-instances.types.ts').CardReturn,void>(b=>call(cardInstances.exports.setSpecialData,{entity:b.read(v=>v.input.master),value:b.read(v=>v.query(cardInstances.exports.current,v.input.card).specialData)}))})}};
+    RitualDagger:concreteCard('RITUAL_DAGGER',dagger,{returned:describeProgram(defineEffect<import('../../../rules/card-instances.types.ts').CardReturn,void>(b=>call(cardInstances.exports.setSpecialData,{entity:b.read(v=>v.input.master),value:b.read(v=>v.query(cardInstances.exports.current,v.input.card).specialData)})),`战斗结束返还时，将本牌记录伤害写回永久牌。`)})}};
 }});

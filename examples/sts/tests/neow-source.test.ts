@@ -78,3 +78,16 @@ test('Neow preserves early card-offer curse, late remove curse, and unconditiona
   for(const drawback of [1,4]){const transform=driver({bonus:16,drawback});try{const before=observe(transform.frame()).game;assert.equal(before.deck.length,baseline.deck.length+1);assert.equal(before.select?.remaining,2);assert.equal(before.select?.cards.some(c=>c.deckIndex>=baseline.deck.length),false,'curse is added after candidate snapshot');transform.advance();const after=observe(transform.advance()).game;assert.equal(transform.done(),true);assert.equal(after.deck.length,baseline.deck.length+1);assert.equal(transform.cardCounter(),baseline.cardCounter+1,'no second delayed curse');}finally{transform.close();}}
   assert.match(owner.describeBonus(16),/随机诅咒/);
 });
+
+test('Neow discarded card generation supplies no public probability evidence',()=>{
+  const storage=privateCardGraph(program.initial({seed:'130',bonus:6,drawback:1,menu:false,hp:75,maxHp:75,gold:123},100_000_000));
+  const machine=new CardMachine(program,storage),publications:unknown[]=[];
+  try{
+    let stop=machine.advance();publications.push(...machine.takeProbabilityPublications());
+    while(stop.kind==='call'&&stop.call.port==='event'){stop=machine.advance(null);publications.push(...machine.takeProbabilityPublications());}
+    assert.equal(stop.kind,'call');if(stop.kind!=='call'||stop.call.port!=='decision')throw Error('Expected original potion rewards');
+    const game=observe(stop.call.input).game;
+    assert.equal(game.screen,'REWARDS');assert.equal(game.rewards!.cards.length,0);assert.equal(game.rewards!.potions.length,3);
+    assert.deepEqual(publications,[],'the discarded original card reward is not observed evidence');
+  }finally{storage.close();}
+});

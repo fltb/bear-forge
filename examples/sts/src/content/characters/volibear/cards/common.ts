@@ -24,13 +24,16 @@ export const volibearCommonCards=rules.defineRules({requires:[volibearDomain,vol
   const awaitingAttack=describeProgram((v:rules.ReadView<CardUse>)=>v.query(volibearOpportunities.exports.awaitingAttack,v.input),volibearOpportunities.exports.awaitingAttackText);
   const press=conditional(awaitingAttack,pressBlock,pressDraw,pressAttack);
   const retrieve=queued(rules.defineEffect<CardUse,void>(b=>{
-    const selected=b.local<number|null>(),piles=b.local<number>();
+    const selected=b.local<number|null>(),piles=b.local<number>(),matching=b.local<number[]>();
     return rules.sequence(
       b.assign(piles,b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).piles)),
-      b.assign(selected,b.read(v=>{
+      rules.call(cardPiles.exports.resolveDrawOrder,piles),
+      b.assign(matching,b.read(v=>{
         const p=v.get(rules.query(cardPiles.exports.current,v.get(piles)));
-        return [...v.get(rules.query(zones.exports.members,p.draw))].reverse().find(id=>v.get(rules.query(cardInstances.exports.metadata,id)).type===0)??null;
+        return [...v.get(rules.query(zones.exports.members,p.draw))].filter(id=>v.get(rules.query(cardInstances.exports.metadata,id)).type===0);
       })),
+      b.assign(selected,b.read(v=>v.get(matching).at(-1)??null)),
+      rules.call(zones.exports.observeMatch,{zone:b.read(v=>v.query(cardPiles.exports.bindings,v.get(piles)).draw),matching,selected}),
       rules.when(b.read(v=>v.get(selected)!==null),rules.call(cardPiles.exports.moveToHand,{piles,card:b.read(v=>v.get(selected)!)})),
     );
   }));

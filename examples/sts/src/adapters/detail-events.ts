@@ -11,11 +11,14 @@ import {battles} from '../rules/battles.ts';
 import {enemies} from '../rules/enemies.ts';
 import {powers} from '../rules/powers.ts';
 import {turns} from '../rules/turns.ts';
+import {combatSessions} from '../rules/combat-sessions.ts';
+import {zones} from '../rules/zones.ts';
+import {frozenEyePublication} from './combat-views.ts';
 import type {StsEvent} from '../game.schemas.ts';
 
 /** Explicit record consumer. Hooks publish committed domain facts through the
  * existing event port. No host-side state diff or access to hidden game state. */
-export const detailEvents=rules.defineRules({requires:[permanentDecks,adventures,resources,damage,cardPiles,cardInstances,battles,enemies,powers,turns],build(){
+export const detailEvents=rules.defineRules({requires:[permanentDecks,adventures,resources,damage,cardPiles,cardInstances,battles,enemies,powers,turns,combatSessions,zones],build(){
   const publish=ruleModules.portEffect<StsEvent[],null>('event');
   const abilities:rules.Ability<{}>[]=[];
   function listen<T>(event:rules.RuleEvent<T>,type:string,project:(v:rules.ReadView<rules.ReactionContext<T>>)=>Record<string,string|number|boolean|null>|Record<string,string|number|boolean|null>[]){
@@ -23,7 +26,16 @@ export const detailEvents=rules.defineRules({requires:[permanentDecks,adventures
   }
   listen(permanentDecks.exports.obtained,'cards-obtained',v=>({deck:v.input.event.deck,entity:v.input.event.card,...v.query(cardInstances.exports.permanentView,v.input.event.card)}));
   listen(permanentDecks.exports.removed,'card-removed',v=>({deck:v.input.event.deck,entity:v.input.event.card,...v.query(cardInstances.exports.permanentView,v.input.event.card)}));
-  listen(cardInstances.exports.changed,'card-change',v=>({entity:v.input.event.entity,beforeUpgraded:v.input.event.before.upgraded,afterUpgraded:v.input.event.after.upgraded,beforeCost:v.input.event.before.cost,afterCost:v.input.event.after.cost,beforeData:v.input.event.before.specialData,afterData:v.input.event.after.specialData}));
+  listen(cardInstances.exports.changed,'card-change',v=>{
+    const event=v.input.event;
+    if(event.after.mode===1){
+      const session=v.query(combatSessions.exports.forRun,v.input.owner);
+      if(session===null)return[];
+      const piles=v.query(battles.exports.status,v.query(combatSessions.exports.current,session).battle).piles;
+      if(v.query(zones.exports.location,event.entity)===v.query(cardPiles.exports.bindings,piles).draw&&!frozenEyePublication.visible(v,v.input.owner))return[];
+    }
+    return{entity:event.entity,beforeUpgraded:event.before.upgraded,afterUpgraded:event.after.upgraded,beforeCost:event.before.cost,afterCost:event.after.cost,beforeData:event.before.specialData,afterData:event.after.specialData};
+  });
   listen(resources.exports.changed,'resource-change',v=>({...v.input.event}));
   listen(damage.exports.resolved,'damage',v=>({...v.input.event}));
   listen(resources.exports.healed,'heal',v=>({...v.input.event}));

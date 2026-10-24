@@ -114,3 +114,31 @@ test('pure schema normalization copies only changed containers and preserves arr
   assert.deepEqual(Object.keys(numbers),['0','1']);assert.equal(numbers[0],undefined);assert.equal(numbers[1],1);
   const unknown=bindRuleSchema(z.unknown());assert.equal(unknown.own(input),input);
 });
+
+
+test('pure string records share owned children while retaining normalization, key order and rejection', async () => {
+  const {ownRuleValue}=await import('../src/rules-values.ts');
+  const schema=z.record(z.string(),z.object({n:z.number().int().min(0),optional:z.number().optional()})),plan=bindRuleSchema(schema);
+  const shared={n:2},input=ownRuleValue({a:shared,b:shared,constructor:{n:3}});
+  const output=plan.own(input);
+  assert.equal(output,input);assert.equal(output.a,output.b);assert.equal(plan.own(input),output);
+  const source=ownRuleValue({a:{extra:true,n:1},b:input.b,['__proto__']:{n:-1},constructor:input.constructor});
+  const normalized=plan.own(source);
+  assert.deepEqual(normalized,schema.parse(source));assert.deepEqual(Object.keys(normalized),['a','b','constructor']);
+  assert.notEqual(normalized.a,source.a);assert.equal(normalized.b,source.b);assert.ok(Object.hasOwn(source,'__proto__'));
+  assert.throws(()=>plan.own({bad:{n:-1}}),error=>error instanceof z.ZodError&&error.issues[0]?.path.join('.')==='bad.n');
+  const mutable={a:{n:1}},owned=plan.own(mutable);mutable.a.n=9;assert.equal(owned.a!.n,1);
+});
+
+test('record key semantics and value callbacks stay on their isolated original parser', async () => {
+  const {ownRuleValue}=await import('../src/rules-values.ts');
+  for(const schema of [z.record(z.enum(['a','b']),z.number()),z.record(z.string().regex(/^a/),z.number()),z.record(z.email(),z.number()),z.record(z.string().transform(key=>key.toUpperCase()),z.number())]){
+    const plan=bindRuleSchema(schema),source={a:1,b:2},expected=schema.safeParse(source);
+    if(expected.success)assert.deepEqual(plan.own(source),expected.data);else assert.throws(()=>plan.own(source),z.ZodError);
+  }
+  let retained:{n:number}|undefined,calls=0;
+  const schema=z.record(z.string(),z.unknown().transform(value=>{calls++;retained=value as {n:number};retained.n++;return retained;}));
+  const plan=bindRuleSchema(schema),source=ownRuleValue({a:{n:1}}),first=plan.own(source);
+  assert.equal(first.a!.n,2);assert.equal(source.a.n,1);retained!.n=9;assert.equal(first.a!.n,2);
+  const second=plan.own(source);assert.equal(calls,2);assert.equal(second.a!.n,2);
+});

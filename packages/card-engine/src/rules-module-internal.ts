@@ -1,3 +1,4 @@
+import type {ForwardProbabilityAccount} from './probability.ts';
 import type {ChoiceReply} from './rules-choices.types.ts';
 import type {PreparedOrdering} from './rules-order.types.ts';
 import type {RuleTask} from './rules-tasks.types.ts';
@@ -52,6 +53,7 @@ export type ModuleBindings = {
   programIdentity:string;
 };
 export type ModuleState = {
+  probabilityAccount?:ForwardProbabilityAccount;
   indexes: RuleIndexes;
   entities: Record<number, { components: Record<number, any>;definition:number|null;scope:number;owner:number|null;phase:'initializing'|'active'|'removing' }>;
   scopes:Record<number,{kind:number|null;parent:number|null;phase:'initializing'|'active'|'ending'|'closed'}>;

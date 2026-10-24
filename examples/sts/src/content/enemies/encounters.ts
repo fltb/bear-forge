@@ -1,3 +1,5 @@
+import {publicMonsterName} from './shared/programs.ts';
+import {enemies} from '../../rules/enemies.ts';
 import {rules} from '../../rules/execution.ts';
 import {encounters} from "../../rules/encounters.ts";
 import {cultist} from "./exordium/cultist.ts";
@@ -25,7 +27,17 @@ const {defineRules,defineEffect,defineEntity,sequence,when,forEach,call}=rules;
 export const encounterContent=defineRules({requires:[encounters,cultist,exordiumEnemies,exordiumElites,exordiumHumanoids,slimes,enemyConstruction,exordiumBosses,cityEnemies,cityPairEnemies,bronzeAutomaton,cityBosses,beyondEnemies,beyondElites,finalEnemies,beyondBosses,writhingMass,maskedBandits],build(){
   const construct=defineEffect<{setup:EncounterSetup;definition:EnemyDefinition},EncounterEnemy>(b=>{const enemy=b.local<PreparedEnemy>();return sequence(b.assign(enemy,call(enemyConstruction.exports.prepare,{definition:b.read(v=>v.input.definition),owner:b.read(v=>v.input.setup.run),scope:b.read(v=>v.input.setup.scope),hpRng:b.read(v=>v.input.setup.hpRng),ascension:b.read(v=>v.input.setup.ascension)})),b.return(b.read(v=>({definition:v.input.definition,actor:v.get(enemy).actor,parameters:v.get(enemy).parameters}))));});
   const compose=(effect:rules.Effect<EncounterSetup,(EncounterEnemy|null)[]>)=>defineEntity(encounters.exports.kind,{assemble:effect});
-  const fixed=(definitions:readonly(EnemyDefinition|null)[])=>compose(defineEffect<EncounterSetup,(EncounterEnemy|null)[]>(b=>{const pool=b.local<(EnemyDefinition|null)[]>(),out=b.local<(EncounterEnemy|null)[]>(),made=b.local<EncounterEnemy>();return sequence(b.assign(pool,[...definitions]),b.assign(out,[]),forEach(pool,definition=>when(b.read(v=>v.get(definition)===null),b.assign(out,b.read(v=>[...v.get(out),null])),sequence(b.assign(made,call(construct,{setup:b.input,definition:b.read(v=>v.get(definition)!)})),b.assign(out,b.read(v=>[...v.get(out),v.get(made)]))))),b.return(out));}));
+  const fixed=(definitions:readonly(EnemyDefinition|null)[])=>compose(defineEffect<EncounterSetup,(EncounterEnemy|null)[]>(b=>{
+    const pool=b.local<(EnemyDefinition|null)[]>(),out=b.local<(EncounterEnemy|null)[]>(),made=b.local<EncounterEnemy>();
+    return sequence(
+      b.assign(pool,[...definitions]),
+      // These are the original fixed members, before their original HP draws.
+      // Only probability execution checks this necessary condition against a
+      // roster already observed; normal play exposes nothing at this point.
+      call(random.exports.constrain,{name:'combat-roster',values:b.read(v=>[JSON.stringify(v.get(pool).map(definition=>publicMonsterName(definition===null?null:v.query(enemies.exports.metadata,definition))))])}),
+      b.assign(out,[]),forEach(pool,definition=>when(b.read(v=>v.get(definition)===null),b.assign(out,b.read(v=>[...v.get(out),null])),sequence(b.assign(made,call(construct,{setup:b.input,definition:b.read(v=>v.get(definition)!)})),b.assign(out,b.read(v=>[...v.get(out),v.get(made)]))))),b.return(out),
+    );
+  }));
   const pick=(definitions:readonly EnemyDefinition[])=>defineEffect<EncounterSetup,EnemyDefinition>(b=>{const pool=b.local<EnemyDefinition[]>(),index=b.local<number>();return sequence(b.assign(pool,[...definitions]),b.assign(index,call(random.exports.int,{stream:b.read(v=>v.input.miscRng),start:0,end:definitions.length-1})),b.return(b.read(v=>v.get(pool)[v.get(index)]!)));});
   const louse=defineEffect<EncounterSetup,EnemyDefinition>(b=>{const coin=b.local<boolean>(),pool=b.local<EnemyDefinition[]>();return sequence(b.assign(pool,[exordiumEnemies.exports.RedLouse,exordiumEnemies.exports.GreenLouse]),b.assign(coin,call(random.exports.boolean,{stream:b.read(v=>v.input.miscRng)})),b.return(b.read(v=>v.get(pool)[v.get(coin)?0:1]!)));});
   const slaver=defineEffect<EncounterSetup,EnemyDefinition>(b=>{const coin=b.local<boolean>(),pool=b.local<EnemyDefinition[]>();return sequence(b.assign(pool,[exordiumElites.exports.RedSlaver,exordiumElites.exports.BlueSlaver]),b.assign(coin,call(random.exports.boolean,{stream:b.read(v=>v.input.miscRng)})),b.return(b.read(v=>v.get(pool)[v.get(coin)?0:1]!)));});

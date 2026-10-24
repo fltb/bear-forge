@@ -65,6 +65,7 @@ export const {rollEnemyAfter,initialEnemyRoll}=enemyUtilities.exports;
 export function enemyProgram(...effects:rules.Effect<EnemyAction,void>[]){return rules.defineEffect<EnemyAction,void>(b=>rules.sequence(...effects.map(effect=>rules.call(effect,b.input))));}
 
 export const sourceMonsterNames:rules.Borrowed<Record<number,string>>={...Object.fromEntries(Object.entries(monsterIds).map(([name,id])=>[id,name])),[monsterIds.INVALID]:'INVALID = 0'};
+export function publicMonsterName(meta:{readonly id:number;readonly name:string}|null):string{return meta===null?sourceMonsterNames[monsterIds.INVALID]!:sourceMonsterNames[meta.id]??meta.name;}
 
 export type EnemyMoveProgram={move:number;intent?:rules.Query<number,import('../../../rules/enemies.types.ts').EnemyIntent>;execute:rules.Effect<EnemyAction,void>};
 /** Author utility: lowers a concrete move table to ordinary branches and typed calls at link time. */

@@ -3,7 +3,7 @@ import { mkdir, open, rename, readFile, readdir, unlink, link } from 'node:fs/pr
 import { join, resolve } from 'node:path';
 import { serialize, deserialize } from 'node:v8';
 import { randomUUID } from 'node:crypto';
-import { copy, sameData } from '@bear-forge/boundary';
+import { sameData } from '@bear-forge/boundary';
 /** One atomic file contains a complete task commit. There is no database. */
 export class ExperimentFiles<R extends { id: string } = TaskResult, S extends { id: string } = R> {
   readonly directory: string;
@@ -25,14 +25,18 @@ export class ExperimentFiles<R extends { id: string } = TaskResult, S extends { 
     }
   }
   async write(key: string, value: unknown) {
+    // These are runner-owned records. Serialization already takes a detached
+    // byte snapshot synchronously; cloning the entire history first doubles
+    // its live heap at every checkpoint. Capture before the first await so
+    // later caller mutations cannot change this write.
+    const target = this.path(key), bytes = serialize(value);
     await mkdir(this.directory, {
       recursive: true
     });
-    const target = this.path(key),
-      temporary = target + '.' + randomUUID() + '.tmp',
+    const temporary = target + '.' + randomUUID() + '.tmp',
       file = await open(temporary, 'wx');
     try {
-      await file.writeFile(serialize(copy(value)));
+      await file.writeFile(bytes);
       await file.sync();
     } finally {
       await file.close();

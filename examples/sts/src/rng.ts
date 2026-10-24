@@ -41,7 +41,10 @@ export function randomLongRange(r:RandomState,first:bigint,last?:bigint):bigint 
   r.counter++;return start+BigInt(Math.trunc(nextDouble(r)*Number(end-start)));
 }
 export function randomFloat(r:RandomState,first?:number,last?:number):number {
-  r.counter++;const f=nextFloat(r);
+  r.counter++;return floatAtUnit(nextFloat(r),first,last);
+}
+/** The original float scaling, shared by real RNG and finite image producers. */
+export function floatAtUnit(f:number,first?:number,last?:number):number {
   if(first===undefined)return f;
   if(last===undefined)return Math.fround(f*Math.fround(first));
   return Math.fround(Math.fround(first)+Math.fround(f*Math.fround(Math.fround(last)-Math.fround(first))));

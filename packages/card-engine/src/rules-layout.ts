@@ -1,3 +1,4 @@
+import {atomProbabilityFor} from './rules-probability.ts';
 import { layoutDigest } from './rules-digest.ts';
 import { expressions,definitions } from './rules-internal.ts';
 import type { AnyEffect } from './rules-internal.ts';
@@ -28,6 +29,6 @@ export function ruleLayoutIdentity(id:string,bindings:ModuleBindings,names:Reado
     return[metadata.kind,Object.keys(metadata).filter(key=>key!=='creator'&&key!=='input'&&key!=='output'&&key!=='schema'&&key!=='config'&&key!=='setup'&&key!=='schemaPlan'&&key!=='inputPlan'&&key!=='outputPlan'&&key!=='setupPlan').map(key=>[key,encode((metadata as any)[key])]),
       metadata.kind==='entity'?encode(metadata.config):null];
   });
-  const effects=[...names].map(([effect,name])=>{const metadata=definitions.get(effect)!;return[name,metadata.kind,metadata.kind==='author'?metadata.build.toString():metadata.kind==='port'?metadata.port:metadata.kind==='bound'?[metadata.bind.toString(),encode(metadata.layout)]:metadata.lower.toString()];});
+  const effects=[...names].map(([effect,name])=>{const metadata=definitions.get(effect)!;return[name,metadata.kind,metadata.kind==='author'?metadata.build.toString():metadata.kind==='port'?metadata.port:metadata.kind==='bound'?[metadata.bind.toString(),encode(metadata.layout),encode(atomProbabilityFor(effect))]:metadata.lower.toString()];});
   return id+'/'+layoutDigest(JSON.stringify({statics,effects,trees:trees.map(encode),lifecycles:bindings.lifecycles.map(encode)}));
 }

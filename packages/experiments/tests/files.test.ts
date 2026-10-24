@@ -4,6 +4,26 @@ import { mkdtemp, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExperimentFiles } from '../src/files.ts';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+
+test('record writes capture aliases and values before yielding without cloning the live history', async () => {
+  const directory=await mkdtemp(join(tmpdir(),'bear-record-write-'));
+  const files=new ExperimentFiles(directory,(value:any)=>value),shared={value:7};
+  const record={id:'test',first:shared,second:shared};
+  const pending=files.write('record',record);shared.value=99;
+  await pending;
+  const saved=await files.read<typeof record>('record');
+  assert.equal(saved!.first.value,7);assert.equal(saved!.first,saved!.second);
+  const child=spawnSync(process.execPath,['--max-old-space-size=64','--input-type=module','-e',`
+    import {ExperimentFiles} from ${JSON.stringify(new URL('../src/files.ts',import.meta.url).href)};
+    const records=Array.from({length:250000},(_,i)=>({a:i,b:i,c:i,d:i,e:i,f:i}));
+    await new ExperimentFiles(${JSON.stringify(directory)},x=>x).write('large',{records});
+  `],{cwd:fileURLToPath(new URL('..',import.meta.url)),encoding:'utf8'});
+  assert.equal(child.status,0,child.stderr);
+  const large=await files.read<{records:{a:number}[]}>('large');
+  assert.equal(large!.records.length,250000);assert.equal(large!.records[249999]!.a,249999);
+});
 test('a durable task survives summary failure and is never replaced by a retry', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'bear-summary-recovery-'));
   type Row = { id: string; amount: number };

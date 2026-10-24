@@ -191,6 +191,7 @@ export function createVolibearSelectionCards(choices:rules.RuleModule<CardChoice
       const piles=b.local<number>(),looked=b.local<readonly number[]>(),selected=b.local<readonly number[]>(),moved=b.local<boolean>();
       return rules.sequence(
         b.assign(piles,b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).piles)),
+        rules.call(cardPiles.exports.revealDraw,{piles,count:b.read(v=>cardAmount(scryCount,v))}),
         b.assign(looked,b.read(v=>{
           const p=v.get(rules.query(cardPiles.exports.current,v.get(piles)));
           return [...v.get(rules.query(zones.exports.members,p.draw))].reverse().slice(0,cardAmount(scryCount,v));

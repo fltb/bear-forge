@@ -56,7 +56,16 @@ export function createEvidenceServer(directory: string) {
           return;
         }
         const values = player === 'audit' ? row.facts : row.packets.filter(p => p.player === player);
-        const trajectory = player === 'audit' ? null : trajectories(row)[player!];
+        // STS has a single-player outcome rather than Forge's score map.
+        // Show accepted search evidence only; never serialize policy state or Context.
+        const trajectory = player === 'audit' ? null : 'algorithm' in row.input ? {
+          packets:values,
+          transitions:row.decisions.filter(d=>d.accepted.player===player).map(d=>({
+            step:d.step,action:d.accepted.reply.action,policyVersion:d.proposal.policyVersion,
+            search:d.proposal.nextMemory?.evidence??null,
+          })),
+          outcome:row.status,
+        } : trajectories(row)[player!];
         data = {
           id: row.id,
           status: row.status,

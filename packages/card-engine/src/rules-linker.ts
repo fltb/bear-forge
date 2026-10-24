@@ -1,3 +1,4 @@
+import {probabilityOperation,probabilityOperationFor} from './probability.ts';
 import {attachRuleReplyGuards} from './rules-reply-guards.ts';
 import {attachRuleQueries} from './rules-inspection.ts';
 import {attachCardAdmission} from './card-admission.ts';
@@ -83,7 +84,9 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
     if(definition.kind==='compiled'){effects.push({id,steps:definition.lower({bindings:linkedModules.bindings,names,ensure,register,identity:()=>runtimeIdentity,effectName:index=>runtimeNames[index],resolveReference,ports:new Set(Object.keys(options.schemas.ports)),guard:(effect,guard)=>replyGuards.set(ensure(effect),guard)})});continue;}
     if (definition.kind === 'bound') {
       const run = definition.bind(linkedModules.bindings);
-      effects.push({ id, steps: [card.operation<S>(scope => run(scope, scope.input), 'result'),
+      const operation = (scope:CardScope<S>) => run(scope, scope.input), probability=probabilityOperationFor(run);
+      if (probability) probabilityOperation(operation,probability);
+      effects.push({ id, steps: [card.operation<S>(operation, 'result'),
         card.invoke<S>(ensure(dispatchImmediateEvents)),
         card.return<S>(scope => scope.locals.result)] });
       continue;

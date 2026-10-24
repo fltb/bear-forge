@@ -54,7 +54,10 @@ export const adventureViews=defineRules({requires:[adventures,shops,battlePublic
     kinds:[cardInstances.exports.kind,relics.exports.kind],base(r,run){
       const entry=r.query(battlePublications.exports.privateForRun,run);if(entry!==null)return entry;
       const s=r.query(adventures.exports.privateProjection,run),publicGame=r.query(game,run),deck=r.query(permanentDecks.exports.view,s.deck),belt=r.query(potions.exports.current,s.potions),bits=[0n,0n,0n];
-      for(const relic of publicGame.relics){const n=relicNumber(relic.id,r.query(adventures.exports.catalog,run).catalog.relics),slot=Math.floor(n/64);bits[slot]=(bits[slot]??0n)|(1n<<BigInt(n%64));}
+      // One pure view query has one unchanged catalog. Borrow it once for all
+      // mappings; querying per item needlessly normalizes the whole catalog.
+      const relicCatalog=r.query(adventures.exports.catalog,run).catalog.relics;
+      for(const relic of publicGame.relics){const n=relicNumber(relic.id,relicCatalog),slot=Math.floor(n/64);bits[slot]=(bits[slot]??0n)|(1n<<BigInt(n%64));}
       const {select:publicSelect,...baseGame}=publicGame;
       const definitionId=(definition:CardPreview['definition'])=>r.definitionConfiguration(definition,cardInstances.exports.kind).id;
       return {
@@ -64,7 +67,7 @@ export const adventureViews=defineRules({requires:[adventures,shops,battlePublic
         hasContinuation:s.hasContinuation,lastRoom:s.lastRoom,speedrunPace:s.speedrunPace,skipBattles:s.skipBattles,potionCount:belt.count,potionCapacity:belt.capacity,allPotions:belt.slots,
         noteForYourself:{id:definitionId(s.noteForYourself.definition),misc:s.noteForYourself.misc,upgraded:s.noteForYourself.upgraded},deckCounts:deck.deckCounts,upgradeableCount:deck.upgradeableCount,transformableCount:deck.transformableCount,
         relicBits:bits.map(String),eventList:s.eventList,shrineList:s.shrineList,oneTimeEvents:s.oneTimeEvents,
-        relicPools:Object.fromEntries(Object.entries(s.relicPools).map(([key,list])=>[key,list.map(def=>relicNumber(r.definitionConfiguration(def,relics.exports.kind).id,r.query(adventures.exports.catalog,run).catalog.relics))])),colorlessPool:s.colorlessPool.map(def=>cardNumber(definitionId(def))),
+        relicPools:Object.fromEntries(Object.entries(s.relicPools).map(([key,list])=>[key,list.map(def=>relicNumber(r.definitionConfiguration(def,relics.exports.kind).id,relicCatalog))])),colorlessPool:s.colorlessPool.map(def=>cardNumber(definitionId(def))),
         ...(s.screen==='EVENT_SCREEN'?{eventData:s.eventData}:{}),
         ...(publicSelect?{select:{...publicSelect,transformRng:[s.streams.misc,s.streams.card,s.streams.neow].indexOf(s.selection.transformStream)}}:{}),
       };

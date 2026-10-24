@@ -9,6 +9,7 @@ import {permanentDecks} from './permanent-decks.ts';
 import {cardInstances} from './card-instances.ts';
 import {potions} from './potions.ts';
 import {random} from './random.ts';
+import {ordering,type OrderChoice} from './ordering.ts';
 import {relics} from './relics.ts';
 import {entityId} from './resources.schemas.ts';
 import {adventureSetupSchema,adventureStateSchema,cardDefinitionSchema,relicDefinitionSchema,relicTiers,rewardsSchema,selectionSchema,selectedSchema} from './adventures.schemas.ts';
@@ -20,7 +21,7 @@ type CardId=string;
 type RelicId=string;
 const {defineRules,defineComponent,defineEvent,defineQuery,defineEffect,defineEntity,sequence,call,query,spawnEntity}=rules;
 export const emptyAdventureRewards=():AdventureRewards=>({gold:[],cards:[],relics:[],potions:[],emeraldKey:false,sapphireKey:false});
-export const adventures=defineRules({requires:[resources,permanentDecks,potions,random,relics],build(m){
+export const adventures=defineRules({requires:[resources,permanentDecks,potions,random,relics,ordering],build(m){
   const menu=m.own(defineComponent({schema:z.object({enabled:z.boolean(),options:z.record(z.string(),z.string())}),initial:()=>({enabled:false,options:{}})}));
   const detailsEnabled=defineQuery({input:entityId,output:z.boolean(),reads:[menu],base:(r,id)=>r.component(id,menu).enabled});
   const optionDetails=defineQuery({input:entityId,output:z.record(z.string(),z.string()).nullable(),reads:[menu],base:(r,id)=>{const value=r.component(id,menu);return value.enabled&&Object.keys(value.options).length?value.options:null;}});
@@ -111,7 +112,18 @@ export const adventures=defineRules({requires:[resources,permanentDecks,potions,
     {entity:i.run,component:pools.component,value:{...required(r.component(i.run,pools.component)),eventList:i.eventList,shrineList:i.shrineList,colorlessPool:i.colorlessPool}},
     {entity:i.run,component:economy.component,value:{...required(r.component(i.run,economy.component)),monsterChance:Math.fround(.1),shopChance:Math.fround(.03),treasureChance:Math.fround(.02),potionChance:0}},
   ],events:[],result:undefined};}});
-  const takeEncounter=plan.change(z.object({run:entityId,elite:z.boolean()}),z.int32(),(s,i)=>{const list=i.elite?s.eliteList:s.monsterList,index=i.elite?s.eliteOffset:s.monsterOffset,encounter=list[index];if(encounter===undefined)throw Error('Encounter plan requires refill');return{state:{...s,...(i.elite?{eliteOffset:index+1}:{monsterOffset:index+1})},result:encounter};});
+  const consumeEncounter=plan.change(z.object({run:entityId,elite:z.boolean(),encounter:z.int32()}),z.int32(),(s,i)=>{
+    const list=i.elite?s.eliteList:s.monsterList,index=i.elite?s.eliteOffset:s.monsterOffset;
+    if(list[index]===undefined)throw Error('Encounter plan requires refill');
+    const next=list.map((value,at)=>at===index?i.encounter:value);
+    return{state:{...s,...(i.elite?{eliteList:next,eliteOffset:index+1}:{monsterList:next,monsterOffset:index+1})},result:i.encounter};
+  });
+  const takeEncounter=defineEffect<{run:number;elite:boolean;choices:OrderChoice[]},number>(b=>{
+    const encounter=b.local<number>();return sequence(b.assign(encounter,call(ordering.exports.select,{actual:b.read(v=>{
+      const s=v.query(plan.current,v.input.run),value=v.input.elite?s.eliteList[s.eliteOffset]:s.monsterList[s.monsterOffset];
+      if(value===undefined)throw Error('Encounter plan requires refill');return value;
+    }),choices:b.read(v=>v.input.choices)})),call(consumeEncounter,{run:b.read(v=>v.input.run),elite:b.read(v=>v.input.elite),encounter}),b.return(encounter));
+  });
   const setRewards=m.atom({input:z.object({run:entityId,rewards:rewardsSchema}),output:z.undefined(),reads:[rewards.component,position.component],writes:[rewards.component,position.component],emits:[],run(r,i){return{writes:[{entity:i.run,component:rewards.component,value:{...required(r.component(i.run,rewards.component)),rewards:i.rewards}},{entity:i.run,component:position.component,value:{...required(r.component(i.run,position.component)),screen:'REWARDS'}}],events:[],result:undefined};}});
   const removeReward=rewards.change(z.object({run:entityId,kind:z.enum(['cards','gold','potions','relics']),index:z.int32().nonnegative()}),z.undefined(),(s,i)=>{
     if(i.index>=s.rewards[i.kind].length)throw Error('Invalid reward index');
@@ -120,7 +132,16 @@ export const adventures=defineRules({requires:[resources,permanentDecks,potions,
   const beginSelection=m.atom({input:z.object({run:entityId,selection:selectionSchema}),output:z.undefined(),reads:[position.component],writes:[selection.component,position.component],emits:[],run(r,i){return{writes:[{entity:i.run,component:selection.component,value:{selection:i.selection}},{entity:i.run,component:position.component,value:{...required(r.component(i.run,position.component)),screen:'CARD_SELECT'}}],events:[],result:undefined};}});
   const acceptSelection=selection.change(z.object({run:entityId,index:z.int32().nonnegative()}),z.boolean(),(s,i)=>{const chosen=s.selection.cards[i.index];if(!chosen||s.selection.selected.length>=s.selection.count)throw Error('Illegal permanent card selection');const selection={...s.selection,cards:s.selection.cards.filter((_,index)=>index!==i.index),selected:[...s.selection.selected,chosen]};return{state:{...s,selection},result:selection.selected.length===selection.count};});
   const setTransformStream=selection.change(z.object({run:entityId,stream:entityId}),z.undefined(),(s,i)=>({state:{...s,selection:{...s.selection,transformStream:i.stream}},result:undefined}));
-  const takeRelic=pools.change(z.object({run:entityId,tier:z.enum(relicTiers),front:z.boolean()}),relicDefinitionSchema,(s,i)=>{const pool=s.relicPools[i.tier];if(!pool.length)throw Error('Pinned source relic pool exhausted');const definition=i.front?pool[0]!:pool.at(-1)!;return{state:{...s,relicPools:{...s.relicPools,[i.tier]:i.front?pool.slice(1):pool.slice(0,-1)}},result:definition};});
+  const consumeRelic=pools.change(z.object({run:entityId,tier:z.enum(relicTiers),index:z.int32().nonnegative()}),relicDefinitionSchema,(s,i)=>{
+    const pool=s.relicPools[i.tier],definition=pool[i.index];if(!definition)throw Error('Pinned source relic pool exhausted');
+    return{state:{...s,relicPools:{...s.relicPools,[i.tier]:pool.filter((_,at)=>at!==i.index)}},result:definition};
+  });
+  const takeRelic=defineEffect<{run:number;tier:RelicTier;front:boolean;publication?:{name:string;accepted:readonly string[]}},RelicDefinition>(b=>{
+    const index=b.local<number>(),definition=b.local<RelicDefinition>();return sequence(b.assign(index,call(ordering.exports.select,{
+      actual:b.read(v=>{const pool=v.query(pools.current,v.input.run).relicPools[v.input.tier];if(!pool.length)throw Error('Pinned source relic pool exhausted');return v.input.front?0:pool.length-1;}),
+      choices:b.read(v=>{const pool=v.query(pools.current,v.input.run).relicPools[v.input.tier];return pool.map((definition,value)=>{const key=v.query(relics.exports.definitionId,definition);return{key,value,weight:1/pool.length,...(v.input.publication?{publication:v.input.publication.accepted.includes(key)?{name:v.input.publication.name,value:key}:null}:{})};});}),
+    })),b.assign(definition,call(consumeRelic,{run:b.read(v=>v.input.run),tier:b.read(v=>v.input.tier),index})),b.return(definition));
+  });
   const {record,published}=history;
   return{exports:{detailsEnabled,optionDetails,setOptionDetails,enableDetails,cardPools,bindings:bindings.current,position:position.current,plan:plan.current,economy:economy.current,pools:pools.current,selection:selection.current,rewards:rewards.current,history:history.current,historyCursor:history.cursor,pendingHistory:history.pending,catalog,status,location,market,rewardScene,selectionContext,historyStatus,publication,privateProjection,notifyCombatFinished,combatFinished:combatFinished.public,combatStages,kind,current,instances,prepareRequest,requesting:requesting.public,entered:entered.public,notifyEntered,forActor,card,relic,hasRelic,setScene,setRarity,countShopRemove,setKeys,setOutcome,setStolenGold,setPotionChance,arrive,setRoom,setEventData,setColorlessPool,removeEvent,setRoomChances,setBossRelics,setChest,incrementFloor,beginAct,takeEncounter,setRewards,removeReward,beginSelection,acceptSelection,setTransformStream,takeRelic,record,published}};
 }});

@@ -1,4 +1,5 @@
 import {card} from './card.ts';
+import {recordProbabilitySchedule} from './rules-probability.ts';
 import {ownRuleValue} from './rules-values.ts';
 import { indexTask, removeTask, removeIndex } from './rules-indexes.ts';
 import { createDeque, appendDeque, removeDeque, takeDeque } from './rules-deque.ts';
@@ -32,6 +33,7 @@ function buildTask<I,O,T>(target:Effect<I,O>|Value<Effect<I,O>>,input:Input<I>,o
     const name=dynamic?null:link.ensure(target as Effect<I,O>);
     const event=at?link.bindings.indices.get(at.event):null,condition=at?.condition?link.bindings.indices.get(at.condition):null;
     if(at&&(event===undefined||staticDefinitions.get(at.event)?.kind!=='event'||at.condition&&condition===undefined))throw Error('Unlinked task schedule point');
+    if(at)recordProbabilitySchedule(link.bindings,at.event);
     return[card.operation(s=>{
       const state=stateOf(s.state),args=s.input,scope=state.scopes[args.lifetime];
       if(!Number.isSafeInteger(args.lifetime)||!scope||scope.phase==='ending'||scope.phase==='closed')throw Error('Invalid task lifetime');

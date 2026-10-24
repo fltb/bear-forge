@@ -13,6 +13,8 @@ import {entityId} from './resources.schemas.ts';
 import {cardPilesSetupSchema,cardPilesStateSchema,pileCardSchema,cardDiscardSchema,pileBindingsSchema,pileCountersSchema,pileMembershipSchema} from './card-piles.schemas.ts';
 import type {CardPilesSetup,CardPilesState,PileCard,CardDiscard} from './card-piles.types.ts';
 import type {CardConfig,CardSetup,CardMutable} from './card-instances.types.ts';
+import {appendExchangeable,type OrderKnowledge} from './order-space.ts';
+import {unobservedRuleTargets} from '../../../../packages/card-engine/src/rules-probability.ts';
 const {defineRules,defineComponent,defineEvent,defineQuery,defineEffect,sequence,when,whileDo,call,query,forEach,enqueue}=rules;
 
 /** Ordered card movement and draw continuations. Named card, power and relic behavior is content. */
@@ -95,15 +97,35 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
   const finishShuffle=m.atom({input:entityId,output:z.undefined(),reads:[shuffleState],writes:[shuffleState],emits:[],run(r,piles){
     const before=r.component(piles,shuffleState);return{writes:[{entity:piles,component:shuffleState,value:{...before,epoch:before.epoch+1}}],events:[],result:undefined};
   }});
-  const shuffleDiscard=defineEffect<number,void>(b=>{const p=b.local<CardPilesState>(),order=b.local<readonly number[]>();return sequence(
-    b.assign(p,query(current,b.input)),b.assign(order,random.exports.shuffle({stream:b.read(v=>v.get(p).shuffleRng),items:query(zones.exports.members,b.read(v=>v.get(p).discard))})),
+  const resolveDrawOrder=defineEffect<number,void>(b=>call(zones.exports.resolveOrder,b.read(v=>{
+    const zone=v.query(bindings.current,v.input).draw;
+    return{zone,keys:v.query(zones.exports.members,zone).map(entity=>({entity,key:v.query(cardInstances.exports.combatView,entity).uniqueId}))};
+  })));
+  // These original operations only permute/move existing members. A linked
+  // observer can retain the sampled order, so its joint state must then keep
+  // that order. Creation callbacks have no such certificate (initializeDeck).
+  const unobservedReorder=unobservedRuleTargets([zones.exports.reordered]);
+  const unobservedMoves=unobservedRuleTargets([zones.exports.reordered,zones.exports.moving,zones.exports.moved,zones.exports.members,zones.exports.capacity]);
+  const shuffleDiscard=defineEffect<number,void>(b=>{const p=b.local<CardPilesState>(),order=b.local<readonly number[]>(),prior=b.local<OrderKnowledge>();return sequence(
+    call(resolveDrawOrder,b.input),
+    b.assign(p,query(current,b.input)),b.assign(prior,query(zones.exports.orderKnowledge,b.read(v=>v.get(p).draw))),b.assign(order,random.exports.shuffle({stream:b.read(v=>v.get(p).shuffleRng),items:query(zones.exports.members,b.read(v=>v.get(p).discard))})),
     call(zones.exports.reorder,{zone:b.read(v=>v.get(p).discard),order:b.read(v=>[...v.get(order)])}),
-    forEach(order,card=>call(requireMove,{entity:card,from:b.read(v=>v.get(p).discard),to:b.read(v=>v.get(p).draw),index:b.read(v=>v.query(zones.exports.members,v.get(p).draw).length)})),call(finishShuffle,b.input),
+    forEach(order,card=>call(requireMove,{entity:card,from:b.read(v=>v.get(p).discard),to:b.read(v=>v.get(p).draw),index:b.read(v=>v.query(zones.exports.members,v.get(p).draw).length)})),
+    call(zones.exports.conceal,b.read(v=>({zone:v.get(p).draw,fresh:v.get(unobservedMoves),...appendExchangeable(v.get(prior),v.get(order),v.query(zones.exports.members,v.get(p).draw).filter(id=>!v.get(order).includes(id)))}))),call(finishShuffle,b.input),
   );});
   const fulfillShuffle=defineEffect<{piles:number;epoch:number},void>(b=>when(b.read(v=>v.query(shuffleEpoch,v.input.piles)===v.input.epoch),call(shuffleDiscard,b.read(v=>v.input.piles))));
   const shuffleDraw=defineEffect<number,void>(b=>{const p=b.local<CardPilesState>(),order=b.local<readonly number[]>();return sequence(
+    call(resolveDrawOrder,b.input),
     b.assign(p,query(current,b.input)),b.assign(order,random.exports.shuffle({stream:b.read(v=>v.get(p).shuffleRng),items:query(zones.exports.members,b.read(v=>v.get(p).draw))})),call(zones.exports.reorder,{zone:b.read(v=>v.get(p).draw),order:b.read(v=>[...v.get(order)])}),
+    call(zones.exports.conceal,{zone:b.read(v=>v.get(p).draw),fresh:unobservedReorder,blocks:b.read(v=>[[...v.get(order)]]),unsupported:false}),
   );});
+  const revealDraw=defineEffect<{piles:number;count:number},void>(b=>sequence(call(zones.exports.resolveOrder,b.read(v=>{
+    const zone=v.query(bindings.current,v.input.piles).draw;
+    return{zone,keys:v.query(zones.exports.members,zone).map(entity=>({entity,key:v.query(cardInstances.exports.combatView,entity).uniqueId})),top:v.input.count};
+  })),call(zones.exports.reveal,b.read(v=>{
+    const zone=v.query(bindings.current,v.input.piles).draw;
+    return{zone,count:v.input.count,keys:v.query(zones.exports.members,zone).map(entity=>({entity,key:v.query(cardInstances.exports.combatView,entity).uniqueId}))};
+  }))));
   const drawPlan=defineQuery({input:z.object({piles:entityId,count:z.int32()}).strict(),output:z.object({piles:cardPilesStateSchema,amount:z.int32().nonnegative(),available:z.int32().nonnegative()}),dependencies:[current,canDraw,zones.exports.members],base:(r,input)=>{
     const p=r.query(current,input.piles),available=r.query(zones.exports.members,p.draw).length,hand=r.query(zones.exports.members,p.hand).length;
     const blocked=input.count<=0||!r.query(canDraw,input.piles)||hand>=10||available+r.query(zones.exports.members,p.discard).length===0;
@@ -134,6 +156,7 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
           call(adjustDrawn,{piles:b.read(v=>v.input.piles),count:b.read(v=>-v.get(amount))}),
           call(drawBatch,{piles:b.read(v=>v.input.piles),count:amount,observer:b.read(v=>v.input.observer)}),b.return(undefined),
         )),
+        call(revealDraw,{piles:b.read(v=>v.input.piles),count:1}),
         b.assign(picked,b.read(v=>{const cards=v.query(zones.exports.members,v.get(p).draw),last=cards.at(-1);if(last===undefined)throw Error('A draw hook emptied the active draw batch');return last;})),
         b.assign(policy,query(drawPolicy,{piles:b.read(v=>v.input.piles),card:picked})),
         b.assign(enabled,query(cardInstances.exports.effectsEnabled,picked)),
@@ -166,17 +189,20 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
   const initializeDeck=defineEffect<{piles:number;masters:readonly number[];bottled:readonly number[];drawPerTurn:number},void>(b=>{
     const plan=b.local<{piles:CardPilesState;innate:boolean[]}>(),order=b.local<readonly number[]>(),made=b.local<number>();
     return sequence(b.assign(plan,query(deckPlan,b.input)),call(beginDeck,{piles:b.read(v=>v.input.piles),count:b.read(v=>v.input.masters.length)}),
-      b.assign(order,random.exports.shuffle({stream:b.read(v=>v.get(plan).piles.shuffleRng),items:b.read(v=>v.input.masters.map((_,i)=>i))})),
-      b.assign(order,b.read(v=>[...v.get(order).filter(i=>!v.get(plan).innate[i]),...v.get(order).filter(i=>v.get(plan).innate[i])])),
+      b.assign(order,call(random.exports.shuffleGrouped,{stream:b.read(v=>v.get(plan).piles.shuffleRng),items:b.read(v=>v.input.masters.map((_,i)=>i)),groups:b.read(v=>{const indices=v.input.masters.map((_,i)=>i);return[indices.filter(i=>!v.get(plan).innate[i]),indices.filter(i=>v.get(plan).innate[i])];})})),
       forEach(order,index=>sequence(b.assign(made,cardInstances.exports.copyIntoCombat({master:b.read(v=>v.input.masters[v.get(index)]!),uniqueId:index,owner:b.read(v=>v.get(plan).piles.actor),scope:b.read(v=>v.get(plan).piles.scope)})),
         call(register,{piles:b.read(v=>v.input.piles),card:made}),call(requireMove,{entity:made,from:null,to:b.read(v=>v.get(plan).piles.draw),index:b.read(v=>v.query(zones.exports.members,v.get(plan).piles.draw).length)}),
-      )),when(b.read(v=>v.get(plan).innate.filter(Boolean).length>v.input.drawPerTurn),enqueue(draw,{piles:b.read(v=>v.input.piles),count:b.read(v=>v.get(plan).innate.filter(Boolean).length-v.input.drawPerTurn)},
+      )),call(zones.exports.conceal,b.read(v=>{
+        const zone=v.get(plan).piles.draw,all=v.query(zones.exports.members,zone),innate=(id:number)=>v.get(plan).innate[v.query(cardInstances.exports.combatView,id).uniqueId];
+        return{zone,blocks:[all.filter(id=>!innate(id)),all.filter(innate)],unsupported:false};
+      })),when(b.read(v=>v.get(plan).innate.filter(Boolean).length>v.input.drawPerTurn),enqueue(draw,{piles:b.read(v=>v.input.piles),count:b.read(v=>v.get(plan).innate.filter(Boolean).length-v.input.drawPerTurn)},
         {queue:actionQueue,source:b.read(v=>v.input.piles),lifetime:b.read(v=>v.get(plan).piles.actionScope)})),
     );
   });
   const resetTurnCosts=defineEffect<number,void>(b=>forEach(b.read(v=>{const p=v.query(bindings.current,v.input);return[p.hand,p.discard,p.draw];}),zone=>forEach(query(zones.exports.members,zone),card=>call(cardInstances.exports.resetTurn,{entity:card}))));
   const nextId=m.atom({input:entityId,output:z.int32(),reads:[counters.component],writes:[counters.component],emits:[],run(r,piles){const s=r.component(piles,counters.component);if(s===null||!s.initialized)throw Error('Combat deck has not been initialized');return{writes:[{entity:piles,component:counters.component,value:{...s,nextUniqueId:(s.nextUniqueId+1)|0}}],events:[],result:(s.nextUniqueId<<16)>>16};}});
   const create=defineEffect<{piles:number;definition:rules.EntityDefinition<CardConfig,CardSetup>;upgraded:boolean;specialData:number;destination:0|1|2|3;shuffle:boolean;mutable:CardMutable|null},number>(b=>{const p=b.local<CardPilesState>(),id=b.local<number>(),entity=b.local<number>(),index=b.local<number>();return sequence(
+    when(b.read(v=>v.input.destination===0&&v.input.shuffle),call(resolveDrawOrder,b.read(v=>v.input.piles))),
     b.assign(p,query(current,b.read(v=>v.input.piles))),b.assign(id,call(nextId,b.read(v=>v.input.piles))),b.assign(entity,rules.spawnEntity({kind:cardInstances.exports.kind,definition:b.read(v=>v.input.definition),owner:b.read(v=>v.get(p).actor),scope:b.read(v=>v.get(p).scope),setup:{mode:1,master:null,uniqueId:id,upgraded:b.read(v=>v.input.upgraded),specialData:b.read(v=>v.input.specialData)}})),
     call(register,{piles:b.read(v=>v.input.piles),card:entity}),when(b.read(v=>v.input.mutable!==null),call(cardInstances.exports.setMutable,{entity,value:b.read(v=>{const c=v.input.mutable!;return{specialData:c.specialData,cost:c.cost,costForTurn:c.costForTurn,upgraded:c.upgraded,freeToPlayOnce:c.freeToPlayOnce,retain:c.retain};})})),
     when(b.read(v=>v.input.destination===1),call(moveToHand,{piles:b.read(v=>v.input.piles),card:entity}),
@@ -184,10 +210,11 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
         b.assign(index,b.read(v=>v.query(zones.exports.members,v.input.destination===0?v.get(p).draw:v.get(p).discard).length)),
         when(b.read(v=>v.input.destination===0&&v.input.shuffle&&v.get(index)>0),b.assign(index,call(random.exports.int,{stream:b.read(v=>v.get(p).cardRng),start:0,end:b.read(v=>v.get(index)-1)}))),
         call(requireMove,{entity,from:null,to:b.read(v=>v.input.destination===0?v.get(p).draw:v.get(p).discard),index}),
+        when(b.read(v=>v.input.destination===0&&v.input.shuffle&&v.query(zones.exports.members,v.get(p).draw).length>1),call(zones.exports.obscure,{zone:b.read(v=>v.get(p).draw),entity})),
       ))),b.return(entity),
   );});
   const inScope=defineQuery({input:z.int32().nonnegative(),output:z.array(entityId),reads:[bindings.component],base:(r,scope)=>r.entities(bindings.component).filter(id=>r.component(id,bindings.component)?.scope===scope)});
   m.lifecycle(combatScope,{dispose:defineEffect<rules.ScopeLifecycle,void>(b=>forEach(query(inScope,b.read(v=>v.input.scope)),id=>forEach(b.read(v=>{const p=v.query(current,v.get(id));return[p.hand,p.draw,p.discard,p.exhaust,...p.auxiliary];}),zone=>forEach(query(zones.exports.members,zone),entity=>call(requireMove,{entity,from:zone,to:null,index:0})))))});
-  return{exports:{drawPolicy,drawObserverKind,drawObserved,exhaustWithoutOwnEffects,bindings:bindings.current,counters:counters.current,membership:membership.current,kind,current,allocateIdentity:nextId,attachZone,register,unregister,announceShuffle,canDraw,initializeDeck,create,draw,moveToHand,discard,discardHand,exhaust,shuffleDiscard,shuffleDraw,resetTurnCosts,resetDiscardCount,setActionScope,
+  return{exports:{resolveDrawOrder,revealDraw,drawPolicy,drawObserverKind,drawObserved,exhaustWithoutOwnEffects,bindings:bindings.current,counters:counters.current,membership:membership.current,kind,current,allocateIdentity:nextId,attachZone,register,unregister,announceShuffle,canDraw,initializeDeck,create,draw,moveToHand,discard,discardHand,exhaust,shuffleDiscard,shuffleDraw,resetTurnCosts,resetDiscardCount,setActionScope,
     drawing:drawing.public,drawn:drawn.public,enteringHand:enteringHand.public,shuffling:shuffling.public,exhausting:exhausting.public,exhausted:exhausted.public,discarded:discarded.public,stages}};
 }});

@@ -21,6 +21,7 @@ export const relics=defineRules({requires:[],build(m){
   const data=defineQuery({input:z.number().int().nonnegative(),output:z.int32(),base:()=>0});
   const sameDefinition=defineQuery({input:z.tuple([typedValue<RelicDefinition>(),typedValue<RelicDefinition>()]),output:z.boolean(),base:(r,pair)=>r.sameDefinition(pair[0],pair[1])});
   const view=defineQuery({input:z.number().int().nonnegative(),output:z.object({id:z.string(),data:z.int32()}),kinds:[kind],dependencies:[data],base:(r,id)=>({id:r.configuration(id,kind).id,data:r.query(data,id)})});
+  const definitionId=defineQuery({input:typedValue<RelicDefinition>(),output:z.string(),kinds:[kind],base:(r,definition)=>r.definitionConfiguration(definition,kind).id});
   const replacement=defineQuery({input:typedValue<RelicDefinition>(),output:typedValue<RelicDefinition>().nullable(),kinds:[kind],base:(r,definition)=>r.definitionConfiguration(definition,kind).replaces??null});
   const canObtain=defineQuery({input:z.object({actor:z.number().int().nonnegative(),definition:typedValue<RelicDefinition>()}),output:z.boolean(),dependencies:[find,replacement],base:(r,i)=>{
     if(r.query(find,i)!==null)return false;
@@ -39,5 +40,5 @@ export const relics=defineRules({requires:[],build(m){
       b.assign(made,spawnEntity({kind,definition:b.read(v=>v.input.definition),owner:b.read(v=>v.input.actor),scope:b.read(v=>v.input.scope)})),b.return(made),
     );
   });
-  return{exports:{kind,owned,find,data,view,obtain,canObtain,sameDefinition,holder,interact}};
+  return{exports:{kind,owned,find,data,view,definitionId,obtain,canObtain,sameDefinition,holder,interact}};
 }});

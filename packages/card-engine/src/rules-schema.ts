@@ -168,6 +168,35 @@ function compileNode(schema: core.$ZodType): Node {
       } };
       break;
     }
+    case 'record': {
+      const key = definition.keyType._zod.def, element = compileNode(definition.valueType);
+      // Only unconstrained string keys have no selection or normalization.
+      // Enum/numeric/transformed/refined keys and callback-bearing values keep
+      // the original opaque parser, including its private mutable input.
+      if (key.type !== 'string' || ('coerce' in key && key.coerce) || key.checks?.length || definition.keyType._zod.traits.has('$ZodCheck') || !element.pure) {
+        base = semanticNode(schema); break;
+      }
+      base = { identity: false, pure: true, run(value, issues) {
+        const input = value as Record<string, unknown>, keys = Object.keys(input);
+        let output: Record<string, unknown> | undefined = isImmutableRuleValue(input) ? undefined : {};
+        const write = (target: Record<string, unknown>, name: string, item: unknown) => {
+          Object.defineProperty(target, name, { value: item, enumerable: true, writable: true, configurable: true });
+        };
+        for (let index = 0; index < keys.length; index++) {
+          const name = keys[index]!;
+          // Zod records strip this key even when it is an own data property.
+          const start = issues.length, next = name === '__proto__' ? undefined : element.run(input[name], issues);
+          prefix(issues, start, name);
+          if (!output && (name === '__proto__' || !Object.is(next, input[name]))) {
+            output = {};
+            for (let prior = 0; prior < index; prior++) { const key = keys[prior]!; if (key !== '__proto__') write(output, key, input[key]); }
+          }
+          if (output && name !== '__proto__') write(output, name, next);
+        }
+        return output ?? input;
+      } };
+      break;
+    }
     case 'array': {
       const element = compileNode(definition.element);
       base = { identity: false, pure: element.pure, run(value, issues) {

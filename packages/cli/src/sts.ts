@@ -7,6 +7,7 @@ import {createInterface} from 'node:readline';
 import type {Readable,Writable} from 'node:stream';
 import type {InteractiveStatus,InteractiveCommand} from '@bear-forge/sts';
 export async function runSts(args=process.argv.slice(2),input:Readable=process.stdin,output:Writable=process.stdout){
+  if(args[0]==='search')return (await import('./sts-search.ts')).runStsSearch(args.slice(1),output);
   if(args[0]==='play')args=args.slice(1);
   const flags:Record<string,string>={};
   for(let i=0;i<args.length;i+=2){

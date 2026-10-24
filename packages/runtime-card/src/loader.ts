@@ -20,6 +20,8 @@ import { CardGraph, privateCardGraph } from './graph.ts';
 import { publishNativeStop } from './publication.ts';
 import { memorySnapshotStore } from './store.ts';
 import type { SnapshotStore } from './store.ts';
+import {ProbabilityCurrent,registerProbabilityCurrent,registerProbabilityRoot} from './probability.ts';
+import {ProbabilityTracker,probabilityTrackingFor,registerProbabilityTrackingView,registerProbabilitySearch,registerProbabilityHostCost,type ProbabilityTrackingSnapshot} from './probability-tracking.ts';
 
 /** recordCore:false disables execution capture as well as instruction traces;
  * controlled Context save/restore/fork remain available without history logs. */
@@ -40,6 +42,8 @@ export function createCardLoader(options: CardOptions = {}) {
   const recording = recordCore;
   return {
     async load<S, Setup, P extends { [K in keyof P]: PortShape }, R>(definition: CardDefinition<S, Setup, P, R>): Promise<Outcome<LoadedCore<Setup, P, R>>> {
+      const trackingSpec=probabilityTrackingFor(definition);
+      if(trackingSpec&&!controlled)return fail('invalid_argument','Probability tracking requires controlled Contexts');
       let ruleReplyGuard:ReturnType<typeof ruleReplyGuardFor>=null;
       let program: CardProgram<S, Setup, P, R>;
       try { if (typeof definition.id !== 'string' || !definition.id || typeof definition.initialize !== 'function') throw Error('Invalid card definition'); assertProgramSchemasShape(definition.schemas); program = new CardProgram(definition); ruleReplyGuard=ruleReplyGuardFor(definition); definition = program.definition; }
@@ -80,15 +84,41 @@ export function createCardLoader(options: CardOptions = {}) {
       const controllers = recording ? new Map<string, Controller<Setup, P, R>>() : undefined;
       const handles = controlled ? new WeakMap<object, Controller<Setup, P, R>>() : undefined;
       const machines = controlled ? new WeakMap<Controller<Setup, P, R>, CardMachine<S, Setup, P, R>>() : undefined;
+      const tracking = trackingSpec ? new WeakMap<Controller<Setup,P,R>,ProbabilityTracker<S,Setup,P,R>>() : undefined;
       const coreRecords = recordCore ? new WeakMap<Controller<Setup, P, R>, CardTraceRecords>() : undefined;
       function remember(handle: Instance<P, R>, controller: Controller<Setup, P, R>): Instance<P, R> {
         if (!handles) return handle;
         handles.set(handle, controller);
+        if(tracking)registerProbabilityTrackingView(handle,()=>{const model=tracking.get(controller);if(!model||controller.computing||controller.driving)throw Error('Probability tracking is unavailable');return model.inspect();});
+        if(tracking)registerProbabilityHostCost(handle,prior=>{
+          const model=tracking.get(controller);if(!model||controller.computing||controller.driving)throw Error('Probability resources are unavailable');
+          return model.beginHostCost(prior);
+        });
+        if(tracking)registerProbabilitySearch(handle,prior=>{
+          const model=tracking.get(controller);if(!model||controller.computing||controller.driving)throw Error('Probability resources are unavailable');
+          return model.beginSearch(prior);
+        });
+        registerProbabilityCurrent(handle,()=>{
+          const machine=machines!.get(controller);
+          if(!machine||controller.computing||controller.driving)throw Error('Card current is unavailable');
+          return new ProbabilityCurrent(new CardMachine(program,(machine.storage as CardGraph<CardRoot<S>>).fork()));
+        });
+        registerProbabilityRoot(handle,control=>{
+          const machine=machines!.get(controller);
+          if(!machine||controller.computing||controller.driving)throw Error('Card current is unavailable');
+          let posterior:ReturnType<ProbabilityTracker<S,Setup,P,R>['forkForSearch']>|undefined,current:ProbabilityCurrent<S,Setup,P,R>|undefined;
+          try{
+            posterior=tracking?.get(controller)?.forkForSearch(control);
+            current=control.execute('fork',()=>new ProbabilityCurrent(new CardMachine(program,(machine.storage as CardGraph<CardRoot<S>>).fork())));
+            let closed=false;
+            return{current,posterior:posterior?.frontier??null,observation:posterior?.observation??null,close(){if(closed)return;closed=true;current!.close();for(const row of posterior?.frontier.outcomes??[])row.current.close();}};
+          }catch(error){current?.close();for(const row of posterior?.frontier.outcomes??[])control.execute('cleanup',()=>row.current.close());throw error;}
+        });
         const transfer = handle.transfer;
         handle.transfer = async () => { const result = await transfer(); if (result.ok) remember(result.value, controller); return result; };
         return handle;
       }
-      function instantiate(setup: Setup, restored?: { machine: CardMachine<S, Setup, P, R>; state: InstanceStop<P, R>; records: Records<InstanceRecord<Setup, P, R>> | any[]; core?: CardTraceRecords | undefined; shared?: true }): Instance<P, R> {
+      function instantiate(setup: Setup, restored?: { machine: CardMachine<S, Setup, P, R>; state: InstanceStop<P, R>; records: Records<InstanceRecord<Setup, P, R>> | any[]; core?: CardTraceRecords | undefined; shared?: true; tracking?:ProbabilityTracker<S,Setup,P,R>|ProbabilityTrackingSnapshot<S> }): Instance<P, R> {
         const budget = options.stepBudget ?? (controlled ? 1_000_000 : Infinity);
         let root: CardRoot<S> | undefined, storage = restored?.machine.storage;
         if (!restored) {
@@ -113,9 +143,14 @@ export function createCardLoader(options: CardOptions = {}) {
         const machine = new CardMachine(program, storage!, observe);
         // A fork already has an isolated, immutable host stop. Re-exporting the
         // machine here would walk the entire pending view despite COW roots.
-        let stop: RawStop | undefined = restored ? restored.state.kind === 'call' ? { kind: 'call', call: restored.state.call }
+        let model:ProbabilityTracker<S,Setup,P,R>|undefined;
+        try{model=trackingSpec?(restored?.tracking instanceof ProbabilityTracker?restored.tracking.fork(machine):new ProbabilityTracker(machine,trackingSpec,restored?.tracking)):undefined;}
+        catch(error){storage!.close?.();throw error;}
+        let stop: RawStop | undefined;
+        try{stop = restored ? restored.state.kind === 'call' ? { kind: 'call', call: restored.state.call }
           : restored.state.kind === 'done' ? { kind: 'done', result: restored.state.result }
-          : { kind: 'fault', error: restored.state.error } : ownStop(machine.advance());
+          : { kind: 'fault', error: restored.state.error } : ownStop(model?model.advance():machine.advance());}
+        catch(error){model?.close();storage!.close?.();throw error;}
         const instanceSchemas=ruleReplyGuard?{...schemas,ports:Object.fromEntries(Object.entries(schemas.ports).map(([port,declaration])=>{
           const schema=declaration as {input:any;output:{parse:(value:unknown)=>unknown}};
           return[port,{...schema,output:{parse(value:unknown){
@@ -126,16 +161,17 @@ export function createCardLoader(options: CardOptions = {}) {
         }))}as typeof schemas:schemas;
         const controller = new Controller<Setup, P, R>({
           current: () => stop!,
-          advance: async output => { stop = ownStop(machine.advance(output)); },
-          dispose: () => { storage!.close?.(); stop = undefined; machines?.delete(controller); },
+          advance: async output => { stop = ownStop(model?model.advance(output):machine.advance(output)); },
+          dispose: () => { model?.close();storage!.close?.();stop=undefined;machines?.delete(controller);tracking?.delete(controller); },
           ...(controlled ? { snapshot: () => Buffer.from(serialize(machine.storage.export(machine.root))).toString('base64') } : {})
         }, instanceSchemas, setup, restored ? { state: restored.state, records: restored.records, ...(restored.shared ? { shareState: true as const } : {}) } : undefined, recording);
         machines?.set(controller, machine);
+        if(model)tracking!.set(controller,model);
         if (core) coreRecords!.set(controller, core);
         if (controlled) controller.forkHandler = async () => {
           try {
             const storage = machine.storage as CardGraph<CardRoot<S>>;
-            return ok(instantiate(setup, { machine: new CardMachine(program, storage.fork()), state: controller.state, records: controller.records ?? [], core, shared: true }));
+            return ok(instantiate(setup, { machine: new CardMachine(program, storage.fork()), state: controller.state, records: controller.records ?? [], core, shared: true,...(model?{tracking:model}:{}) }));
           } catch (error) { return fail('program_failed', exceptionMessage(error)); }
         };
         controllers?.set(controller.id, controller); return remember(controller.handle(), controller);
@@ -168,18 +204,24 @@ export function createCardLoader(options: CardOptions = {}) {
           const status = await instance.inspect(); if (!status.ok) return status;
           if (c.computing || c.driving) return fail('instance_busy');
           if (c.state.kind === 'fault') return { ok: false, error: c.state.error };
+          const started=performance.now();let cost:ReturnType<ProbabilityTracker<S,Setup,P,R>['beginHostCost']>|undefined;
           try {
+            cost=tracking?.get(c)?.beginHostCost();
             const machine = machines!.get(c)!;
             const graph=(machine.storage as CardGraph<CardRoot<S>>).snapshot();
-            const bytes = serialize({ format: 1, rule: definition.id, root: graph.root, immutable:graph.immutable, state: c.state, records: c.records?.slice() ?? [], recordCore, core: coreRecords?.get(c)?.snapshot() ?? null });
+            const bytes = serialize({ format: 1, rule: definition.id, root: graph.root, immutable:graph.immutable, state: c.state, records: c.records?.slice() ?? [], recordCore, core: coreRecords?.get(c)?.snapshot() ?? null,...(tracking?{tracking:tracking.get(c)!.snapshot()}:{}) });
             const snapshotId = randomUUID(); await store!.put(snapshotId, bytes); return ok(InstanceSnapshotSchema.parse({ snapshotId }));
           } catch (error) { return fail('program_failed', exceptionMessage(error)); }
+          finally{cost?.update(performance.now()-started);}
         },
         async restore(snapshot) {
+          const started=performance.now();
+          let pending:CardStorage<CardRoot<S>>|undefined;
           try {
             const ref = InstanceSnapshotSchema.parse(snapshot), bytes = await store!.get(ref.snapshotId); if (!bytes) return fail('snapshot_not_found');
             const data = deserialize(bytes);
             if (data?.format !== 1 || data.rule !== definition.id || data.recordCore !== recordCore || (!recordCore && data.core !== null) || !Array.isArray(data.records) || !Array.isArray(data.immutable) || !data.root || !['call', 'done'].includes(data.state?.kind)) return fail('snapshot_incompatible');
+            if(Boolean(trackingSpec)!==Boolean(data.tracking))return fail('snapshot_incompatible');
             program.validate(data.root);
             if (data.state.kind === 'call') {
               if (!fields(data.state, ['kind', 'callId', 'call']) || !CallIdSchema.safeParse(data.state.callId).success || !fields(data.state.call, ['port', 'input']) || !Object.hasOwn(schemas.ports, data.state.call.port)) return fail('snapshot_incompatible');
@@ -189,11 +231,15 @@ export function createCardLoader(options: CardOptions = {}) {
               read(schemas.result, data.state.result);
             }
             const storage = graphStorage<CardRoot<S>>(data.root,data.immutable), machine = new CardMachine(program, storage, options.trace);
+            pending=storage;
             if (!sameData(machine.current(), data.state.kind === 'call' ? { kind: 'call', call: data.state.call } : { kind: 'done', result: data.state.result })) return fail('snapshot_incompatible');
             if (data.state.kind === 'call' && (!data.root.waiting || !data.root.frames.length)) return fail('snapshot_incompatible');
             const core = recordCore ? new CardTraceRecords(traceLayout) : undefined; core?.restore(data.core);
-            return ok(instantiate(undefined as Setup, { machine, state: data.state, records: data.records, core }));
+            const instance=instantiate(undefined as Setup, { machine, state: data.state, records: data.records, core,...(data.tracking?{tracking:data.tracking}:{}) });pending=undefined;
+            if(data.tracking)tracking!.get(handles!.get(instance)!)!.includeHostCost({total:data.tracking.account.milliseconds,window:data.tracking.window.milliseconds},performance.now()-started);
+            return ok(instance);
           } catch (error) { return fail('snapshot_incompatible', exceptionMessage(error)); }
+          finally{pending?.close?.();}
         },
         async release(snapshot) {
           try { const ref = InstanceSnapshotSchema.parse(snapshot); if (!await store!.known(ref.snapshotId)) return fail('snapshot_not_found'); const bytes = await store!.get(ref.snapshotId); if (bytes) { const data = deserialize(bytes); if (data.rule !== definition.id || data.format !== 1) return fail('snapshot_incompatible'); await store!.remove(ref.snapshotId); } return ok(undefined); }

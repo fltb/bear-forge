@@ -1,8 +1,16 @@
-import type {LoadedCore} from '@bear-forge/contracts/loading';
+import type {LoadedCore, GameHandle} from '@bear-forge/contracts/loading';
 import type {Outcome} from '@bear-forge/contracts/instance';
 import type { GameModule, GameTypes, GameContract } from '@bear-forge/contracts/authoring';
 import type { Policy } from '@bear-forge/policies';
 export type TaskInput = { id: string; seed: number };
+/** Host accounting is separate from accepted-only policy memory. It includes
+ * discarded work and is checkpointed alongside, never inside, the proposal. */
+export type PolicyResources = Record<string, {
+  milliseconds: number;
+  reservedMilliseconds?: number;
+  costs: {milliseconds: number; peakRssBytes: number; longestSegmentMilliseconds: number;
+    phases?: Record<string,{calls:number;milliseconds:number}>}[];
+}>;
 export type Registration = {
   id: string;
   engine?: 'native' | 'controlled' | undefined;
@@ -10,6 +18,9 @@ export type Registration = {
   concurrency?: number;
   memoryBudgetMB?: number;
   computeStepBudget?: number;
+  taskMilliseconds?: number;
+  batchMilliseconds?: number;
+  stopOnFault?: boolean;
   maxSteps: number;
   maxAttempts: number;
 };
@@ -23,8 +34,10 @@ export type TaskResult<T extends TaskInput = TaskInput> = {
   decisions: any[];
   facts: any[];
   policy: any;
+  policyResources?: PolicyResources;
   cost: {
     milliseconds: number;
+    reservedMilliseconds?: number;
     steps: number;
     cpuMilliseconds?: number;
     processPeakRssBytes?: number;
@@ -54,6 +67,8 @@ export type TaskResult<T extends TaskInput = TaskInput> = {
   };
 };
 export type ExecutionHooks = {
+  signal?: AbortSignal;
+  deadline?: number;
   point?: (stage: 'before-advance' | 'after-advance' | 'after-snapshot' | 'before-commit' | 'after-commit', taskId: string) => void | Promise<void>;
 };
 
@@ -67,7 +82,16 @@ export type ExperimentDefinition<G extends GameTypes, T extends TaskInput, C ext
   parseRegistration: (value: unknown) => C;
   tasks: (config: C) => T[];
   setup: (task: T) => G['setup'];
-  policies: (task: T) => Record<string, Policy>;
+  /** Prepare these policies while the actual game is idle at its request.
+   * Other policies retain the normal concurrent BaseGame callback path. */
+  requiresCurrent?: (task: T) => boolean;
+  /** forkCurrent copies the actual waiting Context, including its continuation.
+   * The caller owns the returned game. requiresCurrent enables acquisition from
+   * policy decisions without changing the frozen BaseGame busy semantics. */
+  policies: (task: T, resources: PolicyResources, forkCurrent: () => Promise<GameHandle<G>>) => Record<string, Policy>;
+  /** Incremental enclosing checkpoint cost. It is sampled before the durable
+   * checkpoint write and settled afterwards, including failed writes. */
+  checkpointCost?: (task:T,resources:PolicyResources,forkCurrent:()=>Promise<GameHandle<G>>)=>Promise<(milliseconds:number)=>void>;
   facts: (record: unknown) => unknown[];
   summarize: (result: TaskResult<T>) => S;
   identity: () => Promise<unknown>;

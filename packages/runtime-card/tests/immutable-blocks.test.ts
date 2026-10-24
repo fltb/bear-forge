@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CardGraph, privateCardGraph } from '../src/graph.ts';
-import { ownRuleValue } from '../../card-engine/src/rules-values.ts';
+import { ownRuleValue, immutableRuleEpoch } from '../../card-engine/src/rules-values.ts';
 import { serialize, deserialize } from 'node:v8';
 
 test('owned immutable rule graphs remain blocks and mutable exports preserve their aliases and cycles', () => {
@@ -96,4 +96,50 @@ test('large string dictionaries keep branch insertion order and bounded first wr
     assert.deepEqual(Object.keys(restored.root.table),Object.keys(graph.root.table));
     graph.close();child.close();restored.close();
   }
+});
+
+
+test('complete current equality preserves shared descendants, aliases, property order, holes and prototypes',()=>{
+  const leaf={n:1},root:{a:{n:number};b:{n:number};items:(number|undefined)[];record:Record<string,number>;self?:unknown}={a:leaf,b:leaf,items:[,undefined],record:{x:1,y:2}};root.self=root;
+  const graph=new CardGraph(root),identical=graph.fork();let checks=0;
+  try{
+    assert.equal(graph.sameCurrent(identical,()=>{checks++;}),true);assert.ok(checks>0);
+    const allocated=graph.fork();try{const value={n:1};allocated.root.a=value;allocated.root.b=allocated.root.a;assert.equal(graph.sameCurrent(allocated,()=>{}),true);}finally{allocated.close();}
+    for(const change of [(g:typeof graph)=>{g.root.a.n=2;},(g:typeof graph)=>{g.root.b={n:1};},(g:typeof graph)=>{g.root.items[0]=undefined;},(g:typeof graph)=>{delete g.root.record.x;g.root.record.x=1;},(g:typeof graph)=>{g.root.record=Object.assign(Object.create(null),{x:1,y:2});}]){
+      const child=graph.fork();try{change(child);assert.equal(graph.sameCurrent(child,()=>{}),false);}finally{child.close();}
+    }
+    assert.throws(()=>graph.sameCurrent(identical,()=>{throw Error('cancelled equality');}),/cancelled equality/);
+    assert.equal(graph.root.a.n,1);assert.equal(graph.root.a,graph.root.b);assert.equal(graph.root.self,graph.root);
+  }finally{graph.close();identical.close();}
+});
+
+
+test('current equality compares fresh immutable blocks and preserves prior Program identities and cross-block aliases',()=>{
+  const make=()=>ownRuleValue({nested:{n:1}}),existing=make(),base=new CardGraph<{whole:ReturnType<typeof make>|null;alias:{n:number}|null}>({whole:null,alias:null});
+  const anchor=immutableRuleEpoch(),left=base.fork(),same=base.fork(),different=base.fork(),mutable=base.fork(),prior=base.fork();
+  try{
+    const first=make();left.root.whole=first;left.root.alias=first.nested;
+    const next=make();same.root.whole=next;same.root.alias=next.nested;
+    assert.equal(left.sameCurrent(same,()=>{},anchor),true);
+    assert.equal(left.sameCurrent(same,()=>{}),false,'a later comparison must conservatively anchor pre-existing blocks');
+    different.root.whole=make();different.root.alias=make().nested;assert.equal(left.sameCurrent(different,()=>{},anchor),false);
+    mutable.root.whole=make();mutable.root.alias={n:1};assert.equal(left.sameCurrent(mutable,()=>{},anchor),false);
+    prior.root.whole=existing;prior.root.alias=existing.nested;assert.equal(left.sameCurrent(prior,()=>{},anchor),false,'Program-held identity must not be renamed');
+    assert.equal(left.root.whole.nested,left.root.alias);
+  }finally{base.close();left.close();same.close();different.close();mutable.close();prior.close();}
+});
+
+
+test('incremental collection keeps up with sustained wide frames without a full collection or idle drain',()=>{
+  const graph=new CardGraph<{keep:{n:number};frames:Record<string,number>[]}>({keep:{n:7},frames:[]}),sibling=graph.fork();
+  let peak=0;
+  try{
+    for(let turn=0;turn<200;turn++){
+      graph.root.frames=Array.from({length:100},(_,i)=>Object.fromEntries(Array.from({length:64},(_,j)=>['slot'+j,turn+i+j])));
+      graph.boundary();peak=Math.max(peak,graph.nodeCount);
+      assert.equal(graph.root.frames[99]!.slot63,turn+162);
+      assert.equal(graph.root.keep.n,7);assert.equal(sibling.root.frames.length,0);
+    }
+    assert.ok(peak<4000,`unreachable wide frames accumulated to ${peak} rows`);
+  }finally{graph.close();sibling.close();}
 });

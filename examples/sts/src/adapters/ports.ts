@@ -13,7 +13,9 @@ import {createCardChoices} from "../rules/card-choices.ts";
 import {createCombatSelectionUtils} from "../content/cards/shared/selection-utils.ts";
 import {battlePublications} from "./battle-publications.ts";
 import {adventureViews} from "./adventure-views.ts";
-import {combatViews} from "./combat-views.ts";
+import {combatViews,frozenEyePublication} from "./combat-views.ts";
+import {cardPiles} from '../rules/card-piles.ts';
+import {zones} from '../rules/zones.ts';
 import type {CardChoicePlayer,CardSelection,PendingCardChoice} from "../rules/card-choices.types.ts";
 
 const {defineRules,defineQuery,defineEffect,sequence,when,call,query,on,install}=rules;
@@ -46,6 +48,10 @@ export const combatSelectionUtils=createCombatSelectionUtils(combatChoices);
 export const stsPorts=defineRules({requires:[adventureChoices,combatChoices,combatSessions],build(){
   const event=ruleModules.portEffect<GameEvent[],null>('event');
   const flush=defineEffect<number,void>(b=>{const count=b.local<number>(),cursor=query(adventures.exports.historyCursor,b.input);return sequence(
+    when(b.read(v=>frozenEyePublication.visible(v,v.input)&&v.query(combatSessions.exports.forRun,v.input)!==null),call(cardPiles.exports.revealDraw,b.read(v=>{
+      const session=v.query(combatSessions.exports.current,v.query(combatSessions.exports.forRun,v.input)!),piles=v.query(battles.exports.status,session.battle).piles;
+      return{piles,count:v.query(zones.exports.members,v.query(cardPiles.exports.bindings,piles).draw).length};
+    }))),
     when(b.read(v=>{const s=v.get(cursor);return s.published<s.length;}),sequence(
       b.assign(count,b.read(v=>v.get(cursor).length)),
       call(event,query(adventures.exports.pendingHistory,b.input)),call(adventures.exports.published,{run:b.input,count}),

@@ -5,6 +5,7 @@ import { callback, exceptionMessage } from '@bear-forge/runtime';
 import { invokeOwnedStop, inputlessReply } from '../../runtime/src/stop-ownership.ts';
 import { RequestIdSchema, GameErrorSchema, JsonValueSchema, InputOptionsSchema } from '@bear-forge/contracts/game';
 import type { BaseGameBinder } from '@bear-forge/contracts/loading';
+import {registerCurrentFork,registerCurrentAccess} from './current.ts';
 /** GameContract adapters only read stable published data. Unknown provider
  * values first become private DTOs; players and parsers still receive copies. */
 function adapterValue<T>(value: T): T {
@@ -625,6 +626,16 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
           retainOwned(requests, requests.every(isOwnedTree), requests.every(isDenseTree));
           state = shared.state.kind === 'request' ? retainOwned({ kind: 'request', requests }, isOwnedTree(requests), isDenseTree(requests)) : shared.state;
         } else await refresh();
+        if(!closed)registerCurrentAccess(game,async operation=>{
+          const error=availability(true);if(error)throw Error(error.error.code+': '+error.error.message);
+          computing=true;try{return await operation(instance);}finally{computing=false;}
+        });
+        if(!closed&&instance.fork)registerCurrentFork(game,async()=>{
+          const error=availability(true);
+          if(error)return error;
+          if(state.kind==='fault')return{ok:false,error:copy(state.error)};
+          return instance.fork!();
+        });
         return closed ? {
           ok: false,
           error: state.error

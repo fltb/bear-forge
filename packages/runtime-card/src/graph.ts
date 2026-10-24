@@ -1,8 +1,9 @@
+import {registerProbabilityFork} from '../../card-engine/src/probability.ts';
 import { types } from 'node:util';
 import { CowStore } from './cow-index.ts';
 import {CowProperties} from './cow-properties.ts';
 import { arrayPrototypeIsPlain } from '../../boundary/src/values.ts';
-import { isImmutableRuleValue, admitImmutableRuleBlock } from '../../card-engine/src/rules-values.ts';
+import { isImmutableRuleValue, admitImmutableRuleBlock, immutableRuleEpoch, immutableRuleBirth } from '../../card-engine/src/rules-values.ts';
 import { Publication } from './publication.ts';
 
 type Reference = { readonly ref: number };
@@ -43,10 +44,12 @@ export class CardGraph<T> {
   private collectionAt = 2048;
   private collection: Collection | null = null;
   private allocationAtBoundary = 0;
+  private writesAtBoundary = 0;
   private restoring: Set<object> | null = null;
   private open = true;
   private rootValue: Value;
   constructor(value: T, immutable?: readonly object[]) {
+    registerProbabilityFork(this,()=>this.fork() as CardGraph<any>,()=>process.memoryUsage().rss);
     if(immutable)this.restoring=new Set(immutable);
     this.rootValue = this.encode(value);
     if(this.restoring?.size)throw Error('Snapshot contains unreachable immutable blocks');
@@ -54,7 +57,7 @@ export class CardGraph<T> {
     // The complete import already encoded every alias. Subsequent computation
     // uses managed references, never retained transferred source objects.
     if (this.identity.next) this.identity.originals = new WeakMap();
-    this.allocationAtBoundary=this.identity.next;
+    this.allocationAtBoundary=this.identity.next;this.writesAtBoundary=0;
   }
   get root(): T { if(!this.open)throw Error('Closed card storage');return this.decode(this.rootValue) as T; }
   private encode(value: any): Value {
@@ -94,6 +97,7 @@ export class CardGraph<T> {
     return index === undefined ? row.props.has(key) : Object.hasOwn(row.pages!.get(Math.floor(index / pageWidth)) ?? {}, key);
   }
   private put(row: Row, key: string, value: Value): void {
+    this.writesAtBoundary++;
     this.shade(value);
     const index = numeric(key);
     if (index === undefined) row.props.set(key,value);
@@ -169,6 +173,49 @@ export class CardGraph<T> {
       preventExtensions() { throw TypeError('Card state cannot be frozen'); },
     });
     this.views.set(id, proxy); proxies.set(proxy, { graph: this, id, reference: value }); return proxy;
+  }
+  /** Conservative equality of complete current graphs. Reference IDs are
+   * paired bijectively, preserving aliases/cycles across different allocations.
+   * Immutable data is compared with the same alias guarantee. No root field
+   * is omitted, including frames, queues and remaining execution budget. */
+  sameCurrent(other:CardGraph<T>,check:()=>void,createdAfter=immutableRuleEpoch()):boolean{
+    if(!this.open||!other.open)throw Error('Closed card storage');
+    const pending:[Value,Value][]=[[this.rootValue,other.rootValue]],leftIds=new Map<number,number>(),rightIds=new Map<number,number>();let visited=0;
+    const leftBlocks=new Map<object,object>(),rightBlocks=new Map<object,object>();
+    const sameBlocks=(first:object,second:object):boolean=>{
+      const work:[unknown,unknown][]=[[first,second]];
+      while(work.length){
+        if((visited++&255)===0)check();const [x,y]=work.pop()!;
+        if(x===null||y===null||typeof x!=='object'||typeof y!=='object'){if(!Object.is(x,y))return false;continue;}
+        // Values that existed before this chance expansion may also be
+        // referenced by shared Program code. They are identity anchors.
+        if((immutableRuleBirth(x)??0)<=createdAfter||(immutableRuleBirth(y)??0)<=createdAfter){if(x!==y)return false;continue;}
+        if(leftBlocks.has(x)||rightBlocks.has(y)){if(leftBlocks.get(x)!==y||rightBlocks.get(y)!==x)return false;continue;}
+        leftBlocks.set(x,y);rightBlocks.set(y,x);
+        if(Object.getPrototypeOf(x)!==Object.getPrototypeOf(y))return false;
+        const a=Reflect.ownKeys(x),b=Reflect.ownKeys(y);if(a.length!==b.length)return false;
+        for(let i=0;i<a.length;i++){const key=a[i]!;if(key!==b[i])return false;work.push([(x as Record<PropertyKey,unknown>)[key],(y as Record<PropertyKey,unknown>)[key]]);}
+      }
+      return true;
+    };
+    const entries=(row:Row):[string,Value][]=>{const out:[string,Value][]=[];row.pages!.forEach(values=>{for(const key of Object.keys(values))out.push([key,values[key]!]);});row.props.forEach((value,key)=>out.push([key,value]));return out;};
+    while(pending.length){
+      if((visited++&255)===0)check();const [a,b]=pending.pop()!;
+      if(a===null||b===null||typeof a!=='object'||typeof b!=='object'){if(!Object.is(a,b))return false;continue;}
+      if('block' in a||'block' in b){if(!('block' in a)||!('block' in b)||!sameBlocks(a.block,b.block))return false;continue;}
+      if(leftIds.has(a.ref)||rightIds.has(b.ref)){if(leftIds.get(a.ref)!==b.ref||rightIds.get(b.ref)!==a.ref)return false;continue;}
+      leftIds.set(a.ref,b.ref);rightIds.set(b.ref,a.ref);
+      const left=this.rows.get(a.ref),right=other.rows.get(b.ref);if(!left||!right)throw Error('Missing card node');
+      if(left===right){
+        // Shared rows can still point at independently changed descendants.
+        const visit=(value:Value)=>{if(value!==null&&typeof value==='object')pending.push([value,value]);};
+        left.pages!.forEach(values=>{for(const value of Object.values(values))visit(value);});left.props.forEach(visit);continue;
+      }
+      if(left.array!==right.array||left.nullPrototype!==right.nullPrototype||left.length!==right.length)return false;
+      const x=entries(left),y=entries(right);if(x.length!==y.length)return false;
+      for(let i=0;i<x.length;i++){if(x[i]![0]!==y[i]![0])return false;pending.push([x[i]![1],y[i]![1]]);}
+    }
+    check();return true;
   }
   own<V>(value: V): V { return this.decode(this.encode(value)); }
   export<V>(value: V): V { return this.materialize(value); }
@@ -323,11 +370,22 @@ export class CardGraph<T> {
     this.identity.originals = new WeakMap();
     const allocated = this.identity.next - this.allocationAtBoundary;
     this.allocationAtBoundary = this.identity.next;
+    const writes=this.writesAtBoundary;this.writesAtBoundary=0;
     if (!this.collection && this.rows.size >= this.collectionAt) this.beginCollection();
-    if (this.collection) this.collectSlice(Math.max(256, allocated * 4));
+    // Marking visits fields as well as rows. Paying only per new object cannot
+    // keep up with wide live frames: the insertion barrier continually adds
+    // more fields than the collector scans, so even dead rows never sweep.
+    // Charge to actual writes; fork and first edit still do no world scan.
+    if (this.collection) this.collectSlice(Math.max(256, allocated * 4 + writes * 2));
   }
   collect(): void {
     this.beginCollection();
+    while (this.collection) this.collectSlice(4096);
+  }
+  /** Short probability continuations fork again at the next random point.
+   * Finish due collection there so child forks do not keep restarting it. */
+  finishCollection(): void {
+    if (!this.collection && this.rows.size >= this.collectionAt) this.beginCollection();
     while (this.collection) this.collectSlice(4096);
   }
   close(): void { this.rows.clear(); this.views.clear(); this.collection = null; this.rootValue=undefined;this.open=false;this.epoch++; }

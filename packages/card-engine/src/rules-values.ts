@@ -1,7 +1,13 @@
 import { isStaticHandle } from './rules-internal.ts';
 import type {Borrowed} from './rules.types.ts';
 
-const immutableValues = new WeakSet<object>();
+const immutableValues = new WeakMap<object,number>();
+let immutableEpoch=0;
+const markImmutable=(value:object)=>{if(!immutableValues.has(value))immutableValues.set(value,++immutableEpoch);};
+/** Private identity anchors for sibling-current equality, never game data or
+ * entropy. Existing Program/parent objects keep their physical identity. */
+export const immutableRuleEpoch=():number=>immutableEpoch;
+export const immutableRuleBirth=(value:object):number|undefined=>immutableValues.get(value);
 /** Private ownership evidence, not a claim inferred from Object.freeze. */
 export function isImmutableRuleValue(value: object): boolean { return immutableValues.has(value); }
 
@@ -23,7 +29,7 @@ export function admitImmutableRuleBlock(root: object, admitted: (value: object) 
       if(child!==null&&typeof child==='object')pending.push(child);
     }
   }
-  for(let index=nodes.length-1;index>=0;index--){const node=nodes[index]!;Object.freeze(node);immutableValues.add(node);admitted(node);}
+  for(let index=nodes.length-1;index>=0;index--){const node=nodes[index]!;Object.freeze(node);markImmutable(node);admitted(node);}
 }
 
 function materialize<T>(input: T, freeze: boolean, reference?: (value: object) => unknown, share=false): T {
@@ -66,7 +72,7 @@ function materialize<T>(input: T, freeze: boolean, reference?: (value: object) =
     }
   }
   if (freeze) for (let index = nodes.length - 1; index >= 0; index--) {
-    const node = nodes[index]!; Object.freeze(node); immutableValues.add(node);
+    const node = nodes[index]!; Object.freeze(node); markImmutable(node);
   }
   return result;
 }
@@ -99,7 +105,7 @@ export function ownPrivateRuleValue<T>(value:T):T{
   const seen=new Set<object>(),pending:object[]=[value];
   while(pending.length){const node=pending.pop()!;if(seen.has(node)||immutableValues.has(node))continue;seen.add(node);
     for(const key of Object.keys(node)){const child=(node as Record<string,unknown>)[key];if(child!==null&&typeof child==='object')pending.push(child);}
-    Object.freeze(node);immutableValues.add(node);
+    Object.freeze(node);markImmutable(node);
   }
   return value;
 }

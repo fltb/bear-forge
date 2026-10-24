@@ -1,3 +1,4 @@
+import {publicMonsterName} from '../content/enemies/shared/programs.ts';
 import { typedValue } from '../rules/value.schemas.ts';
 import {emeraldElites} from "../content/enemies/shared/burning-elite.ts";
 import {z} from 'zod';
@@ -58,6 +59,10 @@ export const combatProgram=defineRules({requires:[emeraldElites,combatSessions,e
       forEach(definitions,definition=>when(b.read(v=>v.get(definition)===null),b.assign(roster,b.read(v=>[...v.get(roster),{actor:null,controller:null,id:monsterId.INVALID,name:'INVALID',miscInfo:0,parameters:[]}])),sequence(
         b.assign(prepared,b.read(v=>{const item=v.get(definition)!;return{...v.query(enemies.exports.metadata,item.definition),actor:item.actor,controller:null,miscInfo:0,parameters:item.parameters};})),b.assign(actors,b.read(v=>[...v.get(actors),v.get(prepared).actor])),b.assign(roster,b.read(v=>[...v.get(roster),v.get(prepared)])),
       ))),
+      // The immutable roster names are displayed by the original public view.
+      // Declare only that view's identity, never an internal encounter ID, HP
+      // draw or intent. Conditioning can reject another roster before shuffle.
+      call(random.exports.declare,{name:'combat-roster',value:b.read(v=>JSON.stringify(v.get(roster).map(publicMonsterName)))}),
       b.assign(registry,spawnEntity({definition:registryDefinition,owner:b.read(v=>v.query(adventures.exports.bindings,v.input.run).actor),scope})),
       b.assign(battle,spawnEntity({definition:battleDefinition,owner:b.read(v=>v.query(adventures.exports.bindings,v.input.run).actor),scope,setup:{actor:b.read(v=>v.query(adventures.exports.bindings,v.input.run).actor),registry,enemies:actors,masters:b.read(v=>v.query(permanentDecks.exports.current,v.query(adventures.exports.bindings,v.input.run).deck).cards),bottled:b.read(v=>{const s=v.query(permanentDecks.exports.current,v.query(adventures.exports.bindings,v.input.run).deck);return s.bottles.filter(index=>index>=0).map(index=>s.cards[index]!).filter(id=>id!==undefined);}),shuffleRng:b.read(v=>v.get(streams).shuffle),cardRng:b.read(v=>v.get(streams).cardRandom),drawPerTurn:5}})),
       forEach(b.read(v=>v.get(definitions).map((_,index)=>index)),index=>when(b.read(v=>v.get(definitions)[v.get(index)]!==null),sequence(

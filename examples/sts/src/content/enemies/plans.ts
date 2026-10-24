@@ -1,6 +1,7 @@
 import {rules} from '../../rules/execution.ts';
 import {random} from "../../rules/random.ts";
 import {encounterId as e} from "../../identifiers.ts";
+import {float24Choices,float24Index,permutationNextChoices,type Float24Selection,type OrderChoice} from '../../rules/ordering.ts';
 import type {MonsterPlan} from "../../encounters.types.ts";
 const {defineRules,defineEffect,sequence,when,whileDo,call}=rules;
 const weak=[[e.CULTIST,e.JAW_WORM,e.TWO_LOUSE,e.SMALL_SLIMES],[e.SPHERIC_GUARDIAN,e.CHOSEN,e.SHELL_PARASITE,e.THREE_BYRDS,e.TWO_THIEVES],[e.THREE_DARKLINGS,e.ORB_WALKER,e.THREE_SHAPES]] as const;
@@ -8,20 +9,59 @@ const strong=[[e.GREMLIN_GANG,e.LOTS_OF_SLIMES,e.RED_SLAVER,e.EXORDIUM_THUGS,e.E
 const weights=[[1/16,1/16,1/16,1.5/16,1.5/16,2/16,2/16,2/16,2/16,2/16],[2/29,2/29,3/29,3/29,3/29,4/29,6/29,6/29],[1/8,1/8,1/8,1/8,1/8,1/8,1/8,1/8]] as const;
 const elites=[[e.GREMLIN_NOB,e.LAGAVULIN,e.THREE_SENTRIES],[e.GREMLIN_LEADER,e.SLAVERS,e.BOOK_OF_STABBING],[e.GIANT_HEAD,e.NEMESIS,e.REPTOMANCER]] as const;
 const bosses=[[e.THE_GUARDIAN,e.HEXAGHOST,e.SLIME_BOSS],[e.AUTOMATON,e.COLLECTOR,e.CHAMP],[e.AWAKENED_ONE,e.TIME_EATER,e.DONU_AND_DECA]] as const;
-type Draw={stream:number;pool:readonly number[];weights:readonly number[]};
+// Both cached-plan execution and future-space execution use these original
+// content tables and predicates. No search-specific encounter rules exist.
+const eliteThresholds=[Math.fround(1/3),Math.fround(2/3)];
+function thresholds(weights:readonly number[]){let sum=0;return weights.map(weight=>sum=Math.fround(sum+Math.fround(weight)));}
+function fresh(picked:number,history:readonly number[]){return picked!==history.at(-1)&&picked!==history.at(-2);}
+function firstStrong(picked:number,history:readonly number[]){const last=history.at(-1);return !(last===e.SMALL_SLIMES&&(picked===e.LARGE_SLIME||picked===e.LOTS_OF_SLIMES)||last===e.TWO_LOUSE&&picked===e.THREE_LOUSE);}
+function freshElite(picked:number,history:readonly number[]){return picked!==history.at(-1);}
+function actIndex(act:number){if(!Number.isInteger(act)||act<1||act>3)throw Error('Monster plan requires act 1–3');return act-1;}
+function weakCount(act:number){return act===1?3:2;}
+/** The single original encounter selection definition. Both the production
+ * rejection loop and its probability projection consume this same data. */
+export function encounterSelection(act:number,elite:boolean,history:readonly number[]):Float24Selection {
+  const index=actIndex(act),early=history.length<weakCount(act),values=elite?elites[index]!:early?weak[index]!:strong[index]!;
+  const bounds=elite?eliteThresholds:thresholds(early?values.map(()=>1/values.length):weights[index]!).slice(0,-1);
+  const accept=elite?freshElite:history.length===weakCount(act)?firstStrong:fresh;
+  return{values,bounds,accepted:values.map(value=>accept(value,history))};
+}
+export function nextEncounterChoices(act:number,elite:boolean,history:readonly number[]):OrderChoice[]{
+  return float24Choices(encounterSelection(act,elite,history));
+}
+function bossPool(act:number){return bosses[actIndex(act)]!;}
+export function secondBossChoices(first:number):OrderChoice[]{
+  return permutationNextChoices(bossPool(3),[first]);
+}
+type Draw={stream:number;act:number;elite:boolean;history:readonly number[]};
 /** Content pools and rejection rules use public random atoms; no mutable RandomState leaves its owner. */
 export const encounterPlans=defineRules({requires:[random],build(){
-  const weighted=defineEffect<Draw,number>(b=>{const roll=b.local<number>();return sequence(b.assign(roll,call(random.exports.float,{stream:b.read(v=>v.input.stream)})),b.return(b.read(v=>{let sum=0;for(let i=0;i<v.input.weights.length;i++){sum=Math.fround(sum+Math.fround(v.input.weights[i]!));if(v.get(roll)<sum)return v.input.pool[i]!;}return v.input.pool.at(-1)!;})));});
-  const populate=defineEffect<Draw&{prefix:readonly number[];count:number},number[]>(b=>{const list=b.local<number[]>(),picked=b.local<number>(),added=b.local<number>();return sequence(b.assign(list,b.read(v=>[...v.input.prefix])),b.assign(added,0),whileDo(b.read(v=>v.get(added)<v.input.count),sequence(
-    b.assign(picked,call(weighted,b.read(v=>({stream:v.input.stream,pool:v.input.pool,weights:v.input.weights})))),when(b.read(v=>v.get(picked)!==v.get(list).at(-1)&&v.get(picked)!==v.get(list).at(-2)),sequence(b.assign(list,b.read(v=>[...v.get(list),v.get(picked)])),b.assign(added,b.read(v=>v.get(added)+1)))),
-  )),b.return(list));});
-  const generate=defineEffect<{stream:number;act:number;ascension:number},MonsterPlan>(b=>{const index=b.local<number>(),monsters=b.local<number[]>(),eliteList=b.local<number[]>(),picked=b.local<number>(),roll=b.local<number>(),found=b.local<boolean>(),order=b.local<readonly number[]>();return sequence(
-    b.assign(index,b.read(v=>{if(!Number.isInteger(v.input.act)||v.input.act<1||v.input.act>3)throw Error('Monster plan requires act 1–3');return v.input.act-1;})),
-    b.assign(monsters,call(populate,b.read(v=>{const pool=weak[v.get(index)]!;return{stream:v.input.stream,pool,weights:pool.map(()=>1/pool.length),prefix:[],count:v.input.act===1?3:2};}))),b.assign(found,false),
-    whileDo(b.read(v=>!v.get(found)),sequence(b.assign(picked,call(weighted,b.read(v=>({stream:v.input.stream,pool:strong[v.get(index)]!,weights:weights[v.get(index)]!})))),when(b.read(v=>{const last=v.get(monsters).at(-1),next=v.get(picked);return !(last===e.SMALL_SLIMES&&(next===e.LARGE_SLIME||next===e.LOTS_OF_SLIMES)||last===e.TWO_LOUSE&&next===e.THREE_LOUSE);}),sequence(b.assign(monsters,b.read(v=>[...v.get(monsters),v.get(picked)])),b.assign(found,true))))),
-    b.assign(monsters,call(populate,b.read(v=>({stream:v.input.stream,pool:strong[v.get(index)]!,weights:weights[v.get(index)]!,prefix:v.get(monsters),count:12})))),b.assign(eliteList,[]),
-    whileDo(b.read(v=>v.get(eliteList).length<10),sequence(b.assign(roll,call(random.exports.float,{stream:b.read(v=>v.input.stream)})),b.assign(picked,b.read(v=>elites[v.get(index)]![v.get(roll)<Math.fround(1/3)?0:v.get(roll)<Math.fround(2/3)?1:2])),when(b.read(v=>v.get(picked)!==v.get(eliteList).at(-1)),b.assign(eliteList,b.read(v=>[...v.get(eliteList),v.get(picked)]))))),
-    b.assign(order,random.exports.shuffle({stream:b.read(v=>v.input.stream),items:[0,1,2]})),b.return({monsterList:monsters,eliteList,boss:b.read(v=>bosses[v.get(index)]![v.get(order)[0]!]!),secondBoss:b.read(v=>v.input.act===3&&v.input.ascension>=20?bosses[v.get(index)]![v.get(order)[1]!]!:e.INVALID)}),
-  );});
+  const next=defineEffect<Draw,number>(b=>{
+    const selection=b.local<Float24Selection>(),roll=b.local<number>(),index=b.local<number>();
+    return sequence(
+      b.assign(selection,b.read(v=>encounterSelection(v.input.act,v.input.elite,v.input.history))),
+      whileDo(true,sequence(
+        b.assign(roll,call(random.exports.float,{stream:b.read(v=>v.input.stream)})),
+        b.assign(index,b.read(v=>float24Index(v.get(selection),v.get(roll)))),
+        when(b.read(v=>v.get(selection).accepted[v.get(index)]!),b.return(b.read(v=>v.get(selection).values[v.get(index)]!))),
+      )),
+    );
+  });
+  const populate=defineEffect<{stream:number;act:number;elite:boolean;count:number},number[]>(b=>{
+    const list=b.local<number[]>(),picked=b.local<number>();
+    return sequence(b.assign(list,[]),whileDo(b.read(v=>v.get(list).length<v.input.count),sequence(
+      b.assign(picked,call(next,{stream:b.read(v=>v.input.stream),act:b.read(v=>v.input.act),elite:b.read(v=>v.input.elite),history:list})),
+      b.assign(list,b.read(v=>[...v.get(list),v.get(picked)])),
+    )),b.return(list));
+  });
+  const generate=defineEffect<{stream:number;act:number;ascension:number},MonsterPlan>(b=>{
+    const monsters=b.local<number[]>(),eliteList=b.local<number[]>(),order=b.local<readonly number[]>();
+    return sequence(
+      b.assign(monsters,call(populate,{stream:b.read(v=>v.input.stream),act:b.read(v=>v.input.act),elite:false,count:b.read(v=>weakCount(v.input.act)+1+12)})),
+      b.assign(eliteList,call(populate,{stream:b.read(v=>v.input.stream),act:b.read(v=>v.input.act),elite:true,count:10})),
+      b.assign(order,random.exports.shuffle({stream:b.read(v=>v.input.stream),items:b.read(v=>bossPool(v.input.act))})),
+      b.return({monsterList:monsters,eliteList,boss:b.read(v=>v.get(order)[0]!),secondBoss:b.read(v=>v.input.act===3&&v.input.ascension>=20?v.get(order)[1]!:e.INVALID)}),
+    );
+  });
   return{exports:{generate}};
 }});

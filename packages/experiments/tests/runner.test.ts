@@ -7,6 +7,42 @@ import { createExperimentRunner } from '../src/runner.ts';
 import { ExperimentFiles } from '../src/files.ts';
 import { createHash } from 'node:crypto';
 
+test('bounded runner accounts for prior work, stops on faults, and does not restart exhausted batches', async () => {
+  type G = {setup:number;ports:{};programResult:number;view:number;player:'0';observation:number;actions:{};event:never;playerEvent:never;result:number;control:never};
+  const {createNativeLoader} = await import('@bear-forge/runtime-native');
+  const {z} = await import('zod');
+  const directory = await mkdtemp(join(tmpdir(),'bear-bounded-runner-'));
+  let starts = 0, fail = false;
+  const runner = createExperimentRunner<G,{id:string;seed:number},any,{id:string;status:string}>({
+    contract:{schemas:{view:z.number(),result:z.number()},ports:{},finish:(result:number)=>({view:result,result})} as any,
+    execution:{identity:{kind:'bounded-fixture'},load:()=>createNativeLoader().load({schemas:{setup:z.number(),result:z.number(),ports:{}},async run(value:number){starts++;if(fail)throw Error('fixture-fault');return value;}})},
+    parseRegistration:(v:unknown)=>v as any,tasks:()=>[{id:'a',seed:1},{id:'b',seed:2}],setup:(t:any)=>t.seed,
+    policies:()=>({}),facts:()=>[],summarize:(row:any)=>({id:row.id,status:row.status}),identity:async()=>({version:1}),
+  });
+  const config={id:'bounded',engine:'native',maxAttempts:1,maxSteps:2,concurrency:1,batchMilliseconds:60_000,taskMilliseconds:10_000,stopOnFault:true};
+  try {
+    const aborted=new AbortController();aborted.abort();
+    assert.equal((await runner.runExperiment(join(directory,'cancelled'),config as any,undefined,{signal:aborted.signal})).results.length,0);
+    assert.equal(starts,0);
+    const cancelledFiles=new ExperimentFiles(join(directory,'cancelled'),v=>v);
+    const wallWindow:any=await cancelledFiles.read('wall-budget');
+    assert.equal(wallWindow.milliseconds,config.batchMilliseconds);
+    await cancelledFiles.write('wall-budget',{...wallWindow,startedAt:Date.now()-config.batchMilliseconds-1});
+    const expired=await runner.runExperiment(join(directory,'cancelled'));
+    assert.equal(expired.stopReason,'wall-budget');assert.equal(expired.results.length,0);assert.equal(starts,0);
+    await cancelledFiles.write('wall-budget',{...wallWindow,milliseconds:config.batchMilliseconds+1});
+    await assert.rejects(runner.runExperiment(join(directory,'cancelled')),/Invalid experiment wall budget/);
+    const spent=join(directory,'spent'),files=new ExperimentFiles<{id:string;status:string;cost:{milliseconds:number}}>(spent,v=>v);
+    await files.register(config,[{id:'a',seed:1},{id:'b',seed:2}]);
+    await files.commit('a',{id:'a',status:'ended',cost:{milliseconds:60_001}});
+    assert.equal((await runner.runExperiment(spent)).results.length,1);assert.equal(starts,0);
+    fail=true;
+    const failed=join(directory,'failed'),first=await runner.runExperiment(failed,config as any);
+    assert.equal(first.results.length,1);assert.equal(first.results[0]!.status,'fault');assert.equal(starts,1);
+    assert.equal((await runner.runExperiment(failed)).results.length,1);assert.equal(starts,1);
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
+
 test('frozen implementation identity compares boundary data, not property order', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'bear-identity-'));
   const files = new ExperimentFiles<{ id: string }>(directory, value => value);
@@ -32,6 +68,12 @@ test('frozen implementation identity compares boundary data, not property order'
   identity = { metadata: { b: 0, a: 1 }, sourceDigest: 'fixed' };
   await assert.rejects(() => runner.runExperiment(directory), /Registered production code or dependency version changed/);
   identity = { metadata: { b: -0, a: 1 }, sourceDigest: 'fixed' };
+  const heapSizeLimit = frozen.runtime.heapSizeLimit;
+  assert.ok(heapSizeLimit > 0);
+  frozen.runtime.heapSizeLimit = heapSizeLimit + 1;
+  await files.write('implementation', frozen);
+  await assert.rejects(() => runner.runExperiment(directory), /Experiment runtime version changed/);
+  frozen.runtime.heapSizeLimit = heapSizeLimit;
   frozen.runtime.versions.v8 = 'different-v8';
   await files.write('implementation', frozen);
   await assert.rejects(() => runner.runExperiment(directory), /Experiment runtime version changed/);

@@ -39,9 +39,9 @@ export function createAdventureLoot(acquisition:ReturnType<typeof createAdventur
   };}
   const goldenIdol=bonusBattleGold(.25);
   const potion=defineEffect<{run:number;rewards:AdventureRewards},AdventureRewards>(b=>{const roll=b.local<number>(),picked=b.local<number>(),chance=b.local<number>();return sequence(
-    b.assign(chance,query(whiteStatue.query,b.input)),b.assign(roll,call(random.exports.int,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input.run).streams.potion),start:0,end:99})),
-    when(b.read(v=>v.get(roll)>=v.get(chance)),sequence(call(adventures.exports.setPotionChance,{run:b.read(v=>v.input.run),chance:b.read(v=>v.query(adventures.exports.economy,v.input.run).potionChance+10)}),b.return(b.read(v=>v.input.rewards)))),
-    b.assign(picked,call(adventureDraws.exports.rewardPotion,b.read(v=>v.query(adventures.exports.bindings,v.input.run).streams.potion))),call(adventures.exports.setPotionChance,{run:b.read(v=>v.input.run),chance:b.read(v=>v.query(adventures.exports.economy,v.input.run).potionChance-10)}),b.return(b.read(v=>({...v.input.rewards,potions:[...v.input.rewards.potions,v.get(picked)]}))),
+    b.assign(chance,query(whiteStatue.query,b.input)),b.assign(roll,call(random.exports.mappedInt,b.read(v=>{const values=Array.from({length:100},(_,roll)=>Number(roll<v.get(chance)));return{stream:v.query(adventures.exports.bindings,v.input.run).streams.potion,values,declarations:values.map(value=>({name:'reward-potion-present',value}))};}))),
+    when(b.read(v=>v.get(roll)===0),sequence(call(adventures.exports.setPotionChance,{run:b.read(v=>v.input.run),chance:b.read(v=>v.query(adventures.exports.economy,v.input.run).potionChance+10)}),b.return(b.read(v=>v.input.rewards)))),
+    b.assign(picked,call(adventureDraws.exports.rewardPotion,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input.run).streams.potion),publish:true})),call(adventures.exports.setPotionChance,{run:b.read(v=>v.input.run),chance:b.read(v=>v.query(adventures.exports.economy,v.input.run).potionChance-10)}),b.return(b.read(v=>({...v.input.rewards,potions:[...v.input.rewards.potions,v.get(picked)]}))),
   );});
   function extraRelic(draw:rules.Effect<{run:number;tier:RelicTier},RelicDefinition>){
     const effect=defineEffect<RewardInput,AdventureRewards>(b=>{const rank=b.local<RelicTier>(),relic=b.local<RelicDefinition>();return sequence(
@@ -50,20 +50,25 @@ export function createAdventureLoot(acquisition:ReturnType<typeof createAdventur
     const text=programText(draw);return text===undefined?effect:describeProgram(effect,`额外掉落1件${text}`);
   }
   function extraCards(room:Room){return describeProgram(defineEffect<RewardInput,AdventureRewards>(b=>{const cards=b.local<CardPreview[]>();return sequence(
-    b.assign(cards,call(adventureDraws.exports.reward,{run:b.read(v=>v.input.run),room})),b.return(b.read(v=>({...v.input.rewards,cards:[...v.input.rewards.cards,v.get(cards)]}))),
+    b.assign(cards,call(adventureDraws.exports.reward,{publish:true,run:b.read(v=>v.input.run),room})),b.return(b.read(v=>({...v.input.rewards,cards:[...v.input.rewards.cards,v.get(cards)]}))),
   );}),'额外获得1组卡牌奖励');}
   const blackStar=rewardInRoom('BLACK_STAR','ELITE',extraRelic(nonCampfireRelic));
   const prayerWheel=rewardInRoom('PRAYER_WHEEL','MONSTER',extraCards('MONSTER'));
   const battle=defineEffect<{run:number;room:Room},AdventureRewards>(b=>{const reward=b.local<AdventureRewards>(),gold=b.local<number>(),cards=b.local<CardPreview[]>(),relic=b.local<RelicDefinition>(),rank=b.local<RelicTier>();return sequence(
     b.assign(reward,emptyAdventureRewards()),
-    when(b.read(v=>v.input.room==='BOSS'),sequence(b.assign(gold,call(random.exports.int,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input.run).streams.misc),start:-5,end:5})),b.assign(gold,b.read(v=>Math.round(Math.fround(Math.fround(100+v.get(gold))*Math.fround(.75)))))),b.assign(gold,call(random.exports.int,{stream:b.read(v=>v.query(adventures.exports.bindings,v.input.run).streams.treasure),start:b.read(v=>v.input.room==='ELITE'?25:10),end:b.read(v=>v.input.room==='ELITE'?35:20)}))),
-    b.assign(gold,query(goldenIdol.query,{run:b.read(v=>v.input.run),gold})),b.assign(reward,b.read(v=>({...v.get(reward),gold:[v.get(gold)]}))),
+    b.assign(gold,call(random.exports.mappedInt,b.read(v=>{
+      const values=Array.from({length:11},(_,index)=>{
+        const base=v.input.room==='BOSS'?Math.round(Math.fround(Math.fround(95+index)*Math.fround(.75))):(v.input.room==='ELITE'?25:10)+index;
+        return v.query(goldenIdol.query,{run:v.input.run,gold:base});
+      });
+      return{stream:v.query(adventures.exports.bindings,v.input.run).streams[v.input.room==='BOSS'?'misc':'treasure'],values,declarations:values.map(value=>({name:'reward-gold',value}))};
+    }))),b.assign(reward,b.read(v=>({...v.get(reward),gold:[v.get(gold)]}))),
     when(b.read(v=>v.input.room==='ELITE'),sequence(
       b.assign(rank,call(tier,{run:b.read(v=>v.input.run),elite:true})),b.assign(relic,call(acquisition.exports.draw,{run:b.read(v=>v.input.run),tier:rank,shop:false,front:true,screenless:false})),b.assign(reward,b.read(v=>({...v.get(reward),relics:[...v.get(reward).relics,v.get(relic)]}))),
       b.assign(reward,call(blackStar,{run:b.read(v=>v.input.run),room:b.read(v=>v.input.room),rewards:reward})),
       b.assign(reward,b.read(v=>{const s=v.query(adventures.exports.location,v.input.run);return{...v.get(reward),emeraldKey:s.map.burningEliteX===s.x&&s.map.burningEliteY===s.y};})),
     )),
-    b.assign(reward,call(potion,{run:b.read(v=>v.input.run),rewards:reward})),b.assign(cards,call(adventureDraws.exports.reward,{run:b.read(v=>v.input.run),room:b.read(v=>v.input.room)})),b.assign(reward,b.read(v=>({...v.get(reward),cards:[...v.get(reward).cards,v.get(cards)]}))),
+    b.assign(reward,call(potion,{run:b.read(v=>v.input.run),rewards:reward})),b.assign(cards,call(adventureDraws.exports.reward,{publish:true,run:b.read(v=>v.input.run),room:b.read(v=>v.input.room)})),b.assign(reward,b.read(v=>({...v.get(reward),cards:[...v.get(reward).cards,v.get(cards)]}))),
     b.assign(reward,call(prayerWheel,{run:b.read(v=>v.input.run),room:b.read(v=>v.input.room),rewards:reward})),when(b.read(v=>v.input.room==='MONSTER'&&v.query(adventures.exports.economy,v.input.run).stolenGold>0),b.assign(reward,b.read(v=>({...v.get(reward),gold:[...v.get(reward).gold,v.query(adventures.exports.economy,v.input.run).stolenGold]})))),b.return(reward),
   );});
   return{exports:{tier,potion,battle,relicTexts:Object.freeze(Object.fromEntries(Object.entries({WHITE_BEAST_STATUE:whiteStatue.text,GOLDEN_IDOL:goldenIdol.text,BLACK_STAR:programText(blackStar),PRAYER_WHEEL:programText(prayerWheel)}).filter((entry):entry is [string,string]=>entry[1]!==undefined)))}};

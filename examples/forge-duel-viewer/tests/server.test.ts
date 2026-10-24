@@ -133,3 +133,21 @@ test('evaluation API reports planned batch tasks and condition-specific evidence
     assert.deepEqual(await(await fetch(base+'/api/relations')).json(),report);
   }finally{await new Promise<void>(r=>server.close(()=>r()));await rm(dir,{recursive:true,force:true});}
 });
+
+
+test('STS search evidence uses accepted decisions without Forge scores or private memory',async()=>{
+  const {rm}=await import('node:fs/promises');
+  const dir=await mkdtemp(join(tmpdir(),'bear-search-view-')),files=new ExperimentFiles(dir);
+  const search={algorithm:'r2',coverageComplete:true,completed:4,actions:[{key:'0',estimate:.4}],reason:null};
+  await files.write('task-search',{id:'search',input:{algorithm:'r2'},status:'ended',result:{outcome:'death',heartDefeated:false},
+    packets:[{player:'0',value:{public:true}},{player:'1',value:{private:true}}],facts:[{auditSecret:true}],
+    policy:{secret:true},decisions:[{step:1,accepted:{player:'0',reply:{action:{bits:0}}},proposal:{policyVersion:'sts-player-r2@4',nextMemory:{evidence:search,privateExtra:true}}}]});
+  const server=createEvidenceServer(dir);await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{
+    const base='http://127.0.0.1:'+(server.address() as any).port;
+    const response=await fetch(base+'/api/evidence?task=search&player=0');assert.equal(response.status,200);
+    const body=await response.json();assert.deepEqual(body.trajectory.transitions,[{step:1,action:{bits:0},policyVersion:'sts-player-r2@4',search}]);
+    assert.deepEqual(body.values,[{player:'0',value:{public:true}}]);
+    assert.equal(JSON.stringify(body).includes('private'),false);assert.equal(JSON.stringify(body).includes('secret'),false);
+  }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));await rm(dir,{recursive:true,force:true});}
+});

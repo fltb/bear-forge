@@ -3,7 +3,7 @@ import {observe} from '../src/contract.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createInteractiveSession} from '../src/interactive-session.ts';
-import {presentDecision,describeCard,formatDecision} from '../src/presentation.ts';
+import {presentDecision,describeCard,formatDecision,enemyIntentLabel} from '../src/presentation.ts';
 import {MS,moveId} from '../src/combat-identifiers.ts';
 import {actRecovery} from '../src/program/progression.ts';
 import type {RelicId} from '../src/identifiers.ts';
@@ -40,6 +40,18 @@ function assertSelectionMetadata(r:InteractiveRecord){
     assert.equal(s.canPickZero,s.skipIndex!==undefined&&r.actions.some(a=>(a.bits&0xffff)===s.skipIndex));
   }
 }
+
+test('public enemy intent explains non-attacks and uses original damage without revealing hidden intent',()=>{
+  const {observation}=presentationFixture();
+  const battle=observation.battle!;
+  // This fixture publishes detail views only when enabled; a detached public
+  // presentation example supplies the same already-resolved intent fields.
+  battle.intents=[{index:0,name:'CULTIST_INCANTATION',attack:false,baseDamage:0,attackDamage:0,hits:0}];
+  assert.match(enemyIntentLabel(battle,0),/获得仪式/);
+  battle.intents=[{index:0,name:'CULTIST_DARK_STRIKE',attack:true,baseDamage:6,attackDamage:17,hits:3}];
+  assert.match(enemyIntentLabel(battle,0),/17×3/);
+  battle.intentHidden=true;assert.equal(enemyIntentLabel(battle,0),'隐藏');
+});
 
 test('combat potion presentation distinguishes discard, untargeted use and real enemy targets',()=>{
   const program=new CardProgram(combatContentDefinition);

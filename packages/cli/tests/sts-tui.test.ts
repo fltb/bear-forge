@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fit,wrap,cellWidth,renderTui} from '../src/sts-tui-view.ts';
+import {fit,wrap,cellWidth,renderTui,cardLines} from '../src/sts-tui-view.ts';
 import {runTui} from '../src/sts-tui.ts';
 import type {TuiModel} from '../src/sts-tui-view.ts';
 
@@ -14,6 +14,12 @@ test('small terminal cannot obscure an active action; displays resize and save-e
 });
 test('CLI rejects unknown flags rather than starting an unintended game',async()=>{
   await assert.rejects(runTui(['--resume']),/缺少值/);await assert.rejects(runTui(['--seed','1','--seed','2']),/重复/);
+});
+test('card text keeps actual turn cost, free play, upgrade and original full effect',()=>{
+  const lines=cardLines({id:'BASH',upgraded:true,cost:2,costForTurn:1,freeToPlayOnce:true,retain:true});
+  assert.match(lines.join('\n'),/Bash\+.*攻击.*基础费用 2.*本回合费用 1/);
+  assert.match(lines.join('\n'),/保留.*本次免费.*需要敌方目标/);
+  assert.match(lines.join('\n'),/易伤/);
 });
 
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -41,6 +47,10 @@ test('TUI renders original multi-choice, rejects absent combinations, scrolls ba
     assert.equal(chooseMultiple(batch,[999]),undefined);
     const model:TuiModel={batch,tab:1,scroll:1e9,selected:0,filter:'',filtering:false,message:'fixture',busy:false,log:[],focus:'content',confirm:false,multi:[candidates[0]!.index]};
     const output=renderTui(model,80,24);assert.match(output,/\[x\]/);assert.match(output,/多选模式/);
+    assert.doesNotMatch(contentLines(batch,1,[]).join('\n'),/Frozen Eye/);
+    assert.match(contentLines(batch,4,[]).join('\n'),/RUNIC_DOME · 当前计数/);
+    const long=structuredClone(model);long.tab=5;long.scroll=0;
+    assert.match(renderTui(long,80,24),/当前多选候选/);
     assert.ok(model.scroll<1e9);const end=model.scroll;model.scroll=Math.max(0,end-10);renderTui(model,80,24);assert.ok(model.scroll<end);
     assert.equal(output.split('\r\n').length,24);
     assert.match(contentLines(batch,0,[]).join('\n'),/意图 隐藏/);
@@ -59,9 +69,24 @@ for(const room of ['SHOP','REST','EVENT'] as const)test(`TUI and host accept ori
     const action=p.actions.find(a=>room==='SHOP'?a.kind==='buy-card':room==='REST'?a.kind==='rest-option'&&a.details.option===1:a.kind==='event-option'&&a.bits===0);assert.ok(action);
     const model:TuiModel={batch,tab:0,scroll:0,selected:p.actions.indexOf(action!),filter:'',filtering:false,message:'',busy:false,log:[],focus:'actions',confirm:false,multi:null};
     assert.ok(renderTui(model,110,30).includes(room==='SHOP'?'购买':room==='REST'?'锻造':'升级'));
+    if(room==='SHOP'){
+      const publicCopy=structuredClone(batch);publicCopy.state.observation.game.gold=0;
+      const text=contentLines(publicCopy,5,[]).join('\n');
+      assert.match(text,/商店全部商品/);assert.match(text,/金币不足/);assert.match(text,/基础费用/);
+    }
+    if(room==='EVENT'){
+      const long=structuredClone(batch);long.state.observation.game.optionDetails!['0']='很长的事件代价与收益。'.repeat(200)+'选项末尾可见';
+      const scroll:TuiModel={...model,batch:long,tab:5,scroll:0};let visible='';
+      for(let page=0;page<150;page++){scroll.scroll=page*17;visible+=renderTui(scroll,80,24);}
+      assert.match(visible,/选项末尾可见/);
+    }
     const response=await session.act({id:'room-input',sessionId:batch.state.sessionId,revision:batch.revision,action:{bits:action!.bits}});assert.ok(response.accepted);if(!response.accepted)throw Error('not accepted');
     assert.equal(response.batch.state.observation.game.screen,room==='SHOP'?'SHOP_ROOM':'CARD_SELECT');
     assert.ok(decisionPresentation(response.batch).actions.length>0);
     assert.ok(renderTui({...model,batch:response.batch,selected:0},80,24).length>0);
+    if(room==='SHOP'){
+      assert.match(contentLines(response.batch,5,[]).join('\n'),/已售罄／不可用/);
+      assert.ok(!decisionPresentation(response.batch).actions.some(a=>a.kind==='buy-card'&&a.details.index===action!.details.index));
+    }
   }finally{await session.close();await rm(dir,{recursive:true,force:true});}
 });

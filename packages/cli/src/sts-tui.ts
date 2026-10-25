@@ -70,7 +70,7 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
     else if(key.name==='tab')model.focus=model.focus==='actions'?'content':'actions';
     else if(key.name==='left'||key.name==='right'){model.tab=(model.tab+(key.name==='right'?1:tabs.length-1))%tabs.length;model.scroll=0;}
     else if(key.name==='pageup'||key.name==='pagedown')model.scroll=Math.max(0,model.scroll+(key.name==='pageup'?-1:1)*Math.max(1,(output.rows??24)-8));
-    else if(key.name==='up'||key.name==='down'){const change=key.name==='up'?-1:1;if(model.focus==='content')model.scroll=Math.max(0,model.scroll+change);else model.selected=Math.max(0,Math.min(last,model.selected+change));model.confirm=false;}
+    else if(key.name==='up'||key.name==='down'){const change=key.name==='up'?-1:1;if(model.focus==='content')model.scroll=Math.max(0,model.scroll+change);else model.selected=Math.max(0,Math.min(last,model.selected+change));if(model.focus==='actions'&&model.tab===5)model.scroll=0;model.confirm=false;}
     else if(key.name==='home'||key.name==='end'){if(model.focus==='actions')model.selected=key.name==='home'?0:last;else model.scroll=key.name==='home'?0:1e9;model.confirm=false;}
     else if(key.name==='return'&&settle&&(actions[model.selected]||model.multi!==null)){
       if(!saved){model.message='尚未保存，请按 s 重试。';draw();return;}

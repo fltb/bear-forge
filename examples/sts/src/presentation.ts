@@ -11,6 +11,7 @@ import {potionRequiresEnemy} from './content/potions/metadata.ts';
 import {statusTexts,volibearMechanics} from './content/powers/descriptions.ts';
 import {relicId,potionId} from './identifiers.ts';
 import {PS,MS} from './combat-identifiers.ts';
+import {intentTexts} from './content/enemies/intent-texts.ts';
 import type {Action,Observation} from './game.schemas.ts';
 const volibear=new Map(Object.values(volibearCardDescriptions).map(d=>[d.id,d]));
 const relicNumbers=new Map<number,string>(Object.entries(relicId).map(([k,v])=>[v,k]));
@@ -25,15 +26,17 @@ export function describeCard(id:string,upgraded=false){
 }
 function relicName(id:number){const key=relicNumbers.get(id);if(!key)throw Error('Unknown relic number '+id);return key;}
 function potionName(id:number){const key=potionNumbers.get(id);if(!key)throw Error('Unknown potion number '+id);return key;}
+export function describeRelic(id:number|string){const name=typeof id==='number'?relicName(id):id;return {id:name,text:relicTexts[name]!};}
+export function describePotion(id:number){const name=potionName(id);return {id:name,text:potionTexts[name]!};}
 function roomLabel(room:string){return room==='EVENT'?'? 未知房间（进入后确定类型）':room;}
-function enemyIntentLabel(b:NonNullable<Observation['battle']>,index:number){
+export function enemyIntentLabel(b:NonNullable<Observation['battle']>,index:number){
   if(b.intentHidden)return '隐藏';
   const intent=b.intents?.find(i=>i.index===index),monster=b.monsters.find(m=>m.index===index);
   if(!intent)return '无';
   const name=intent.name==='LAGAVULIN_SLEEP'
     ?`${monster&&(BigInt(monster.statusBits)&(1n<<BigInt(MS.ASLEEP)))!==0n?'睡眠':'已唤醒，当前仍为过渡行动'}${intent.attack?'':'（本次不攻击）'}`
-    :intent.name.replaceAll('_',' ');
-  return name+(intent.hits>0?`，${intent.attackDamage}×${intent.hits}（格挡与伤害减免前）`:'');
+    :`${intentTexts[intent.name as keyof typeof intentTexts]??(intent.hits>0?'攻击':'特殊行动')}（${intent.name}）`;
+  return name+(intent.hits>0?`，${intent.attack?'攻击':'非攻击伤害'} ${intent.attackDamage}×${intent.hits}（格挡与伤害减免前）`:'');
 }
 const selectionTypes:Record<number,string>={1:'变换',2:'变换并升级',3:'升级',4:'移除',5:'复制',6:'获得',7:'设为固有',8:'献祭'};
 const selectionTasks:Record<string,string>={ARMAMENTS:'升级',CODEX:'选择加入抽牌堆',DISCOVERY:'选择加入手牌',DUAL_WIELD:'复制',EXHAUST_ONE:'消耗',EXHAUST_MANY:'消耗',EXHUME:'从消耗堆回收',FORETHOUGHT:'放至抽牌堆底并减费',GAMBLE:'弃置并抽等量牌',HEADBUTT:'置于抽牌堆顶',LIQUID_MEMORIES_POTION:'回收并本回合0费',SECRET_TECHNIQUE:'检索技能',SECRET_WEAPON:'检索攻击',WARCRY:'置于抽牌堆顶','弃牌':'弃置','消耗牌':'消耗','预见':'预见：弃置选中的牌，其余保持顺序','保留攻击':'保留','复制攻击':'复制','回收攻击':'回收','强化攻击':'强化'};
@@ -81,7 +84,7 @@ export function describeAction(o:Observation,bits:number){
     const s=g.shop!;
     if(kind===6)return action('leave','离开商店');
     if(kind===5)return action('remove-card',`支付${s.removeCost}金币移除1张牌`);
-    if(kind===0){const c=s.cards[i]!;return action('buy-card',`支付${s.prices[i]}金币购买 ${describeCard(c.id,c.upgraded).name}`,{index:i});}
+    if(kind===0){const c=s.cards[i]!;return action('buy-card',`支付${s.prices[i]}金币购买 ${describeCard(c.id,c.upgraded).name}${c.upgraded?'+':''}`,{index:i,card:c});}
     if(kind===3)return action('buy-potion',`支付${s.prices[10+i]}金币购买 ${potionName(s.potions[i]!)}`,{index:i});
     if(kind===4)return action('buy-relic',`支付${s.prices[7+i]}金币购买 ${relicName(s.relics[i]!)}`,{index:i});
   }

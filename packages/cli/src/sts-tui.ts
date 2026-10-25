@@ -86,6 +86,7 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
   try{draw();void prompt();await completion;}
   finally{finished=true;abort.abort(Error('关闭界面'));input.off('keypress',keypress);output.off('resize',onResize);process.off('SIGTERM',onSignal);process.off('SIGINT',onSignal);input.setRawMode(false);input.pause();output.write('\x1b[?25h\x1b[?1049l');await session.close();}
   const metric=(v:number[])=>{const a=[...v].sort((a,b)=>a-b);return a.length?`n=${a.length}, median=${a[Math.floor(a.length/2)]!.toFixed(1)}ms, max=${a.at(-1)!.toFixed(1)}ms`:'n=0';};
-  output.write(`${abandoned?'已中止，未宣称保存成功':'已保存退出'}。状态：${faulted?'fault':abandoned?'aborted':model.batch.state.termination}，决策 ${model.batch.revision}\n继续：npm run sts:tui -- --resume ${JSON.stringify(directory)}\n动作 ${metric(session.metrics().advance)}；保存 ${metric(session.metrics().save)}；绘制 ${metric(drawTimes)}\n`);
+  const quotedDirectory="'"+directory.replaceAll("'", "'\"'\"'")+"'";
+  output.write(`${abandoned?'已中止，未宣称保存成功':'已保存退出'}。状态：${faulted?'fault':abandoned?'aborted':model.batch.state.termination}，决策 ${model.batch.revision}\n继续：npm run sts:tui -- --resume ${quotedDirectory}\n动作 ${metric(session.metrics().advance)}；保存 ${metric(session.metrics().save)}；绘制 ${metric(drawTimes)}\n`);
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))runTui().catch(error=>{console.error(String(error));process.exitCode=1;});

@@ -1,3 +1,4 @@
+import {detailEvents} from './detail-events.ts';
 import type {CardUse} from '../rules/card-instances.types.ts';
 import { typedValue } from '../rules/value.schemas.ts';
 import {combatSessions} from "../rules/combat-sessions.ts";
@@ -47,7 +48,7 @@ export const combatChoices=createCardChoices(combatAdapter,[projections]);
 export const combatSelectionUtils=createCombatSelectionUtils(combatChoices);
 
 /** The only external ports; all rule choices share these existing wire schemas. */
-export const stsPorts=defineRules({requires:[adventureChoices,combatChoices,combatSessions],build(m){
+export const stsPorts=defineRules({requires:[adventureChoices,combatChoices,combatSessions,detailEvents],build(m){
   // The original frame is computed after every combat-finished reaction.
   // Real execution crosses this no-op; probability execution can retain it.
   const finishedCombat=withProbability(m.atom({input:FrameSchema,output:z.undefined(),reads:[],writes:[],emits:[],run:()=>({writes:[],events:[],result:undefined})}),{
@@ -56,6 +57,7 @@ export const stsPorts=defineRules({requires:[adventureChoices,combatChoices,comb
   });
   const event=ruleModules.portEffect<GameEvent[],null>('event');
   const flush=defineEffect<number,void>(b=>{const count=b.local<number>(),cursor=query(adventures.exports.historyCursor,b.input);return sequence(
+    when(b.read(v=>v.query(adventures.exports.detailsEnabled,v.input)),call(detailEvents.exports.publishBoard,b.input)),
     when(b.read(v=>frozenEyePublication.visible(v,v.input)&&v.query(combatSessions.exports.forRun,v.input)!==null),call(cardPiles.exports.revealDraw,b.read(v=>{
       const session=v.query(combatSessions.exports.current,v.query(combatSessions.exports.forRun,v.input)!),piles=v.query(battles.exports.status,session.battle).piles;
       return{piles,count:v.query(zones.exports.members,v.query(cardPiles.exports.bindings,piles).draw).length};
@@ -74,7 +76,7 @@ export const stsPorts=defineRules({requires:[adventureChoices,combatChoices,comb
     if(custom)return{session,pickCount:v.input.event.maximum??1,canPickZero:v.input.event.minimum===0,canPickAnyNumber:v.input.event.multiple===true&&v.input.event.minimum===0};
     return{session,...(simple?{pickCount:screen===CardScreen.Discovery&&!v.query(combatSessions.exports.current,session).haveUsedDiscoveryAction?v.query(combatSessions.exports.current,session).selectionMetadata.pickCount:1,canPickZero:false,canPickAnyNumber:false}:screen===CardScreen.ExhaustMany?{pickCount:v.input.event.maximum??0}:screen===CardScreen.Forethought?{canPickAnyNumber:false}:{})};
   })));
-  const beforeCard=on(combatChoices.exports.requesting,{condition:ownsCard,effect:defineEffect<rules.ReactionContext<PendingCardChoice>,void>(b=>sequence(call(selectMetadata,b.input),call(flush,b.read(v=>v.input.owner))))});
+  const beforeCard=on(combatChoices.exports.requesting,{condition:ownsCard,effect:defineEffect<rules.ReactionContext<PendingCardChoice>,void>(b=>sequence(call(selectMetadata,b.input),call(flush,b.read(v=>v.input.owner)),when(b.read(v=>v.query(adventures.exports.detailsEnabled,v.input.owner)),call(detailEvents.exports.publishSelection,b.read(v=>({battle:v.input.event.battle,cards:v.input.event.cards}))))))});
   const cardChosen=on(combatChoices.exports.selected,{condition:defineQuery({input:typedValue<rules.ReactionContext<CardSelection>>(),output:z.boolean(),dependencies:[battles.exports.current,adventures.exports.forActor,battles.exports.status],base:(r,c)=>c.event.interactive&&r.query(adventures.exports.forActor,r.query(battles.exports.status,c.event.battle).actor)===c.owner}),effect:defineEffect<rules.ReactionContext<CardSelection>,void>(b=>call(adventures.exports.record,{run:b.read(v=>v.input.owner),kind:'battle',bits:b.read(v=>v.input.event.bits)}))});
   const initialize=defineEffect<number,void>(b=>sequence(...[beforeAdventure,beforeCard,cardChosen].map(ability=>install({ability,source:b.input,owner:b.input,environment:{},lifetime:b.read(v=>v.query(adventures.exports.bindings,v.input).scope)}))));
   return{exports:{initialize,flush,frame:projections.exports.frame,finishedCombat}};

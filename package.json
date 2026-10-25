@@ -45,7 +45,8 @@
     "card": "node --experimental-strip-types packages/cli/src/main.ts card:run",
     "training:setup": "uv sync --frozen --project packages/training --python 3.14",
     "training": "node --experimental-strip-types packages/cli/src/training.ts",
-    "evaluate": "node --experimental-strip-types packages/cli/src/main.ts evaluate"
+    "evaluate": "node --experimental-strip-types packages/cli/src/main.ts evaluate",
+    "sts:tui": "node --experimental-strip-types packages/cli/src/sts-tui.ts"
   },
   "engines": {
     "node": ">=22.18.0"

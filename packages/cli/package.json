@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm run typecheck && npm test",
-    "test:search": "node --experimental-strip-types --test --test-concurrency=1 tests/sts-search.test.ts"
+    "test:search": "node --experimental-strip-types --test --test-concurrency=1 tests/sts-search.test.ts",
+    "test:tui": "node --experimental-strip-types --test tests/sts-tui.test.ts"
   },
   "dependencies": {
     "@bear-forge/forge-duel-viewer": "*",

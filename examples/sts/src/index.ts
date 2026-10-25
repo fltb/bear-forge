@@ -9,3 +9,7 @@ export type {GameEvent,StsEvent} from './game.schemas.ts';
 export {createSearchPolicy} from './search/policy.ts';
 export type {StsSearchOptions} from './search/policy.ts';
 export {createSearchExperiment, searchRegistration} from './search/experiment.ts';
+export {createSimulator} from './simulator.ts';
+export {openSimulatorStore} from './simulator-store.ts';
+export type {Simulator} from './simulator.ts';
+export type {SimulatorView,EventBatch,SimulatorCommand,SimulatorStore} from './simulator.types.ts';

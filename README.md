@@ -1,8 +1,12 @@
 # Bear Forge
 
-2026-10-25：STS 启发式搜索实验已按用户要求封存，未实现铁甲第四幕碎心；不再继续脚本调参。后续策略方向为 Transformer，先评估现有 Card Core 上的 STS 模拟器后端及共享前端/训练接口。封存状态、检查边界与未验证修改见 [实施清单](docs/plan.md)。
+当前玩家入口：`npm run sts:tui`；保存退出后按打印命令 `npm run sts:tui -- --resume <目录>` 继续。[TUI 操作、存档与接口](docs/sts-simulator.md)。验收进度见 docs/plan.md。
+
+2026-10-25：STS 启发式搜索实验已按用户要求封存，未实现铁甲第四幕碎心；不再继续脚本调参。玩家模拟器首批提供 TUI、共享会话和直接存档恢复；后续策略方向仍为 Transformer。封存状态、检查边界与未验证修改见 [实施清单](docs/plan.md)。
 
 正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；受控执行采用共享 Program 与独立 Context，分支及恢复不重新初始化程序；完整验收进度见 docs/plan.md。训练入口包含现成 DouZero 学习器及两游戏共用的自研 Transformer/PPO，模型通过同一 Policy 和 Card Core 执行。STS/Card Core 的[三层整体优化设计与计划](docs/card-core-spec.md#whole-stack-optimization)已写定，实施与验收状态见 docs/plan.md；玩家搜索正按[局部决策与完整概率空间规格](docs/player-search-spec.md)重构，旧有界策略的评估仅为历史结果，当前未完成项见 docs/plan.md；Rust 迁移继续后置。
+
+下述搜索说明为封存历史，不代表重新启用搜索。当前玩家入口与验收以本文开头的 TUI 文档及 plan.md 为准。
 
 完整介绍与审核入口：[项目介绍](docs/project-overview.md)。玩家搜索严格执行 `next(current)`：直接分支完整真实当前 Context，未来随机与隐藏排序由概率内核展开，不初始化后重跑历史。当前敌人意图按背板授权沿原路径复用，包括 Runic Dome；未来选招仍由原规则展开。卡牌、敌人与机制共用原数据和同一生产结算，公共协议不变。
 

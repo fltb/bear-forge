@@ -5,6 +5,7 @@ import {CardScreen} from "./selection-presentations.ts";
 import {z} from 'zod';
 import {rules} from '../rules/execution.ts';
 import {ruleModules} from '@bear-forge/card-engine';
+import {withProbability} from '../../../../packages/card-engine/src/rules-probability.ts';
 import {FrameSchema,ActionSchema,type Action,type GameEvent} from "../game.schemas.ts";
 import {adventures} from "../rules/adventures.ts";
 import {battles} from "../rules/battles.ts";
@@ -20,6 +21,7 @@ import type {CardChoicePlayer,CardSelection,PendingCardChoice} from "../rules/ca
 
 const {defineRules,defineQuery,defineEffect,sequence,when,call,query,on,install}=rules;
 const booleanChoiceBits=(value:boolean)=>((2<<29)|(value?0:1))>>>0;
+export const combatFinishedBoundary='sts-combat-finished';
 const selectionSchema=z.object({screen:z.number(),cards:z.array(z.number()),indices:z.array(z.number()).optional(),skipIndex:z.number().optional(),pickCount:z.number().optional(),canPickZero:z.boolean().optional(),canPickAnyNumber:z.boolean().optional()}).nullable();
 const projections=defineRules({requires:[adventureViews,combatViews,battlePublications],build(){
   const frame=defineQuery({input:z.object({run:z.number(),actions:z.array(z.number()),selection:selectionSchema}),output:FrameSchema,dependencies:[adventureViews.exports.game,combatViews.exports.battle,adventures.exports.current,battlePublications.exports.forRun,adventures.exports.historyStatus],base(r,i){
@@ -45,7 +47,13 @@ export const combatChoices=createCardChoices(combatAdapter,[projections]);
 export const combatSelectionUtils=createCombatSelectionUtils(combatChoices);
 
 /** The only external ports; all rule choices share these existing wire schemas. */
-export const stsPorts=defineRules({requires:[adventureChoices,combatChoices,combatSessions],build(){
+export const stsPorts=defineRules({requires:[adventureChoices,combatChoices,combatSessions],build(m){
+  // The original frame is computed after every combat-finished reaction.
+  // Real execution crosses this no-op; probability execution can retain it.
+  const finishedCombat=withProbability(m.atom({input:FrameSchema,output:z.undefined(),reads:[],writes:[],emits:[],run:()=>({writes:[],events:[],result:undefined})}),{
+    space:()=>({kind:'boundary',name:combatFinishedBoundary}),boundaryValue:frame=>frame,
+    run:()=>({writes:[],events:[],result:undefined}),
+  });
   const event=ruleModules.portEffect<GameEvent[],null>('event');
   const flush=defineEffect<number,void>(b=>{const count=b.local<number>(),cursor=query(adventures.exports.historyCursor,b.input);return sequence(
     when(b.read(v=>frozenEyePublication.visible(v,v.input)&&v.query(combatSessions.exports.forRun,v.input)!==null),call(cardPiles.exports.revealDraw,b.read(v=>{
@@ -69,7 +77,7 @@ export const stsPorts=defineRules({requires:[adventureChoices,combatChoices,comb
   const beforeCard=on(combatChoices.exports.requesting,{condition:ownsCard,effect:defineEffect<rules.ReactionContext<PendingCardChoice>,void>(b=>sequence(call(selectMetadata,b.input),call(flush,b.read(v=>v.input.owner))))});
   const cardChosen=on(combatChoices.exports.selected,{condition:defineQuery({input:typedValue<rules.ReactionContext<CardSelection>>(),output:z.boolean(),dependencies:[battles.exports.current,adventures.exports.forActor,battles.exports.status],base:(r,c)=>c.event.interactive&&r.query(adventures.exports.forActor,r.query(battles.exports.status,c.event.battle).actor)===c.owner}),effect:defineEffect<rules.ReactionContext<CardSelection>,void>(b=>call(adventures.exports.record,{run:b.read(v=>v.input.owner),kind:'battle',bits:b.read(v=>v.input.event.bits)}))});
   const initialize=defineEffect<number,void>(b=>sequence(...[beforeAdventure,beforeCard,cardChosen].map(ability=>install({ability,source:b.input,owner:b.input,environment:{},lifetime:b.read(v=>v.query(adventures.exports.bindings,v.input).scope)}))));
-  return{exports:{initialize,flush,frame:projections.exports.frame}};
+  return{exports:{initialize,flush,frame:projections.exports.frame,finishedCombat}};
 }});
 
 

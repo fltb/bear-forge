@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runCardGame, replayCardGame } from '../src/card.ts';
+import { runCardGame } from '../src/card.ts';
+import {main} from '../src/main.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createCardLoader } from '@bear-forge/runtime-card';
@@ -34,14 +35,16 @@ test('default game build links Card definitions in both modes without creating a
   }
 });
 for (const game of ['forge-duel', 'doudizhu'] as const) for (const controlled of [false, true]) {
-  test(`production dedicated ${game} through BaseGame, record and replay, controlled ${controlled}`, async () => {
+  test(`production dedicated ${game} through BaseGame records only its actual execution, controlled ${controlled}`, async () => {
     const directory = await mkdtemp(join(tmpdir(), 'card-cli-'));
     try {
       const records = join(directory, 'records.json');
       const result = await runCardGame({ game, controlled, seed: 31, records });
-      assert.equal(result.state.kind, 'ended'); assert.equal(result.replayVerified, true);
-      const replay = await replayCardGame({ game, records, controlled }); assert.equal(replay.replayVerified, true);
-      if (controlled) assert.ok(replay.coreSteps > 0);
+      assert.equal(result.state.kind,'ended');assert.equal('replayVerified' in result,false);
+      const saved=JSON.parse(await readFile(records,'utf8'));
+      assert.equal(saved.records.length,result.records);assert.ok(saved.coreTrace.length>0);
+      assert.equal(saved.records.at(-1).kind,'completed');
+      assert.equal(saved.records.filter((row:any)=>row.kind==='started').length,1);
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 }
@@ -50,11 +53,11 @@ test('ordinary native CLI games finish without collecting or replaying an unrequ
   for (const game of ['forge-duel', 'doudizhu'] as const) {
     const result = await runCardGame({ game, controlled: false, seed: 31 });
     assert.equal(result.state.kind, 'ended');
-    assert.equal(result.records, 0); assert.equal(result.replayVerified, false);
+    assert.equal(result.records,0);assert.equal('replayVerified' in result,false);
   }
 });
 
 test('STS rejects generic execution and replay before starting a game', async () => {
   await assert.rejects(runCardGame({game:'sts',controlled:true,seed:'18446744073709551615'}), /dedicated sts play/);
-  await assert.rejects(replayCardGame({game:'sts',controlled:true,records:'/must-not-be-read'}), /replay is disabled/);
+  for(const game of ['sts','forge-duel','doudizhu'])await assert.rejects(main(['card:replay','--game',game,'--records','/must-not-be-read']),/Historical replay is disabled/);
 });

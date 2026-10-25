@@ -1,23 +1,68 @@
 import { exceptionMessage } from '@bear-forge/runtime';
-import { createHash } from 'node:crypto';
+import { createHash,randomUUID } from 'node:crypto';
 import { withWriter } from './lock.ts';
 import { readFile, stat } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { createControlledLoader, programDigest, fileSnapshotStore } from '@bear-forge/runtime-controlled';
 import { performance } from 'node:perf_hooks';
 import {getHeapStatistics} from 'node:v8';
+import {setTimeout as waitForPersistence} from 'node:timers/promises';
 import type { GameTypes } from '@bear-forge/contracts/authoring';
 import { createNativeLoader, nativeProgram, isNativeBudgetError } from '@bear-forge/runtime-native';
 import { createGameBinder } from '@bear-forge/game-host';
-import {registerCurrentSource} from '../../game-host/src/current.ts';
+import {registerCurrentSource,gameExecutionControl,saveGameDelivery} from '../../game-host/src/current.ts';
+import {restoreGameContinuation,restoreGameDelivery} from '../../game-host/src/binder.ts';
+import {ExecutionSuspended,continuationControl,restoreContinuation} from '../../runtime/src/continuation.ts';
 import { PolicyRouter } from '@bear-forge/policies';
+import {savePolicyWork,restorePolicyWork,preparePolicyWork,closePolicyWork,suspendedPolicyWork,policyWork} from '../../policies/src/search/work.ts';
 import { ExperimentFiles } from './files.ts';
 import { sameData } from '@bear-forge/boundary';
 import type { Registration, TaskInput, TaskResult, ExecutionHooks, ExperimentDefinition, ExecutionProvider, PolicyResources } from './experiment.types.ts';
 const experimentBudgetErrors = new WeakSet<object>();
 const protocolFailureCodes = new WeakMap<object, string>();
+/** RSS includes unreachable interpreter indexes awaiting V8 collection. On
+ * pressure, give the host collector one chance before suspending live work.
+ * This neither raises the registered threshold nor discards retained data. */
+function memoryExceeded(megabytes:number):boolean{
+  const limit=megabytes*1024*1024;
+  if(process.memoryUsage().rss<=limit)return false;
+  const collect=globalThis.gc;
+  if(typeof collect==='function'){
+    try{collect({type:'major',execution:'sync',flavor:'last-resort'});}catch{return true;}
+    return process.memoryUsage().rss>limit;
+  }
+  return true;
+}
+/** A failed durable write cannot release its live owner and then restart an
+ * older checkpoint. Retry only this persistence operation; the caller keeps
+ * the actual Context/frontier (or terminal result) until publication succeeds.
+ * Cancellation stops new execution, not the obligation to save existing work. */
+async function persistRetained<T>(retained:boolean,hooks:ExecutionHooks,taskId:string,stage:string,operation:()=>Promise<T>):Promise<T>{
+  let failures=0;
+  for(;;){
+    try{return await operation();}
+    catch(error){
+      if(!retained)throw error;
+      failures++;
+      try{await hooks.persistenceWait?.({taskId,stage,failures,error:exceptionMessage(error)});}catch{/* diagnostics cannot discard the live owner */}
+      await waitForPersistence(Math.min(1000,25*2**Math.min(failures-1,6)));
+    }
+  }
+}
 class ExperimentBudgetError extends Error {
   constructor(message: string) { super(message); experimentBudgetErrors.add(this); }
+}
+/** A durable unfinished task, not a game result and not a retry from setup. */
+const retainedPauses=new WeakSet<object>();
+class RetainedWorkPause extends Error{
+  readonly reason:string;
+  readonly cost:{milliseconds:number;steps:number};
+  readonly checkpointRequired:boolean;
+  constructor(reason:string,cost:{milliseconds:number;steps:number},checkpointRequired=true){
+    super('Retained search work: '+reason);this.reason=reason;this.cost=cost;this.checkpointRequired=checkpointRequired;
+    retainedPauses.add(this);
+  }
+  static [Symbol.hasInstance](value:unknown):boolean{return retainedPauses.has(value as object);}
 }
 class ProtocolFailure extends Error {
   readonly code: string;
@@ -119,6 +164,22 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
     if (prepared && prepared.engine !== (controlled ? 'controlled' : 'native')) throw Error('Prepared executable engine mismatch');
     if (controlled && !files) throw Error('Controlled task requires its registered output directory');
     const saved: any = files ? await files.read('checkpoint-' + task.id) : null;
+    const active:any=definition.retainedSearch&&files?await files.read('active-work-'+task.id):null;
+    if(definition.retainedSearch&&(active!==null||saved?.workToken!=null)&&
+      !(typeof active?.token==='string'&&active.token.length>0&&active.token===saved?.workToken)){
+      throw new RetainedWorkPause('uncheckpointed-current-lost',{milliseconds:priorMilliseconds,steps:saved?.step??0});
+    }
+    let workToken:string|null=saved?.workToken??null,dirty=false;
+    const beginWork=async()=>{
+      if(!definition.retainedSearch||dirty)return;
+      if(!files||!controlled)throw Error('Retained search requires durable controlled execution');
+      const token=randomUUID();
+      // Publish BEFORE executing a new prefix. A hard exit with a token that
+      // differs from the checkpoint is evidence of potentially lost work,
+      // never permission to re-execute that prefix from the older checkpoint.
+      await persistRetained(true,hooks,task.id,'work-marker',()=>files.write('active-work-'+task.id,{token}));
+      workToken=token;dirty=true;
+    };
     let loaded: any;
     if ('execution' in definition) {
       const executable = definition.execution.identity;
@@ -155,14 +216,25 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
       }
       loaded = unwrap(await createNativeLoader().load(artifact ? await approvedNative(artifact, config.computeStepBudget) : definition.module.program));
     }
-    const instance = controlled && saved ? unwrap(await loaded.persistence.restore(saved.snapshot)) : unwrap(await loaded.core.start(definition.setup(task)));
-    const game = unwrap(await createGameBinder().bind({
+    if(!(controlled&&saved))await beginWork();
+    const instance = controlled && saved ? saved.gameContinuation?await restoreContinuation(loaded,saved.snapshot):unwrap(await loaded.persistence.restore(saved.snapshot)) : unwrap(await loaded.core.start(definition.setup(task)));
+    const gameInput={
       instance,
       contract: 'execution' in definition ? definition.contract : definition.module.contract,
       ...(controlled ? {
         persistence: loaded.persistence
       } : {})
-    }));
+    };
+    let game:any;
+    try{game=unwrap(await(saved?.gameContinuation?restoreGameContinuation(gameInput,saved.gameContinuation):saved?.gameDelivery?restoreGameDelivery(gameInput,saved.gameDelivery):createGameBinder().bind(gameInput)));}
+    catch(error){
+      // A binder that already took ownership cleans up its owned handle. The
+      // caller's old handle may consequently be revoked; preserve the cause.
+      try{const pending=continuationControl(instance);if(pending?.pending())await pending.close();else await instance.close();}catch{}
+      throw error;
+    }
+    const execution=gameExecutionControl(game);
+    const closeGame=async()=>{if(execution?.pending())await execution.close();else await game.close();};
     const policyResources: PolicyResources = controlled ? saved?.policyResources ?? {} : {};
     // Work since the durable checkpoint may include discarded proposals. Charge
     // its known duration (or conservative reservation) to each actor's safety
@@ -178,29 +250,72 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
       return unwrap(await game.fork());
     };
     registerCurrentSource(forkCurrent,game);
-    const policies = definition.policies(task,policyResources,forkCurrent),
-      router = new PolicyRouter(policies, task.seed, controlled ? saved?.policy : undefined);
-    const packets: any[] = controlled ? saved?.packets ?? [] : [],
-      decisions: any[] = controlled ? saved?.decisions ?? [] : [];
-    const policyBindings = new Map(Object.keys(policies).map(player => [player, router.binding(player)]));
+    let policies:ReturnType<typeof definition.policies>={},router:PolicyRouter;
+    const policyBindings=new Map<string,any>();
     const preparedReplies = new Map<string, {reply?: any; error?: unknown}>();
     let needsPreparation = false;
-    for (const [player, binding] of policyBindings) unwrap(await game.bind(requiresCurrent ? {
-      ...binding,
-      onRequest: async (request: any) => {
-        const prepared = preparedReplies.get(JSON.stringify(request.id));
-        if (!prepared) {needsPreparation = true; return {kind:'pause'};}
-        if ('error' in prepared) throw prepared.error;
-        return prepared.reply;
+    try{
+      policies=definition.policies(task,policyResources,forkCurrent);
+      router=new PolicyRouter(policies,task.seed,controlled?saved?.policy:undefined);
+      if(saved?.policyWork){
+        restorePolicyWork(policies,saved.policyWork);
+        // Policies now own their restored data (or their retained reference).
+        // The runner must not pin a second complete frontier for this entire
+        // invocation. The durable checkpoint on disk remains unchanged.
+        saved.policyWork=undefined;
       }
-    } : binding));
+      if(saved?.routerPending)router.restorePending(saved.routerPending);
+      for(const player of Object.keys(policies))policyBindings.set(player,router.binding(player));
+      for (const [player, binding] of policyBindings) {
+        const callbacks=requiresCurrent ? {
+        ...binding,
+        onRequest: async (request: any) => {
+          const prepared = preparedReplies.get(JSON.stringify(request.id));
+          if (!prepared) {needsPreparation = true; return {kind:'pause'};}
+          if ('error' in prepared) throw prepared.error;
+          return prepared.reply;
+        }
+        } : binding;
+        unwrap(await(execution?.pending()?execution.bind(callbacks):game.bind(callbacks)));
+      }
+    }catch(error){
+      try{closePolicyWork(policies);}finally{await closeGame();}
+      throw error;
+    }
+    const retainsWork=Object.values(policies).some(policy=>policyWork(policy)!==undefined);
+    if(retainsWork&&execution)execution.schedule(()=>hooks.signal?.aborted?'cancelled':
+      config.taskMilliseconds!==undefined&&performance.now()-started>=config.taskMilliseconds||hooks.deadline!==undefined&&performance.now()>=hooks.deadline?'wall-budget':
+      memoryExceeded(config.memoryBudgetMB??4096)?'memory-budget':null);
+    const persist=<V>(stage:string,operation:()=>Promise<V>)=>persistRetained(retainsWork,hooks,task.id,stage,operation);
+    const packets: any[] = controlled ? saved?.packets ?? [] : [],
+      decisions: any[] = controlled ? saved?.decisions ?? [] : [];
     const advance = async () => {
-      if (!requiresCurrent) return unwrap(await game.run(hooks.signal ? {signal: hooks.signal} : undefined));
+      if (!requiresCurrent) return unwrap(await(execution?.pending()?execution.resume(hooks.signal?{signal:hooks.signal}:undefined):game.run(hooks.signal ? {signal: hooks.signal} : undefined)));
       // Policy evaluation needs a stable current Context. Prepare its reply
       // before entering the driver, then let BaseGame validate and accept it.
       // An initial event-only advance can reach the first request and pause;
       // no player action has executed at that point, and nothing is replayed.
       for (;;) {
+        // A suspended game must first finish its original continuation. At a
+        // stable boundary, restore retained search before publishing a dirty
+        // token: a crash while decoding cannot have consumed a search edge.
+        if(!execution?.pending()){
+          try{await preparePolicyWork(policies);}
+          catch(error){
+            if(!retainsWork)throw error;
+            // A prior game continuation may already have progressed in this
+            // interval. Preserve it before reporting a preparation failure.
+            if(dirty)await checkpointWork();
+            throw new RetainedWorkPause('search-restore-failed: '+exceptionMessage(error),{milliseconds:priorMilliseconds+performance.now()-started,steps});
+          }
+        }
+        await beginWork();
+        if(execution?.pending()){
+          needsPreparation=false;
+          const next=unwrap(await execution.resume(hooks.signal?{signal:hooks.signal}:undefined));
+          if(!needsPreparation||next.accepted||next.pause!=='requested'||hooks.signal?.aborted)return next;
+          continue;
+        }
         const state = unwrap(await game.inspect());
         const cancellation = new AbortController(), abort = () => cancellation.abort();
         hooks.signal?.addEventListener('abort',abort,{once:true});
@@ -213,6 +328,16 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
             try {preparedReplies.set(key,{reply:await binding.onRequest(request,{signal:cancellation.signal})});}
             catch (error) {preparedReplies.set(key,{error});}
           }));
+          const suspension=suspendedPolicyWork(policies);
+          if(suspension.length){
+            const reason=hooks.signal?.aborted?'cancelled':suspension.find(reason=>reason!=='scheduling-yield')??
+              (config.taskMilliseconds!==undefined&&performance.now()-started>=config.taskMilliseconds||hooks.deadline!==undefined&&performance.now()>=hooks.deadline?'wall-budget':
+              memoryExceeded(config.memoryBudgetMB??4096)?'memory-budget':null);
+            if(reason){await checkpointWork();throw new RetainedWorkPause(hooks.signal?.aborted?'cancelled':reason,{milliseconds:priorMilliseconds+performance.now()-started,steps});}
+            // A scheduling yield resumes this SAME live search session. No
+            // game action or logical game step has been accepted.
+            await new Promise<void>(resolve=>setImmediate(resolve));continue;
+          }
           needsPreparation = false;
           const next = unwrap(await game.run(hooks.signal ? {signal:hooks.signal} : undefined));
           if (!needsPreparation || next.accepted || next.pause !== 'requested' || hooks.signal?.aborted) return next;
@@ -228,17 +353,47 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
       result: any = null,
       error: string | undefined;
     let advances = steps;
+    let continuingTransaction=Boolean(saved?.routerPending);
+    const stepLimit=retainsWork?steps+config.maxSteps:config.maxSteps;
+    const retainSnapshot=async(snapshot:any,completedSteps:number)=>{
+      const obsolete=previousSnapshot;previousSnapshot=snapshot;
+      if(!obsolete)return;
+      try{unwrap(await loaded.persistence.release(obsolete));}
+      catch(error){
+        // The replacement checkpoint already owns the new snapshot. Failed
+        // cleanup cannot invalidate it or turn unfinished search into a result.
+        if(retainsWork)throw new RetainedWorkPause('snapshot-cleanup-failed: '+exceptionMessage(error),{
+          milliseconds:priorMilliseconds+performance.now()-started,steps:completedSteps,
+        });
+        throw error;
+      }
+    };
+    const checkpointWork=async()=>{
+      if(!controlled||!files)throw Error('Retained search requires durable controlled execution');
+      const current=execution?.pending()?await persist('game-continuation',()=>execution.save()):
+        {snapshot:await persist('game-snapshot',async()=>unwrap(await game.save())),game:undefined};
+      const snapshot=current.snapshot;
+      const gameDelivery=current.game?null:saveGameDelivery(game);
+      const transaction=await persist('router-snapshot',async()=>({pending:router.savePending(),state:router.snapshot()}));
+      const policyState=await persist('search-snapshot',async()=>savePolicyWork(policies));
+      await persist('checkpoint',()=>files.write('checkpoint-'+task.id,{snapshot,policy:transaction.state,routerPending:transaction.pending,policyWork:policyState,policyResources,
+        ...(current.game?{gameContinuation:current.game}:{}),
+        ...(gameDelivery?{gameDelivery}:{}),
+        ...(definition.retainedSearch?{workToken}:{}),elapsedMilliseconds:priorMilliseconds+performance.now()-started,packets,decisions,commits,step:steps}));
+      dirty=false;
+      await retainSnapshot(snapshot,steps);
+    };
     try {
-      for (; steps < config.maxSteps; steps++) {
+      for (; steps < stepLimit;) {
         if (hooks.signal?.aborted) throw new ExperimentBudgetError('Experiment cancelled');
-        if (config.taskMilliseconds !== undefined && priorMilliseconds + performance.now() - started >= config.taskMilliseconds ||
+        if (config.taskMilliseconds !== undefined && (retainsWork?0:priorMilliseconds) + performance.now() - started >= config.taskMilliseconds ||
             hooks.deadline !== undefined && performance.now() >= hooks.deadline) throw new ExperimentBudgetError('Experiment wall budget exceeded');
-        if (process.memoryUsage().rss > (config.memoryBudgetMB ?? 4096) * 1024 * 1024) throw new ExperimentBudgetError('Experiment memory budget exceeded');
-        router.begin();
+        if (memoryExceeded(config.memoryBudgetMB ?? 4096)) throw new ExperimentBudgetError('Experiment memory budget exceeded');
+        if(continuingTransaction)continuingTransaction=false;else router.begin();
         await hooks.point?.('before-advance', task.id);
+        if(!requiresCurrent)await beginWork();
         advances++;
         const next = await advance();
-        await hooks.point?.('after-advance', task.id);
         const staged = router.prepare(next.accepted);
         router.commit(task.id + ':' + steps, staged.state);
         commits.push({
@@ -252,23 +407,31 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
           accepted: next.accepted,
           proposal: staged.candidate.proposal
         });
-        if (controlled && (config.checkpointEvery ?? 0) > 0 && (steps + 1) % config.checkpointEvery! === 0 && next.state.kind !== 'fault' && next.state.kind !== 'ended') {
+        // The accepted edge and its host records now belong to this prefix.
+        // Cancellation or a failed save must retain the NEXT logical step.
+        steps++;
+        await hooks.point?.('after-advance', task.id);
+        if (controlled && (config.checkpointEvery ?? 0) > 0 && steps % config.checkpointEvery! === 0 && next.state.kind !== 'fault' && next.state.kind !== 'ended') {
           const checkpointStart=performance.now(),charge=await definition.checkpointCost?.(task,policyResources,forkCurrent);
           try{
-            const snapshotStart=performance.now(),snapshot=unwrap(await game.save());
+            const snapshotStart=performance.now(),snapshot=await persist('game-snapshot',async()=>unwrap(await game.save()));
+            const gameDelivery=saveGameDelivery(game);
             snapshotMilliseconds+=performance.now()-snapshotStart;
-            snapshotBytes+=(await stat(files!.directory+'/snapshots/'+snapshot.snapshotId+'.snapshot')).size;
+            snapshotBytes+=(await persist('snapshot-metadata',()=>stat(files!.directory+'/snapshots/'+snapshot.snapshotId+'.snapshot'))).size;
             await hooks.point?.('after-snapshot',task.id);
             // This prefix is durable with the checkpoint. A failed/unfinished
             // tail is covered by the existing attempt recovery reservation.
             charge?.(performance.now()-checkpointStart);
-            await files!.write('checkpoint-'+task.id,{
-              snapshot,policy:router.snapshot(),policyResources,
+            const policyState=await persist('search-snapshot',async()=>savePolicyWork(policies));
+            await persist('checkpoint',()=>files!.write('checkpoint-'+task.id,{
+              snapshot,policy:router.snapshot(),policyResources,policyWork:policyState,
+              ...(gameDelivery?{gameDelivery}:{}),
+              ...(definition.retainedSearch?{workToken}:{}),
               elapsedMilliseconds:priorMilliseconds+performance.now()-started,
-              packets,decisions,commits,step:steps+1,
-            });
-            if(previousSnapshot)unwrap(await loaded.persistence.release(previousSnapshot));
-            previousSnapshot=snapshot;
+              packets,decisions,commits,step:steps,
+            }));
+            dirty=false;
+            await retainSnapshot(snapshot,steps);
           }finally{charge?.(performance.now()-checkpointStart);}
         }
         if (next.state.kind === 'ended') {
@@ -288,11 +451,19 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
           break;
         }
       }
+      if(retainsWork&&status==='truncated'&&!error){await checkpointWork();throw new RetainedWorkPause('scheduling-step-yield',{milliseconds:priorMilliseconds+performance.now()-started,steps});}
     } catch (e) {
+      if(e instanceof RetainedWorkPause)throw e;
+      if(retainsWork&&e instanceof ExecutionSuspended){
+        await checkpointWork();throw new RetainedWorkPause(e.reason,{milliseconds:priorMilliseconds+performance.now()-started,steps});
+      }
+      if(retainsWork&&budgetFailure(e)){
+        await checkpointWork();throw new RetainedWorkPause(exceptionMessage(e),{milliseconds:priorMilliseconds+performance.now()-started,steps});
+      }
       error = exceptionMessage(e);
       status = budgetFailure(e) ? 'truncated' : 'fault';
     } finally {
-      await game.close();
+      try{closePolicyWork(policies);}finally{await closeGame();}
     }
     if (status === 'truncated' && !error) error = 'Experiment step budget exceeded';
     let after: number | null = null;
@@ -342,9 +513,20 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
   async function runPreparedTask(task: T, config: C, attempt = 1, files?: Files, hooks: ExecutionHooks = {}, prepared?: FrozenExecutable, priorCost?: Row['cost']): Promise<Row> {
     const started = performance.now();
     try {
-      if (process.memoryUsage().rss > (config.memoryBudgetMB ?? 4096) * 1024 * 1024) throw new ExperimentBudgetError('Experiment memory budget exceeded');
+      if(definition.retainedSearch&&hooks.signal?.aborted)throw new RetainedWorkPause('pre-execution-cancelled',{
+        milliseconds:priorCost?.milliseconds??0,steps:priorCost?.steps??0,
+      },false);
+      if (memoryExceeded(config.memoryBudgetMB ?? 4096)) {
+        // No Context has been started or restored here. Keep the attempt
+        // unstarted, so a later invocation may start it exactly once.
+        if(definition.retainedSearch)throw new RetainedWorkPause('pre-execution-memory-budget',{
+          milliseconds:(priorCost?.milliseconds??0)+performance.now()-started,steps:priorCost?.steps??0,
+        },false);
+        throw new ExperimentBudgetError('Experiment memory budget exceeded');
+      }
       return await runTaskImplementation(task, config, attempt, files, hooks, prepared, priorCost);
     } catch (error) {
+      if(error instanceof RetainedWorkPause)throw error;
       const message = exceptionMessage(error);
       return {
         id: task.id,
@@ -455,6 +637,46 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
     }
     if (!('execution' in definition)) await verifyExecutableSources(registration.config.engine ?? 'native', executable);
     if (!frozen) await files.write('implementation', { implementation: identity, runtime, executableDigest: digest });
+    // The task commit is immutable evidence of execution. Publication cost is
+    // settled in the existing attempt records and derived summary, so a failed
+    // summary write cannot force mutation or re-execution of that evidence.
+    const publicationView=(row:Row,record:any):Row=>{
+      const publication=record.publication;
+      if(!publication||record.attempt!==row.attempt||!Number.isSafeInteger(publication.startedAt)||publication.startedAt>Date.now()||!Number.isFinite(publication.milliseconds)||publication.milliseconds<0||typeof publication.complete!=='boolean')throw Error('Invalid terminal publication accounting');
+      return{...row,cost:{...row.cost,milliseconds:row.cost.milliseconds+publication.milliseconds,publicationMilliseconds:publication.milliseconds},
+        attempts:(row.attempts??[]).map(attempt=>attempt.attempt===record.attempt?record:attempt)};
+    };
+    async function publishRetainedResult(row:Row,record:any){
+      const prior=record.publication;
+      const startedAt=prior?.startedAt??Date.now(),measuredAt=performance.now();
+      if(!Number.isSafeInteger(startedAt)||startedAt>Date.now()||prior&&(!Number.isFinite(prior.milliseconds)||prior.milliseconds<0||typeof prior.complete!=='boolean'))throw Error('Invalid terminal publication accounting');
+      // A cold repair includes the period during which publication was left
+      // incomplete. During this process use a monotonic elapsed clock.
+      const carried=Math.max(prior?.milliseconds??0,Date.now()-startedAt);
+      const persist=<V>(stage:string,operation:()=>Promise<V>)=>persistRetained(true,hooks,row.id,stage,operation);
+      const attemptKey='attempt-history-'+row.id+'-'+row.attempt;
+      const pending={...record,publication:{startedAt,milliseconds:carried,complete:false}};
+      await persist('publication-state',async()=>{
+        await files.write(attemptKey,pending);await files.write('attempt-'+row.id,pending);
+      });
+      await persist('task-result',()=>files.commit(row.id,row));
+      await persist('publication-cost',async()=>{
+        // Recompute on each failed bookkeeping attempt. Retrying serialization
+        // or summary publication must not lose the intervening wait cost.
+        const publication={startedAt,milliseconds:carried+performance.now()-measuredAt,complete:true};
+        const completed={...record,publication,cost:{...row.cost,milliseconds:row.cost.milliseconds+publication.milliseconds,publicationMilliseconds:publication.milliseconds}};
+        await files.write(attemptKey,completed);await files.write('attempt-'+row.id,completed);
+        await files.write('summary-'+row.id,definition.summarize(publicationView(row,completed)));
+      });
+    }
+    if(definition.retainedSearch)for(const row of await files.results<Row>()){
+      const record:any=await files.read('attempt-'+row.id);
+      if(record?.publication){
+        if(record.attempt!==row.attempt)throw Error('Terminal publication attempt changed');
+        const summary=await files.read('summary-'+row.id);
+        if(!record.publication.complete||!sameData(summary,definition.summarize(publicationView(row,record))))await publishRetainedResult(row,record);
+      }
+    }
     const existing = new Set((await files.summaries()).map(r => r.id));
     let batchSpent = 0, stopBatch = false;
     if (registration.config.batchMilliseconds !== undefined || registration.config.stopOnFault) {
@@ -473,9 +695,9 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
         }
       }
     }
-    const batchRemaining = registration.config.batchMilliseconds === undefined ? Infinity : Math.max(0, registration.config.batchMilliseconds - batchSpent);
+    const batchRemaining = registration.config.batchMilliseconds === undefined ? Infinity : Math.max(0, registration.config.batchMilliseconds - (definition.retainedSearch?0:batchSpent));
     const batchDeadline = Math.min(hooks.deadline ?? Infinity, batchStarted + batchRemaining,
-      performance.now() + Math.max(0,registeredWallDeadline-Date.now()));
+      definition.retainedSearch?Infinity:performance.now() + Math.max(0,registeredWallDeadline-Date.now()));
     const executionHooks = {...hooks, ...(Number.isFinite(batchDeadline) ? {deadline: batchDeadline} : {})};
     let stopReason: string | null = stopBatch ? 'prior-fault' : null;
     if (registration.config.engine === 'controlled') {
@@ -485,19 +707,38 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
     let done = existing.size;
     const prepared: FrozenExecutable = { engine: registration.config.engine ?? 'native', value: executable };
     async function executeTask(task: T) {
+      const persist=<V>(stage:string,operation:()=>Promise<V>)=>persistRetained(!!definition.retainedSearch,executionHooks,task.id,stage,operation);
       let result: Row | undefined;
       const prior: any = await files.read('attempt-' + task.id);
       const checkpoint = registration.config.engine === 'controlled' && prior && prior.status !== 'fault'
-        ? await files.read<{step:number;elapsedMilliseconds?:number}>('checkpoint-' + task.id) : null;
+        ? await files.read<{step:number;elapsedMilliseconds?:number;workToken?:string}>('checkpoint-' + task.id).then(value=>value===null?null:{step:value.step,elapsedMilliseconds:value.elapsedMilliseconds,workToken:value.workToken}) : null;
+      // The outer attempt scheduler needs only these scalars. Keeping the
+      // deserialized checkpoint here pins a second complete search frontier
+      // while runPreparedTask restores and owns the actual current below.
+      const active:any=definition.retainedSearch?await files.read('active-work-'+task.id):null;
+      if(definition.retainedSearch&&(active!==null||checkpoint?.workToken!=null)&&
+        !(typeof active?.token==='string'&&active.token.length>0&&active.token===checkpoint?.workToken)){
+        const reason='uncheckpointed-current-lost';
+        if(prior){
+          const paused={...prior,status:'incomplete',reason,checkpointRequired:true};
+          await persist('attempt-history',()=>files.write('attempt-history-'+task.id+'-'+prior.attempt,paused));
+          await persist('attempt-state',()=>files.write('attempt-'+task.id,paused));
+        }
+        stopBatch=true;stopReason='search-incomplete:'+reason;return;
+      }
       // Resuming a durable boundary continues the same logical attempt. A
       // completed task file still wins above; no committed task is replayed.
-      const firstAttempt = checkpoint ? prior.attempt : (prior?.attempt ?? 0) + 1;
+      const unstarted=definition.retainedSearch&&(
+        prior?.status==='incomplete'&&prior.checkpointRequired===false||
+        prior?.status==='started'&&!checkpoint&&active===null
+      );
+      const firstAttempt = checkpoint||unstarted ? prior.attempt : (prior?.attempt ?? 0) + 1;
       for (let attempt = firstAttempt; attempt <= registration.config.maxAttempts; attempt++) {
-        const resuming = checkpoint && attempt === prior.attempt;
+        const resuming = (checkpoint||unstarted) && attempt === prior.attempt;
         const priorCost: Row['cost'] | undefined = resuming ? prior.cost ?? {
-          milliseconds: registration.config.taskMilliseconds ?? checkpoint.elapsedMilliseconds ?? 0,
+          milliseconds: registration.config.taskMilliseconds ?? checkpoint?.elapsedMilliseconds ?? 0,
           reservedMilliseconds: registration.config.taskMilliseconds ?? 0,
-          steps: checkpoint.step,
+          steps: checkpoint?.step??0,
         } : undefined;
         const attemptKey = 'attempt-history-' + task.id + '-' + attempt;
         const start = {
@@ -505,19 +746,25 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
           started: resuming ? prior.started : Date.now(),
           status: 'started'
         };
-        await files.write(attemptKey, start);
-        await files.write('attempt-' + task.id, start);
-        result = await runPreparedTask(task, registration.config, attempt, files, executionHooks,
-          prepared, priorCost);
+        await persist('attempt-history',()=>files.write(attemptKey, start));
+        await persist('attempt-state',()=>files.write('attempt-' + task.id, start));
+        try{result = await runPreparedTask(task, registration.config, attempt, files, executionHooks,
+          prepared, priorCost);}catch(error){
+          if(!(error instanceof RetainedWorkPause))throw error;
+          const paused={...start,status:'incomplete',cost:error.cost,reason:error.reason,checkpointRequired:error.checkpointRequired};
+          await persist('attempt-history',()=>files.write(attemptKey,paused));await persist('attempt-state',()=>files.write('attempt-'+task.id,paused));
+          stopBatch=true;stopReason='search-incomplete:'+error.reason;return;
+        }
         const completed = {
           ...start,
           finished: Date.now(),
           cost: result.cost,
           error: result.error ?? null,
-          status: result.status
+          status: result.status,
+          ...(definition.retainedSearch?{publication:{startedAt:Date.now(),milliseconds:0,complete:false}}:{}),
         };
-        await files.write(attemptKey, completed);
-        await files.write('attempt-' + task.id, completed);
+        await persist('attempt-history',()=>files.write(attemptKey, completed));
+        await persist('attempt-state',()=>files.write('attempt-' + task.id, completed));
         if (result.status !== 'fault') break;
       }
       if (!result) result = {
@@ -542,7 +789,12 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
         if (record) result.attempts.push(record);
       }
       await hooks.point?.('before-commit', task.id);
-      await files.commit(task.id, result);
+      const completedResult=result;
+      if(definition.retainedSearch){
+        const record:any=await files.read('attempt-'+task.id);
+        if(!record||record.attempt!==result.attempt)throw Error('Missing terminal attempt for publication');
+        await publishRetainedResult(completedResult,record);
+      }else await persist('task-result',()=>files.commit(task.id,completedResult));
       if (registration.config.stopOnFault && result.status === 'fault') {stopBatch = true; stopReason = 'fault';}
       await hooks.point?.('after-commit', task.id);
       if (registration.config.engine === 'controlled') {
@@ -556,7 +808,7 @@ export function createExperimentRunner<G extends GameTypes, T extends TaskInput,
       if (stopBatch) break;
       if (hooks.signal?.aborted) {stopReason = 'cancelled'; break;}
       if (performance.now() >= batchDeadline) {stopReason = 'wall-budget'; break;}
-      if (process.memoryUsage().rss > (registration.config.memoryBudgetMB ?? 4096) * 1024 * 1024) {stopReason = 'memory-budget'; break;}
+      if (memoryExceeded(registration.config.memoryBudgetMB ?? 4096)) {stopReason = 'memory-budget'; break;}
       await Promise.all(pending.slice(offset, offset + concurrency).map(executeTask));
       if (registration.config.engine === 'controlled') await files.collectSnapshots();
     }

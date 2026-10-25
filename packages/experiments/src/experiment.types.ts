@@ -43,6 +43,10 @@ export type TaskResult<T extends TaskInput = TaskInput> = {
     processPeakRssBytes?: number;
     snapshotMilliseconds?: number;
     snapshotBytes?: number;
+    /** Added in the published summary/attempt record to the immutable task's
+     * execution cost. Includes publication retries and recovery downtime;
+     * sampled before the final accounting records are written. */
+    publicationMilliseconds?: number;
   };
   attempts?: {
     attempt: number;
@@ -70,6 +74,9 @@ export type ExecutionHooks = {
   signal?: AbortSignal;
   deadline?: number;
   point?: (stage: 'before-advance' | 'after-advance' | 'after-snapshot' | 'before-commit' | 'after-commit', taskId: string) => void | Promise<void>;
+  /** Latest live work has not been published durably. The task stays alive
+   * and retries persistence only, including after cancellation. */
+  persistenceWait?: (state:{taskId:string;stage:string;failures:number;error:string})=>void|Promise<void>;
 };
 
 /** Composition dependency, outside the frozen execution protocols. */
@@ -85,6 +92,9 @@ export type ExperimentDefinition<G extends GameTypes, T extends TaskInput, C ext
   /** Prepare these policies while the actual game is idle at its request.
    * Other policies retain the normal concurrent BaseGame callback path. */
   requiresCurrent?: (task: T) => boolean;
+  /** Budgets schedule durable unfinished search work, not terminal task
+   * truncation. A new invocation continues the same checkpoint and attempt. */
+  retainedSearch?:boolean;
   /** forkCurrent copies the actual waiting Context, including its continuation.
    * The caller owns the returned game. requiresCurrent enables acquisition from
    * policy decisions without changing the frozen BaseGame busy semantics. */

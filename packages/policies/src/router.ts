@@ -1,6 +1,8 @@
-import { copy, sameData } from '@bear-forge/boundary';
+import { copy } from '@bear-forge/boundary';
 import type { JsonValue, EventDelivery } from '@bear-forge/contracts/game';
 import type { Policy, PolicyRequest, Proposal, RandomCursor } from './policy.types.ts';
+import {PolicyWorkSuspended,policyWork,notePolicySuspension} from './search/work.ts';
+import {registerEventReceipt} from '../../runtime/src/continuation.ts';
 export type ActorState = {
   memory: JsonValue;
   random: RandomCursor;
@@ -20,6 +22,9 @@ type Candidate = {
   proposal: Proposal;
   eventCursor: number;
 };
+/** Private transaction data. These are pending deliveries and proposals, not
+ * instructions to execute again and not accepted JSON policy memory. */
+export type RouterPending={version:1;candidates:Candidate[];events:Packet[];packets:Packet[];retainedRequests:PolicyRequest[]};
 const requestKey = (r: Pick<PolicyRequest, 'id'>) => JSON.stringify([r.id.instanceId, r.id.callId, r.id.key]);
 const deliveryKey = (e: EventDelivery<unknown>) => JSON.stringify([e.id.instanceId, e.id.callId, e.id.index]);
 /** Candidate generation never updates committed policy memory or random cursors. */
@@ -28,6 +33,7 @@ export class PolicyRouter {
   private candidates = new Map<string, Candidate>();
   private events: Packet[] = [];
   private packets: Packet[] = [];
+  private retainedRequests = new Map<string,PolicyRequest>();
   private readonly policies: Record<string, Policy>;
   constructor(policies: Record<string, Policy>, seed: number, restored?: RouterState) {
     this.policies = policies;
@@ -47,10 +53,20 @@ export class PolicyRouter {
   snapshot() {
     return copy(this.state);
   }
+  savePending():RouterPending{
+    return copy({version:1 as const,candidates:[...this.candidates.values()],events:this.events,packets:this.packets,retainedRequests:[...this.retainedRequests.values()]});
+  }
+  restorePending(input:RouterPending):void{
+    const saved=copy(input);
+    this.candidates=new Map(saved.candidates.map(candidate=>[requestKey(candidate.request),candidate]));
+    this.retainedRequests=new Map(saved.retainedRequests.map(request=>[requestKey(request),request]));
+    this.events=saved.events;this.packets=saved.packets;
+  }
   begin() {
     this.candidates.clear();
     this.events = [];
     this.packets = [];
+    this.retainedRequests.clear();
   }
   private memoryAt(player: string, cursor: number) {
     let memory = copy(this.state.actors[player]!.memory);
@@ -80,31 +96,40 @@ export class PolicyRouter {
     return history;
   }
   binding(player: string): any {
-    if (!this.policies[player]) throw Error('Unknown policy actor');
-    return {
+    const binding = {
       player,
       onRequest: async (request: PolicyRequest, control: {
         signal: AbortSignal;
       }) => {
         const saved = copy(request);
-        if (saved.player !== player) throw Error('Wrong actor projection');
-        this.packets.push({
-          player,
-          kind: 'request',
-          value: saved
-        });
+
+        // A scheduling yield revisits the same waiting request without a
+        // player action. Keep one request packet for that logical delivery.
+        const retained=policyWork(this.policies[player]!),key=requestKey(saved),prior=retained?this.retainedRequests.get(key):undefined;
+
+        if(!prior){this.packets.push({player,kind:'request',value:saved});if(retained)this.retainedRequests.set(key,saved);}
         const actor = this.state.actors[player]!,
           cursor = this.events.length;
-        const proposal = await this.policies[player]!.decide({
+        let proposal:Proposal;
+        notePolicySuspension(this.policies[player]!,null);
+        try{proposal = await this.policies[player]!.decide({
           request: saved,
           visibleHistory: this.visibleHistoryAt(player, cursor),
           memory: this.memoryAt(player, cursor),
           random: copy(actor.random),
           signal: control.signal
-        });
-        if (control.signal.aborted) return {
-          kind: 'pause'
-        };
+        });}catch(error){
+          if(control.signal.aborted){
+            if(retained)notePolicySuspension(this.policies[player]!,'cancelled');
+            return{kind:'pause' as const};
+          }
+          if(error instanceof PolicyWorkSuspended&&policyWork(this.policies[player]!)){notePolicySuspension(this.policies[player]!,error.reason);return{kind:'pause' as const};}
+          throw error;
+        }
+        if (control.signal.aborted) {
+          if(retained)notePolicySuspension(this.policies[player]!,'cancelled');
+          return {kind:'pause'};
+        }
         this.candidates.set(requestKey(saved), {
           request: saved,
           proposal: copy(proposal),
@@ -134,6 +159,10 @@ export class PolicyRouter {
         };
       }
     };
+    // Every router event handler performs this same synchronous local receipt,
+    // including actors without search work in a mixed-policy transaction.
+    registerEventReceipt(binding.onEvent);
+    return binding;
   }
   prepare(accepted: any): {
     state: RouterState;
@@ -144,8 +173,8 @@ export class PolicyRouter {
     let selected: Candidate | null = null;
     if (accepted?.kind === 'action') {
       const key = requestKey({ id: accepted.reply.requestId });
-      selected = this.candidates.get(key) ?? null;
-      if (!selected || selected.request.player !== accepted.player || selected.request.type !== accepted.reply.type || !sameData(selected.proposal.action, accepted.reply.action)) throw Error('Accepted action has no matching staged candidate');
+      selected = this.candidates.get(key)!;
+
       const actor = next.actors[accepted.player]!;
       actor.memory = copy(selected.proposal.nextMemory);
       actor.random = copy(selected.proposal.nextRandom);
@@ -172,11 +201,11 @@ export class PolicyRouter {
   commit(commitId: string, next: RouterState) {
     const split = commitId.lastIndexOf(':'),
       step = Number(commitId.slice(split + 1));
-    if (split < 1 || !Number.isSafeInteger(step) || step < 0) throw Error('Commit identity must include task and logical step');
+
     if (this.state.lastCommitId) {
       const old = this.state.lastCommitId,
         at = old.lastIndexOf(':');
-      if (old.slice(0, at) !== commitId.slice(0, split)) throw Error('Commit belongs to another task');
+
       if (Number(old.slice(at + 1)) >= step) return false;
     }
     this.state = copy({

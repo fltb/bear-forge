@@ -1,7 +1,7 @@
 // Literal algorithm port of sts_lightspeed 7476a819 src/game/Map.cpp.
-import {randomState,randomInt,nextInt} from './rng.ts';
+import {randomState,randomInt,nextInt,type RandomState} from './rng.ts';
 import type {rules} from './rules/execution.ts';
-import type {Room,MapNode,SpireMap} from './map.types.ts';
+import type {Room,MapNode,SpireMap,MapConstruction,MapDraw} from './map.types.ts';
 export type MapRandom={int(start:number,end:number):number;index(size:number):number};
 const roomIds:Record<Room,number>={SHOP:0,REST:1,EVENT:2,ELITE:3,MONSTER:4,TREASURE:5,BOSS:6,BOSS_TREASURE:7,NONE:8,INVALID:9};
 const masks=Array.from({length:7},(_,i)=>0x0101010101010101n<<BigInt(i));
@@ -23,32 +23,7 @@ function commonAncestor(map:SpireMap,x1:number,x2:number,y:number):number {
   if(!left.parents.length||!right.parents.length)return -1;
   const x=Math.max(...left.parents);return x===Math.min(...right.parents)?x:-1;
 }
-function choosePath(map:SpireMap,rng:MapRandom,x:number,y:number):number {
-  let next=x+rng.int(x===0?0:-1,x===6?0:1);
-  // C++ retains a reference to the originally selected destination throughout this loop.
-  const destination=nodeAt(map,next,y+1);
-  for(const parent of destination.parents) {
-    if(parent===x||commonAncestor(map,parent,x,y)===-1)continue;
-    if(next>x){next=x+rng.int(-1,0);if(next<0)next=x;}
-    else if(next===x){next=x+rng.int(-1,1);if(next>6)next=x-1;else if(next<0)next=x+1;}
-    else{next=x+rng.int(0,1);if(next>6)next=x;}
-  }
-  if(x!==0){const neighbor=nodeAt(map,x-1,y);if(neighbor.edges.length){const e=neighbor.edges.at(-1)!;if(e>next)next=e;}}
-  if(x<6){const neighbor=nodeAt(map,x+1,y);if(neighbor.edges.length){const e=neighbor.edges[0]!;if(e<next)next=e;}}
-  return next;
-}
-function createPath(map:SpireMap,rng:MapRandom,start:number) {
-  let x=start;
-  for(let y=0;y<14;y++){
-    const next=choosePath(map,rng,x,y);addEdge(nodeAt(map,x,y),next);nodeAt(map,next,y+1).parents.push(x);x=next;
-  }
-  addEdge(nodeAt(map,x,14),3);
-}
-function createPaths(map:SpireMap,rng:MapRandom) {
-  const first=rng.int(0,6);createPath(map,rng,first);
-  for(let i=1;i<6;i++){
-    let start=rng.int(0,6);while(start===first&&i===1)start=rng.int(0,6);createPath(map,rng,start);
-  }
+function removeDuplicateStarts(map:SpireMap) {
   const visited=new Set<number>();
   for(let x=0;x<7;x++){
     const node=nodeAt(map,x,0);
@@ -82,7 +57,7 @@ function assignNode(node:MapNode,data:Constructor) {
   }
   node.room='MONSTER';
 }
-function assignRooms(map:SpireMap,rng:MapRandom,ascension:number) {
+function prepareRooms(map:SpireMap,ascension:number) {
   let total=0,unassigned=0;
   for(const node of map.nodes){
     if(!node.edges.length)continue;
@@ -98,7 +73,9 @@ function assignRooms(map:SpireMap,rng:MapRandom,ascension:number) {
   for(const [room,chance]of chances)for(let i=0,count=Math.round(f(total*chance));i<count;i++)rooms.push(room);
   if(rooms.length>=total)throw Error('Invalid reference room counts');
   while(rooms.length<unassigned)rooms.push('MONSTER');
-  for(let i=unassigned;i>1;i--){const j=rng.index(i);[rooms[i-1],rooms[j]]=[rooms[j]!,rooms[i-1]!];}
+  return{rooms,unassigned};
+}
+function assignRooms(map:SpireMap,rooms:Room[]) {
   const zeros=()=>Array<bigint>(7).fill(0n);
   const data:Constructor={rooms,offset:0,row:0n,previous:0n,siblings:zeros(),nextSiblings:zeros(),parents:zeros(),nextParents:zeros()};
   for(let y=0;y<14;y++){
@@ -113,22 +90,89 @@ function assignRooms(map:SpireMap,rng:MapRandom,ascension:number) {
   }
 }
 export function generateMap(seed:bigint,ascension:number,act:number,setBurning:boolean):SpireMap {
-  const rng=randomState(seed+BigInt(act===1?1:act*(100*(act-1))));
+  const rng=mapRandomState(seed,act);
   return generateMapWithRandom(ascension,act,setBurning,{int:(start,end)=>randomInt(rng,start,end),index:size=>nextInt(rng,size)});
 }
+export const mapRandomState=(seed:bigint,act:number):RandomState=>randomState(seed+BigInt(act===1?1:act*(100*(act-1))));
+export const drawMapRandom=(random:RandomState,draw:MapDraw):number=>draw.counted?randomInt(random,draw.start,draw.end):nextInt(random,draw.end+1);
 /** The one map algorithm. Only the random source differs in probability mode. */
 export function generateMapWithRandom(ascension:number,act:number,setBurning:boolean,rng:MapRandom):SpireMap {
+  let work=beginMapConstruction(ascension,act,setBurning);
+  for(let draw=mapDraw(work);draw!==null;draw=mapDraw(work)){
+    work=advanceMapConstruction(work,draw.counted?rng.int(draw.start,draw.end):rng.index(draw.end+1));
+  }
+  return work.map;
+}
+
+/** Both the real driver and the probability driver use this construction.
+ * All topology, room eligibility, adjustments and ordering live here once. */
+export function beginMapConstruction(ascension:number,act:number,burning:boolean):MapConstruction {
+  const work:MapConstruction={map:emptyMap(),ascension,burning,phase:'start',path:0,first:-1,x:0,y:0,next:0,destination:0,parent:0,rooms:[],shuffle:0};
   if(act===4){
-    const map=emptyMap(),rooms:Room[]=['REST','SHOP','ELITE','BOSS'];
-    for(let y=0;y<4;y++){const n=nodeAt(map,3,y);n.room=rooms[y]!;if(y<3)addEdge(n,3);if(y>0)n.parents.push(3);}
-    return map;
+    const rooms:Room[]=['REST','SHOP','ELITE','BOSS'];
+    for(let y=0;y<4;y++){const n=nodeAt(work.map,3,y);n.room=rooms[y]!;if(y<3)addEdge(n,3);if(y>0)n.parents.push(3);}
+    work.phase='done';return work;
   }
   if(![1,2,3].includes(act))throw Error('Invalid act');
-  const map=emptyMap();
-  createPaths(map,rng);assignRooms(map,rng,ascension);
-  if(setBurning){
-    const elites=map.nodes.filter(n=>n.room==='ELITE');const elite=elites[rng.int(0,elites.length-1)]!;
-    map.burningEliteX=elite.x;map.burningEliteY=elite.y;map.burningEliteBuff=rng.int(0,3);
+  return work;
+}
+export function mapDraw(work:rules.Borrowed<MapConstruction>):MapDraw|null {
+  switch(work.phase){
+    case 'done':return null;
+    case 'start':return{start:0,end:6,counted:true};
+    case 'step':return{start:work.x===0?0:-1,end:work.x===6?0:1,counted:true};
+    case 'adjust':return{start:work.next>=work.x?-1:0,end:work.next>work.x?0:1,counted:true};
+    case 'shuffle':return{start:0,end:work.shuffle-1,counted:false};
+    case 'elite':return{start:0,end:work.map.nodes.filter(n=>n.room==='ELITE').length-1,counted:true};
+    case 'buff':return{start:0,end:3,counted:true};
   }
-  return map;
+}
+function finishRooms(work:MapConstruction){assignRooms(work.map,work.rooms);work.phase=work.burning?'elite':'done';}
+function continuePath(work:MapConstruction){
+  const {map,x,y}=work;
+  // Retain the originally selected destination, as the source does, across
+  // all adjustments. Its parent cursor is part of the saved current state.
+  const destination=nodeAt(map,work.destination,y+1);
+  while(work.parent<destination.parents.length){
+    const parent=destination.parents[work.parent++]!;
+    if(parent!==x&&commonAncestor(map,parent,x,y)!==-1){work.phase='adjust';return;}
+  }
+  if(x!==0){const neighbor=nodeAt(map,x-1,y);if(neighbor.edges.length){const e=neighbor.edges.at(-1)!;if(e>work.next)work.next=e;}}
+  if(x<6){const neighbor=nodeAt(map,x+1,y);if(neighbor.edges.length){const e=neighbor.edges[0]!;if(e<work.next)work.next=e;}}
+  addEdge(nodeAt(map,x,y),work.next);nodeAt(map,work.next,y+1).parents.push(x);work.x=work.next;work.y++;
+  if(work.y<14){work.phase='step';return;}
+  addEdge(nodeAt(map,work.x,14),3);work.path++;
+  if(work.path<6){work.phase='start';return;}
+  removeDuplicateStarts(map);const prepared=prepareRooms(map,work.ascension);work.rooms=prepared.rooms;work.shuffle=prepared.unassigned;
+  if(work.shuffle>1)work.phase='shuffle';else finishRooms(work);
+}
+/** Consume exactly this pending draw. The caller's current remains untouched;
+ * all mutable construction data in the result belongs to the successor. */
+export function advanceMapConstruction(current:rules.Borrowed<MapConstruction>,value:number):MapConstruction {
+  const draw=mapDraw(current);if(!draw||!Number.isInteger(value)||value<draw.start||value>draw.end)throw Error('Invalid map random result');
+  const work:MapConstruction={...current,map:{...current.map,nodes:current.map.nodes.map(node=>({...node,edges:[...node.edges],parents:[...node.parents]}))},rooms:[...current.rooms]};
+  switch(work.phase){
+    case 'start':
+      // The original second path rejects the first path's starting column.
+      // Rejected draws retain this exact current and request another draw.
+      if(work.path===1&&value===work.first)return work;
+      if(work.path===0)work.first=value;work.x=value;work.y=0;work.phase='step';break;
+    case 'step':work.next=work.x+value;work.destination=work.next;work.parent=0;continuePath(work);break;
+    case 'adjust':{
+      const prior=work.next;work.next=work.x+value;
+      if(prior>work.x){if(work.next<0)work.next=work.x;}
+      else if(prior===work.x){if(work.next>6)work.next=work.x-1;else if(work.next<0)work.next=work.x+1;}
+      else if(work.next>6)work.next=work.x;
+      continuePath(work);break;
+    }
+    case 'shuffle':{
+      const last=work.shuffle-1;[work.rooms[last],work.rooms[value]]=[work.rooms[value]!,work.rooms[last]!];work.shuffle--;
+      if(work.shuffle<=1)finishRooms(work);break;
+    }
+    case 'elite':{
+      const elite=work.map.nodes.filter(n=>n.room==='ELITE')[value]!;work.map.burningEliteX=elite.x;work.map.burningEliteY=elite.y;work.phase='buff';break;
+    }
+    case 'buff':work.map.burningEliteBuff=value;work.phase='done';break;
+  }
+  return work;
 }

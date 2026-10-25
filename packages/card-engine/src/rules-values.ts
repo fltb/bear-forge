@@ -1,35 +1,22 @@
 import { isStaticHandle } from './rules-internal.ts';
 import type {Borrowed} from './rules.types.ts';
-
-const immutableValues = new WeakMap<object,number>();
-let immutableEpoch=0;
-const markImmutable=(value:object)=>{if(!immutableValues.has(value))immutableValues.set(value,++immutableEpoch);};
-/** Private identity anchors for sibling-current equality, never game data or
- * entropy. Existing Program/parent objects keep their physical identity. */
-export const immutableRuleEpoch=():number=>immutableEpoch;
-export const immutableRuleBirth=(value:object):number|undefined=>immutableValues.get(value);
+import {admitCardValueIdentity as markImmutable,hasCardValueIdentity as isImmutableRuleValue} from './card-admission.ts';
+export {cardValueEpoch as immutableRuleEpoch,cardValueBirth as immutableRuleBirth,isContextCardValue as isContextRuleValue,inCardValueContext as inRuleValueContext} from './card-admission.ts';
 /** Private ownership evidence, not a claim inferred from Object.freeze. */
-export function isImmutableRuleValue(value: object): boolean { return immutableValues.has(value); }
+export {isImmutableRuleValue};
 
-/** Real snapshot ingress: recover the serialized immutable block identities
+/** Restore trusted snapshot data: recover immutable block identities
  * in place so aliases to those blocks elsewhere in the snapshot stay intact. */
-export function admitImmutableRuleBlock(root: object, admitted: (value: object) => void): void {
+export function admitImmutableRuleBlock(root: object, admitted: (value: object) => void,context:(value:object)=>boolean=()=>false): void {
   const seen=new Set<object>(),pending:object[]=[root],nodes:object[]=[];
   while(pending.length){
     const value=pending.pop()!;if(seen.has(value))continue;seen.add(value);nodes.push(value);
-    const array=Array.isArray(value),prototype=Object.getPrototypeOf(value);
-    if(prototype!==(array?Array.prototype:Object.prototype))throw Error('Invalid immutable snapshot block');
-    for(const key of Reflect.ownKeys(value)){
-      if(array&&key==='length')continue;
-      if(typeof key!=='string')throw Error('Invalid immutable snapshot property');
-      const descriptor=Object.getOwnPropertyDescriptor(value,key)!;
-      if(!Object.hasOwn(descriptor,'value')||!descriptor.enumerable)throw Error('Invalid immutable snapshot field');
-      const child:unknown=descriptor.value;
-      if(typeof child==='function'||typeof child==='symbol')throw Error('Invalid immutable snapshot data');
+    for(const key of Object.keys(value)){
+      const child=(value as Record<string,unknown>)[key];
       if(child!==null&&typeof child==='object')pending.push(child);
     }
   }
-  for(let index=nodes.length-1;index>=0;index--){const node=nodes[index]!;Object.freeze(node);markImmutable(node);admitted(node);}
+  for(let index=nodes.length-1;index>=0;index--){const node=nodes[index]!;Object.freeze(node);markImmutable(node,context(node));admitted(node);}
 }
 
 function materialize<T>(input: T, freeze: boolean, reference?: (value: object) => unknown, share=false): T {
@@ -42,7 +29,7 @@ function materialize<T>(input: T, freeze: boolean, reference?: (value: object) =
     if (value === null || typeof value !== 'object') return value;
     const previous = seen.get(value);
     if (previous) return previous;
-    const trusted=immutableValues.has(value);
+    const trusted=isImmutableRuleValue(value);
     if(share&&trusted)return value;
     if (!trusted && isStaticHandle(value)) {
       if (!reference) throw Error('Static rule handle cannot enter runtime data');
@@ -81,20 +68,20 @@ function materialize<T>(input: T, freeze: boolean, reference?: (value: object) =
 export function detachRuleValue<T>(value: T|Borrowed<T>): T { return materialize(value, false) as T; }
 /** Commit a value with no author-writable alias; already-owned blocks can share. */
 export function ownRuleValue<T>(value: T): T {
-  return value !== null && typeof value === 'object' && immutableValues.has(value) ? value : materialize(value, true,undefined,true);
+  return value !== null && typeof value === 'object' && isImmutableRuleValue(value) ? value : materialize(value, true,undefined,true);
 }
 /** A component read borrows its owned immutable version. Only an actual
  * transfer from an unowned source needs to establish a detached version. */
 export function readRuleValue<T>(value: T): Borrowed<T> { return ownRuleValue(value) as Borrowed<T>; }
 export function lowerRuleValue<T>(value: T, reference?: (value: object) => unknown): T {
-  if(value!==null&&typeof value==='object'&&immutableValues.has(value))return value;
+  if(value!==null&&typeof value==='object'&&isImmutableRuleValue(value))return value;
   return materialize(value, false, reference, true);
 }
 
 /** Admit an unowned argument once. Pure schema plans can subsequently borrow
  * this version, including every unchanged child, without building a twin. */
 export function ownLoweredRuleValue<T>(value: T, reference?: (value: object) => unknown): T {
-  return value !== null && typeof value === 'object' && immutableValues.has(value)
+  return value !== null && typeof value === 'object' && isImmutableRuleValue(value)
     ? value : materialize(value, true, reference, true);
 }
 
@@ -103,7 +90,7 @@ export function ownLoweredRuleValue<T>(value: T, reference?: (value: object) => 
 export function ownPrivateRuleValue<T>(value:T):T{
   if(value===null||typeof value!=='object')return value;
   const seen=new Set<object>(),pending:object[]=[value];
-  while(pending.length){const node=pending.pop()!;if(seen.has(node)||immutableValues.has(node))continue;seen.add(node);
+  while(pending.length){const node=pending.pop()!;if(seen.has(node)||isImmutableRuleValue(node))continue;seen.add(node);
     for(const key of Object.keys(node)){const child=(node as Record<string,unknown>)[key];if(child!==null&&typeof child==='object')pending.push(child);}
     Object.freeze(node);markImmutable(node);
   }

@@ -2,19 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {serialize,deserialize} from 'node:v8';
 import {createRequire,syncBuiltinESMExports} from 'node:module';
-import {ProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
 import {CardProgram} from '@bear-forge/card-engine';
 import {createCardLoader,memorySnapshotStore} from '@bear-forge/runtime-card';
 import {createGameBinder} from '@bear-forge/game-host';
 import type {GameHandle} from '@bear-forge/contracts/loading';
-import {defaultSearchLimits,type SearchResult} from '@bear-forge/policies';
+import {PolicyWorkSuspended,policyWork} from '../../../packages/policies/src/search/work.ts';
+import {addMass,unitMass,zeroMass,type ProbabilityMass} from '../../../packages/card-engine/src/probability-mass.ts';
 import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
 import {stateOf} from '../../../packages/card-engine/src/rules-module-internal.ts';
 import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
 import {registerCurrentSource} from '../../../packages/game-host/src/current.ts';
 import {combatContentDefinition} from './combat-content-fixture.ts';
-import {withStsProbabilityTracking} from '../src/search/tracking.ts';
-import {createSearchPolicy} from '../src/search/policy.ts';
+import {createSearchPolicy,type StsSearchResult} from '../src/search/policy.ts';
+import {takeStsSearchCurrent,stsExactDomain} from '../src/search/current-session.ts';
+import {readStsCurrent} from '../src/search/probability-current.ts';
+import {describeAction} from '../src/presentation.ts';
 import {contract,type StsTypes} from '../src/contract.ts';
 import {adventures} from '../src/rules/adventures.ts';
 import {combatSessions} from '../src/rules/combat-sessions.ts';
@@ -24,36 +26,51 @@ import {zones} from '../src/rules/zones.ts';
 import {encounterId,potionId} from '../src/identifiers.ts';
 import type {StsEvent} from '../src/game.schemas.ts';
 const unwrap=<T>(r:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};
-const store=memorySnapshotStore(),definition=withStsProbabilityTracking(combatContentDefinition);
-const loadedPromise=createCardLoader({controlled:true,recordCore:false,snapshots:store}).load(definition);
-const limits={...defaultSearchLimits,mode:'work' as const,decisions:2,worlds:4,simulations:64};
+const store=memorySnapshotStore();
+const loadedPromise=createCardLoader({controlled:true,recordCore:false,snapshots:store}).load(combatContentDefinition);
 const random={state:76,position:0};
 function source(game:GameHandle<StsTypes>){const fork=async()=>unwrap(await game.fork!());registerCurrentSource(fork,game);return fork;}
 async function request(game:GameHandle<StsTypes>){const s=unwrap(await game.inspect());if(s.kind!=='request')throw Error(JSON.stringify(s));return s.requests[0]!;}
 
-test('actual probability heap exhaustion returns a labelled legal fallback, releases its root, and does not swallow execution errors',async()=>{
+const evidenceData=(result:StsSearchResult)=>result.evidence as {reason?:string;status:string;steps?:string};
+const isSuspension=(reason:string)=>(error:unknown)=>error instanceof PolicyWorkSuspended&&error.reason===reason;
+
+test('heap pressure retains the exact frontier without an action and does not swallow execution errors',async()=>{
   const loaded=unwrap(await loadedPromise),events:StsEvent[]=[];
   const game=unwrap(await createGameBinder().bind({instance:unwrap(await loaded.core.start({seed:'130',character:'ironclad',encounter:encounterId.CULTIST,relics:[],potion:null,durable:true,elite:false,detailedEvents:true})),contract,persistence:loaded.persistence!}));
   unwrap(await game.bind({player:'0',onRequest:async()=>({kind:'pause'}),onEvent:async e=>{events.push(e.event);return{kind:'reply',value:null};}}));unwrap(await game.run());
   const before=await request(game),visibleHistory=events.map(event=>({event})),v8=createRequire(import.meta.url)('node:v8');
-  const statistics=v8.getHeapStatistics,close=ProbabilityCurrent.prototype.close,fork=ProbabilityCurrent.prototype.fork;
-  let closes=0,evidence:SearchResult|undefined;
+  const statistics=v8.getHeapStatistics;
+  let evidence:StsSearchResult|undefined;
   const input={request:before,visibleHistory,memory:{},random,signal:new AbortController().signal};
+  const policy=createSearchPolicy({character:'ironclad',schedulingMilliseconds:1,forkCurrent:source(game),onEvidence:r=>{evidence=r;}});
+  const broken=createSearchPolicy({character:'ironclad',forkCurrent:async()=>{throw Error('unrelated execution defect');}});
   try{
-    ProbabilityCurrent.prototype.close=function(){closes++;return close.call(this);};
+    await assert.rejects(policy.decide(input),isSuspension('scheduling-yield'));
+    const saved=policyWork(policy)!.save() as {entries:{search:unknown}[]};
+    assert.equal(saved.entries.length,1);
     v8.getHeapStatistics=()=>({...statistics(),total_available_size:1});syncBuiltinESMExports();
-    const output=await createSearchPolicy({character:'ironclad',algorithm:'r2',limits,forkCurrent:source(game),onEvidence:r=>{evidence=r;}}).decide(input);
-    assert.equal(evidence!.evidence.reason,'heap-budget');assert.equal(evidence!.evidence.coverageComplete,false);assert.equal(evidence!.evidence.completed,0);
-    assert.ok(before.options.kind==='exact'&&before.options.values.some(a=>JSON.stringify(a)===JSON.stringify(output.action)));
-    assert.ok(closes>0,'the search-owned root closes after the resource stop');assert.deepEqual(await request(game),before);
-    v8.getHeapStatistics=statistics;syncBuiltinESMExports();
-    ProbabilityCurrent.prototype.fork=function(){throw Error('unrelated execution defect');};
-    await assert.rejects(createSearchPolicy({character:'ironclad',algorithm:'r2',limits,forkCurrent:source(game)}).decide(input),/unrelated execution defect/);
+    // A retained slice may first finish pure bookkeeping before its next
+    // original allocation. Scheduling yields keep that work, too.
+    for(;;){
+      try{await policy.decide(input);assert.fail('Heap pressure cannot select an action');}
+      catch(error){if(isSuspension('scheduling-yield')(error))continue;assert.ok(isSuspension('heap-pressure')(error));break;}
+    }
+    assert.equal(evidence!.action,null);assert.equal(evidenceData(evidence!).status,'incomplete');
+    const paused=policyWork(policy)!.save() as {entries:{search:{steps:bigint}}[]};
+    assert.equal(paused.entries.length,1,'live frontier is still owned after heap pressure');
+    assert.ok(paused.entries[0]!.search.steps>0n);
     assert.deepEqual(await request(game),before);
-  }finally{v8.getHeapStatistics=statistics;syncBuiltinESMExports();ProbabilityCurrent.prototype.close=close;ProbabilityCurrent.prototype.fork=fork;unwrap(await game.close());}
+    v8.getHeapStatistics=statistics;syncBuiltinESMExports();
+    await assert.rejects(policy.decide(input),isSuspension('scheduling-yield'));
+    const resumed=policyWork(policy)!.save() as typeof paused;
+    assert.ok(resumed.entries[0]!.search.steps>paused.entries[0]!.search.steps,'same frontier advances when memory is available');
+    await assert.rejects(broken.decide(input),/unrelated execution defect/);
+    assert.deepEqual(await request(game),before);
+  }finally{v8.getHeapStatistics=statistics;syncBuiltinESMExports();policyWork(policy)!.close();policyWork(broken)!.close();unwrap(await game.close());}
 });
 
-for(const character of ['ironclad','volibear'] as const)test(`${character}: production R1/R2 ignore hidden draw, future pools and RNG, restore directly, and retain actual current intent`,async()=>{
+for(const character of ['ironclad','volibear'] as const)test(`${character}: original draw action expands the same complete weighted law despite hidden future changes, without initialization`,async()=>{
   const loaded=unwrap(await loadedPromise),events:StsEvent[]=[];
   const game=unwrap(await createGameBinder().bind({instance:unwrap(await loaded.core.start({seed:'130',character,encounter:encounterId.BOOK_OF_STABBING,relics:['RUNIC_DOME'],potion:potionId.SWIFT_POTION,durable:true,elite:true,detailedEvents:true})),contract,persistence:loaded.persistence!}));
   unwrap(await game.bind({player:'0',onRequest:async()=>({kind:'pause'}),onEvent:async e=>{events.push(e.event);return{kind:'reply',value:null};}}));unwrap(await game.run());
@@ -77,24 +94,40 @@ for(const character of ['ironclad','volibear'] as const)test(`${character}: prod
   try{
     const visibleHistory=events.map(event=>({event}));
     assert.deepEqual((await request(other)).observation,before.observation);
-    for(const algorithm of ['r1','r2'] as const){
-      const outputs=[];
-      for(const current of [game,other]){
-        let evidence:SearchResult|undefined;
-        const policy=createSearchPolicy({character,algorithm,limits,forkCurrent:source(current),onEvidence:r=>{evidence=r;}});
-        outputs.push(await policy.decide({request:await request(current),visibleHistory,memory:{},random,signal:new AbortController().signal}));
-        assert.ok(evidence!.evidence.completed>0);assert.equal(evidence!.evidence.coverageComplete,true);
-        assert.equal(evidence!.evidence.method,'actual-current');assert.ok(evidence!.cost.phases.advance!.calls>0);
-      }
-      assert.deepEqual(outputs[0],outputs[1],'all accepted policy fields are invariant under real hidden future changes');
+    const laws:Map<string,ProbabilityMass>[]=[];
+    for(const current of [game,other]){
+      const root=await takeStsSearchCurrent(source(current),events),view=readStsCurrent(root.current,root.events);
+      const originalRoot=root.current.machine.storage.export(root.current.machine.root);
+      const domain=stsExactDomain(root.current.machine.program,view.decision.observation,events.length);
+      const action=view.decision.actions.find(action=>describeAction(view.decision.observation,action.bits).kind==='drink-potion');assert.ok(action);
+      let expansion=domain.next(root,String(action.bits)),total=zeroMass();const law=new Map<string,ProbabilityMass>();
+      try{
+        // Transfer the live prefix once to a cold owner; never execute it again.
+        expansion.step();const savedExpansion=deserialize(serialize(expansion.save()));expansion.close();expansion=domain.restoreExpansion(savedExpansion);
+        for(;;){
+          const outcome=expansion.take();
+          if(outcome){
+            try{const information=domain.position(outcome.current).information;law.set(information,addMass(law.get(information)??zeroMass(),outcome.mass));total=addMass(total,outcome.mass);}
+            finally{domain.close(outcome.current);}
+          }else if(expansion.complete)break;else expansion.step();
+        }
+        assert.deepEqual(total,unitMass());assert.deepEqual(expansion.delivered,unitMass());assert.ok(law.size>1);
+        assert.deepEqual(root.current.machine.storage.export(root.current.machine.root),originalRoot,'root and authorized current enemy intent remain untouched');
+        laws.push(law);
+      }finally{expansion.close();domain.close(root);}
     }
+    assert.deepEqual(laws[0],laws[1],'all public successors and their exact masses are invariant under hidden future changes');
     assert.deepEqual(await request(game),before);
-    const account={milliseconds:60_000};let evidence:SearchResult|undefined;
-    const exhausted=createSearchPolicy({character,algorithm:'r2',limits,forkCurrent:source(game),account,onEvidence:r=>{evidence=r;}});
-    await exhausted.decide({request:before,visibleHistory,memory:{},random,signal:new AbortController().signal});
-    assert.equal(evidence!.evidence.reason,'game-search-budget');assert.equal(evidence!.evidence.completed,0);assert.ok(account.milliseconds>=60_000);
+    const account={milliseconds:60_000};let evidence:StsSearchResult|undefined;
+    const policy=createSearchPolicy({character,schedulingMilliseconds:1,forkCurrent:source(game),account,onEvidence:r=>{evidence=r;}});
     const controller=new AbortController();controller.abort();
-    await assert.rejects(createSearchPolicy({character,algorithm:'r2',limits,forkCurrent:source(game)}).decide({request:before,visibleHistory,memory:{},random,signal:controller.signal}),/cancelled/i);
+    try{
+      await assert.rejects(policy.decide({request:before,visibleHistory,memory:{},random,signal:new AbortController().signal}),isSuspension('scheduling-yield'));
+      assert.equal(evidence!.action,null);assert.ok(BigInt(evidenceData(evidence!).steps!)>0n);assert.ok(account.milliseconds>60_000,'old total accounting is not a search cutoff');
+      const savedWork=policyWork(policy)!.save() as {entries:unknown[]};
+      await assert.rejects(policy.decide({request:before,visibleHistory,memory:{},random,signal:controller.signal}),isSuspension('cancelled'));
+      assert.deepEqual((policyWork(policy)!.save() as typeof savedWork).entries,savedWork.entries,'cancellation preserves pending work');
+    }finally{policyWork(policy)!.close();}
     assert.deepEqual(await request(game),before);
   }finally{CardProgram.prototype.initial=original;unwrap(await other.close());unwrap(await game.close());unwrap(await loaded.persistence!.release(saved));}
 });

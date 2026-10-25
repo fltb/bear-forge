@@ -152,7 +152,7 @@ program/ 负责把这些内容装配为完整冒险、战斗和跨房间续接�
 
 2026-10-20 的 STS 前置设计进一步区分同一 Program 内的执行指令、规则支持函数及游戏规则包。执行器仅解释通用控制流和端口；队列、触发登记、修正计算及其时序由规则代码实现，动态数据全部归入既有 Context。卡牌、敌人、遗物不是执行器分支。该划分不增加运行层或公共协议，详见 [可扩展规则模型](card-core-spec.md#extensible-rules) 与 [证明](card-core-proof.md#extensible-rules-proof)；类型化规则底座及固定源铁甲 A20 内容已实现；有限验收不代表其他职业或任意插件均已验证。
 
-用户 2026-10-17 授权专用卡牌路径。通用源码→编译产物→ProgramExecution 与卡牌定义→CardProgram/CardMachine 两条路径并列，共同实现 Core/Instance/BaseGame 协议。后者在 packages/card-engine 声明步骤和同步推进，在 packages/runtime-card 实现 COW 数据图、装载、快照和记录重放；不依赖 compiler/runtime-controlled/runtime-native。
+用户 2026-10-17 授权专用卡牌路径。通用源码→编译产物→ProgramExecution 与卡牌定义→CardProgram/CardMachine 两条路径并列，共同实现 Core/Instance/BaseGame 协议。后者在 packages/card-engine 声明步骤和同步推进，在 packages/runtime-card 实现 COW 数据图、装载、当前 Context 快照和记录查看；不依赖 compiler/runtime-controlled/runtime-native。历史记录仅供只读核对，不得执行历史动作恢复现场；真实动作执行后只能从其后继当前状态继续，禁止恢复旧根重选。
 
 Card Core 共享静态定义，Card Instance 的单一图根保存世界、结算帧、局部值、待决调用、随机流和游标。原生模式用普通数据，受控模式以持久索引和数组固定页实现写时分离。Controller 和 BaseGameBinder 仍管理外部调用和玩家交互。受控卡牌路径的同步规则操作属于受信任有界函数；任意 JS 的语义/宿主访问准入仍由原通用路径负责。详见 card-core-spec.md 与 card-core-proof.md。
 

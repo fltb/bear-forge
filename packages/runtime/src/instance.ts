@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { exceptionMessage } from './exception.ts';
 import { Records } from './records.ts';
+import {ExecutionSuspended} from './continuation.ts';
 import { registerStopOwner, exportStop, isInputlessReply } from './stop-ownership.ts';
 import { keys, fields } from '@bear-forge/boundary';
 import { copyOwned as copy, readOwned as read, retainOwned, isOwnedTree, isDenseTree } from '../../boundary/src/values.ts';
@@ -26,9 +27,21 @@ export type RawStop = {
 export type Execution = {
   current: () => RawStop;
   advance: (output: unknown) => Promise<void>;
+  /** Private provider continuation of an already consumed reply. Never call
+   * advance with a saved reply to implement this capability. */
+  resume?: () => Promise<void>;
   discardOutput?: () => void;
   dispose: () => void;
   snapshot?: () => string;
+};
+type AcceptedPhase = { callId: string; phase: 'advance' | 'publish' | 'ready' };
+/** Private host data paired with a provider's current instruction Context.
+ * The public Instance persistence protocol still accepts only stable IO/done. */
+export type ControllerContinuation<S, P extends { [K in keyof P]: PortShape }, R> = {
+  state: InstanceStop<P, R>;
+  records: InstanceRecord<S, P, R>[];
+  recording: boolean;
+  accepted: AcceptedPhase;
 };
 type Parser<T> = { parse(value: unknown): T };
 type RuntimeSchemas<S, P extends { [K in keyof P]: PortShape }, R> = {
@@ -113,6 +126,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
   driving = false;
   closed = false;
   owner = 0;
+  private accepted: AcceptedPhase | null = null;
   forkHandler?: () => Promise<Outcome<Instance<P, R>>>;
   engine: Execution;
   schemas: RuntimeSchemas<S, P, R>;
@@ -123,9 +137,21 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
      * stop value. Host reads still copy it. This avoids copying a whole pending
      * game view during an in-memory fork. Not a public protocol option. */
     shareState?: true;
+    /** Private restore only, alongside the provider's consumed continuation. */
+    accepted?: AcceptedPhase;
   }, recording = true) {
     this.engine = engine;
     this.schemas = schemas;
+    if (restored?.accepted) {
+      const accepted = restored.accepted;
+      if (!fields(accepted, ['callId', 'phase']) || !['advance', 'publish', 'ready'].includes(accepted.phase)) throw Error('Invalid accepted continuation');
+      CallIdSchema.parse(accepted.callId);
+      if (accepted.phase !== 'ready' && (restored.state.kind !== 'call' || restored.state.callId !== accepted.callId)) throw Error('Accepted continuation disagrees with waiting call');
+      if (accepted.phase === 'ready' && restored.state.kind === 'call' && restored.state.callId === accepted.callId) throw Error('Published continuation still names the consumed call');
+      if (accepted.phase === 'advance' && !engine.resume) throw Error('Provider cannot resume a consumed reply');
+      if (restored.state.kind === 'fault') throw Error('A fault is not a pending continuation');
+      this.accepted = { ...accepted };
+    }
     this.records = recording ? restored?.records instanceof Records ? restored.records.fork() : new Records() : null;
     if (this.records) {
       if (restored && !(restored.records instanceof Records)) {
@@ -133,6 +159,55 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
       } else if (!restored) this.records.push({ sequence: 0, kind: 'started', setup: copy(setup) });
     }
     if (restored) this.state = restored.shareState ? restored.state : copy(restored.state);else this.refresh();
+  }
+  /** Called synchronously by the provider at a committed instruction boundary.
+   * Saving these records does not call handlers, parsers or the interpreter. */
+  saveContinuation(): ControllerContinuation<S, P, R> {
+    if (this.closed || !this.accepted || this.state.kind === 'fault') throw Error('No accepted continuation to save');
+    return copy({ state: this.state, records: this.records?.slice() ?? [], recording: this.records !== null, accepted: this.accepted });
+  }
+  get hasContinuation(): boolean { return this.accepted !== null; }
+  get continuationCallId(): string {
+    if (!this.accepted) throw Error('No accepted continuation');
+    return this.accepted.callId;
+  }
+  /** Private ownership handoff of a suspended current. The new public handle
+   * stays busy; the provider must register its continuation capability too. */
+  transferContinuation(): Instance<P, R> {
+    if (this.closed || this.driving || this.computing || !this.accepted) throw Error('Accepted continuation is unavailable');
+    this.owner++; this.bindings = null; return this.handle();
+  }
+  async closeContinuation(): Promise<void> {
+    if (this.closed || this.driving || this.computing || !this.accepted) throw Error('Accepted continuation is unavailable');
+    this.accepted = null;
+    const result = await this.handle().close();
+    if (!result.ok) throw Error(result.error.message);
+  }
+  private publishAccepted(): void {
+    if (this.accepted?.phase === 'publish') {
+      this.refresh();
+      this.accepted.phase = 'ready';
+    }
+  }
+  /** Private cold continuation. Public run/inspect/transfer remain busy until
+   * the old accepted edge has produced its next real IO/terminal result.
+   * On a provider publication failure keep the phase for a subsequent retry. */
+  async resumeContinuation(): Promise<InstanceRunStop<P, R>> {
+    if (this.closed || this.driving || this.computing || !this.accepted) throw Error('Accepted continuation is unavailable');
+    this.driving = this.computing = true;
+    try {
+      if (this.accepted.phase === 'advance') {
+        if (!this.engine.resume) throw Error('Provider cannot resume a consumed reply');
+        await this.engine.resume();
+        this.accepted.phase = 'publish';
+      }
+      this.publishAccepted();
+      const result = { accepted: true, state: copy(this.state), pause: null } as InstanceRunStop<P, R>;
+      this.accepted = null;
+      return result;
+    } finally {
+      this.computing = this.driving = false;
+    }
   }
   append(record: any) {
     if (!this.records) return;
@@ -214,7 +289,7 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
   availability(token: number, stableOnly = false): Outcome<never> | null {
     if (token !== this.owner) return fail('instance_owned');
     if (this.closed) return fail('instance_closed');
-    if (this.computing || stableOnly && this.driving) return fail('instance_busy');
+    if (this.accepted || this.computing || stableOnly && this.driving) return fail('instance_busy');
     return null;
   }
   handle(): Instance<P, R> {
@@ -327,11 +402,15 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
                       }
                     });
                     self.computing = true;
+                    self.accepted = { callId: current.callId, phase: 'advance' };
                     try {
                       await self.engine.advance(engineOutput);
-                      self.refresh();
+                      self.accepted.phase = 'publish';
+                      self.publishAccepted();
                     } catch (cause) {
+                      if (cause instanceof ExecutionSuspended && self.engine.resume) throw cause;
                       self.setFault('program_failed', cause);
+                      self.accepted = null;
                     } finally {
                       self.computing = false;
                     }
@@ -341,11 +420,13 @@ export class Controller<S, P extends { [K in keyof P]: PortShape }, R> {
               }
             }
           }
-          return ok({
+          const result = ok({
             accepted,
             state: exportStop(handle, 'run', self.state, this),
             pause: self.state.kind === 'call' ? pause : null
           } as InstanceRunStop<P, R>);
+          self.accepted = null;
+          return result;
         } finally {
           self.engine.discardOutput?.();
           aborter.abort();

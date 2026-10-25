@@ -21,49 +21,33 @@ function projection(module: any, call: any) {
 }
 
 for (const seed of [87, 991]) for (const first of ['0', '1'] as const) {
-  test(`frozen reference: full Forge tape, seed ${seed}, first ${first}`, async () => {
+  test(`frozen reference: independently driven Forge games, seed ${seed}, first ${first}`, async () => {
     const setup = { profile: 'forge-duel-v1' as const, seed, first, decks: { '0': [...baseDeck], '1': [...baseDeck] } };
-    const tape: Array<{ call: any; output: any; projection: any }> = [];
-    const expected = await reference.program.run(setup, {
-      async call(call: any) {
-        assert.ok(tape.length < 600, 'reference must terminate');
-        const snapshot = structuredClone(call);
-        const projected = projection(reference, snapshot);
-        let output: any = null;
-        if (call.port === 'decision') {
-          const port = reference.contract.ports.decision;
-          const { view, requests } = port.receive(call.input);
-          const request = requests[0]!;
-          const options = reference.contract.inputs.move.describe(view, request);
-          assert.equal(options.kind, 'exact');
-          if (options.kind !== 'exact') throw Error('exact options required');
-          // Reference alone chooses; the candidate receives the identical tape.
-          const prepared = port.respond(view, request, options.values[0]!);
-          assert.equal(prepared.valid, true);
-          output = prepared.output;
-        }
-        tape.push({ call: snapshot, output: structuredClone(output), projection: projected });
-        return output;
-      },
-    } as any);
+    const transcript: Array<{ call: any; output: any; projection: any }> = [];
+    const answer=(module:any,call:any)=>{
+      if(call.port==='event')return null;
+      const port=module.contract.ports.decision,{view,requests}=port.receive(call.input),request=requests[0];
+      const options=module.contract.inputs.move.describe(view,request);assert.equal(options.kind,'exact');
+      const reply=port.respond(view,request,options.values[0]);assert.equal(reply.valid,true);return reply.output;
+    };
+    const expected=await reference.program.run(setup,{async call(call:any){
+      assert.ok(transcript.length<600,'reference must terminate');
+      const output=answer(reference,call);
+      transcript.push({call:structuredClone(call),output:structuredClone(output),projection:projection(reference,call)});return output;
+    }} as any);
     let cursor = 0;
     const actual = await runCard(game.definition, structuredClone(setup), {
       async call(call: any) {
-        const recorded = tape[cursor++];
+        const recorded = transcript[cursor++];
         assert.ok(recorded, 'candidate emitted extra call');
         assert.deepEqual(call, recorded.call, `call ${cursor}`);
         assert.deepEqual(projection(game, call), recorded.projection, `projection ${cursor}`);
-        if (call.port === 'decision') {
-          const port = game.contract.ports.decision;
-          const { view, requests } = port.receive(call.input);
-          const accepted = port.respond(view, requests[0]!, recorded.output);
-          assert.equal(accepted.valid, true);
-          if (accepted.valid) assert.deepEqual(accepted.output, recorded.output);
-        }
-        return structuredClone(recorded.output);
+        const output=answer(game,call);
+        assert.deepEqual(output,recorded.output,'independently chosen current reply');
+        return output;
       },
     } as any);
-    assert.equal(cursor, tape.length);
+    assert.equal(cursor, transcript.length);
     assert.deepEqual(actual, expected);
     assert.deepEqual(game.contract.finish(actual), reference.contract.finish(expected));
   });

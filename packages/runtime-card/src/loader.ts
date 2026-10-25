@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import {setImmediate as yieldTurn} from 'node:timers/promises';
 import { serialize, deserialize } from 'node:v8';
 import { CardProgram, CardMachine, plainCardStorage, ruleReplyGuardFor } from '@bear-forge/card-engine';
 import type { CardDefinition, CardRoot, CardTrace, CardStorage } from '@bear-forge/card-engine';
@@ -13,19 +14,26 @@ import type { RawStop } from '@bear-forge/runtime';
 import { read, copy, sameData, fields } from '@bear-forge/boundary';
 import { admitDetached, isOwned, retainOwned, isOwnedTree, isDenseTree } from '../../boundary/src/values.ts';
 import { Records } from '../../runtime/src/records.ts';
+import type {ControllerContinuation} from '../../runtime/src/instance.ts';
+import {ExecutionSuspended,registerContinuation,registerContinuationLoader} from '../../runtime/src/continuation.ts';
 import { bindTraceWriter } from '../../card-engine/src/card-trace.ts';
 import { CardTraceRecords } from './trace.ts';
 import type { TraceLayout } from './trace.ts';
 import { CardGraph, privateCardGraph } from './graph.ts';
+import {ruleContextIdentityEpoch} from '../../card-engine/src/card.ts';
 import { publishNativeStop } from './publication.ts';
 import { memorySnapshotStore } from './store.ts';
 import type { SnapshotStore } from './store.ts';
-import {ProbabilityCurrent,registerProbabilityCurrent,registerProbabilityRoot} from './probability.ts';
-import {ProbabilityTracker,probabilityTrackingFor,registerProbabilityTrackingView,registerProbabilitySearch,registerProbabilityHostCost,type ProbabilityTrackingSnapshot} from './probability-tracking.ts';
+import {ProbabilityCurrent,registerProbabilityCurrent} from './probability.ts';
+import {ScheduledAdvance,type ScheduledSnapshot} from './scheduled.ts';
 
 /** recordCore:false disables execution capture as well as instruction traces;
  * controlled Context save/restore/fork remain available without history logs. */
-export type CardOptions = { controlled?: boolean; stepBudget?: number; snapshots?: SnapshotStore; recordCore?: boolean; trace?: (event: CardTrace) => void };
+export type CardOptions = { controlled?: boolean; stepBudget?: number;
+  /** Renewable scheduling of original execution; mutually exclusive with a
+   * cumulative fault budget. Private yields never become public IO/results. */
+  instructionsPerSlice?:number;
+  snapshots?: SnapshotStore; recordCore?: boolean; trace?: (event: CardTrace) => void };
 const nativeStructuredClone = globalThis.structuredClone;
 const traceReaders = new WeakMap<object, (id: string) => Outcome<CardTrace[]>>();
 /** Companion capture facility; the shared LoadedCore/Instance protocol is unchanged. */
@@ -34,6 +42,8 @@ export function readCardTrace(loaded: object, instanceId: string): Outcome<CardT
 }
 export function createCardLoader(options: CardOptions = {}) {
   if (options.stepBudget !== undefined && (!Number.isSafeInteger(options.stepBudget) || options.stepBudget < 1)) throw Error('Invalid card step budget');
+  if(options.instructionsPerSlice!==undefined&&(!Number.isSafeInteger(options.instructionsPerSlice)||options.instructionsPerSlice<1))throw Error('Invalid card instruction slice');
+  if(options.instructionsPerSlice!==undefined&&options.stepBudget!==undefined)throw Error('Choose renewable scheduling or a cumulative step budget');
   const controlled = options.controlled ?? true;
   const store = controlled ? options.snapshots ?? memorySnapshotStore() : undefined;
   const recordCore = options.recordCore ?? controlled;
@@ -42,8 +52,6 @@ export function createCardLoader(options: CardOptions = {}) {
   const recording = recordCore;
   return {
     async load<S, Setup, P extends { [K in keyof P]: PortShape }, R>(definition: CardDefinition<S, Setup, P, R>): Promise<Outcome<LoadedCore<Setup, P, R>>> {
-      const trackingSpec=probabilityTrackingFor(definition);
-      if(trackingSpec&&!controlled)return fail('invalid_argument','Probability tracking requires controlled Contexts');
       let ruleReplyGuard:ReturnType<typeof ruleReplyGuardFor>=null;
       let program: CardProgram<S, Setup, P, R>;
       try { if (typeof definition.id !== 'string' || !definition.id || typeof definition.initialize !== 'function') throw Error('Invalid card definition'); assertProgramSchemasShape(definition.schemas); program = new CardProgram(definition); ruleReplyGuard=ruleReplyGuardFor(definition); definition = program.definition; }
@@ -57,7 +65,7 @@ export function createCardLoader(options: CardOptions = {}) {
         program.blocks.forEach((block,index)=>{offsets.push(positions.length);block.forEach((step,position)=>positions.push({effect:program.names[index]!,block:index,index:position,kind:step.kind}));});
         traceLayout.positions=positions;traceLayout.offsets=offsets;
       }
-      const graphStorage = <T>(root: T, immutable?:readonly object[]): CardGraph<T> => definition.project ? new CardGraph(root,immutable) : privateCardGraph(root,immutable);
+      const graphStorage = <T>(root: T, immutable?:readonly object[],nullPrototypes?:readonly object[],contextValues?:readonly object[]): CardGraph<T> => definition.project ? new CardGraph(root,immutable,nullPrototypes,contextValues) : privateCardGraph(root,immutable,nullPrototypes,contextValues);
       const nativeStorage = (root: CardRoot<S>) => {
         const clone = globalThis.structuredClone;
         if (definition.project || clone !== nativeStructuredClone) return plainCardStorage(root, clone);
@@ -84,42 +92,84 @@ export function createCardLoader(options: CardOptions = {}) {
       const controllers = recording ? new Map<string, Controller<Setup, P, R>>() : undefined;
       const handles = controlled ? new WeakMap<object, Controller<Setup, P, R>>() : undefined;
       const machines = controlled ? new WeakMap<Controller<Setup, P, R>, CardMachine<S, Setup, P, R>>() : undefined;
-      const tracking = trackingSpec ? new WeakMap<Controller<Setup,P,R>,ProbabilityTracker<S,Setup,P,R>>() : undefined;
       const coreRecords = recordCore ? new WeakMap<Controller<Setup, P, R>, CardTraceRecords>() : undefined;
+      // Keep the exact prepared bytes and identity after an uncertain write.
+      // A retry at the same public current publishes that snapshot again;
+      // it never advances the machine or accumulates a new file per retry.
+      const pendingSnapshots=controlled?new WeakMap<Controller<Setup,P,R>,{state:InstanceStop<P,R>;id:string;bytes:Uint8Array}>():undefined;
+      const continuations=new WeakMap<Controller<Setup,P,R>,ScheduledAdvance<S,Setup,P,R>>();
+      const schedules=new WeakMap<Controller<Setup,P,R>,()=>string|null>();
+      const pendingContinuations=new WeakMap<Controller<Setup,P,R>,{id:string;bytes:Uint8Array}>();
+      const savingContinuations=new WeakSet<Controller<Setup,P,R>>();
       function remember(handle: Instance<P, R>, controller: Controller<Setup, P, R>): Instance<P, R> {
         if (!handles) return handle;
+        const owner=controller.owner;
+        const owned=()=>{if(controller.owner!==owner||controller.closed)throw Error('Original continuation owner is unavailable');};
+        const idle=()=>{owned();if(controller.computing||controller.driving||savingContinuations.has(controller))throw Error('Original continuation is still running or saving');};
         handles.set(handle, controller);
-        if(tracking)registerProbabilityTrackingView(handle,()=>{const model=tracking.get(controller);if(!model||controller.computing||controller.driving)throw Error('Probability tracking is unavailable');return model.inspect();});
-        if(tracking)registerProbabilityHostCost(handle,prior=>{
-          const model=tracking.get(controller);if(!model||controller.computing||controller.driving)throw Error('Probability resources are unavailable');
-          return model.beginHostCost(prior);
-        });
-        if(tracking)registerProbabilitySearch(handle,prior=>{
-          const model=tracking.get(controller);if(!model||controller.computing||controller.driving)throw Error('Probability resources are unavailable');
-          return model.beginSearch(prior);
-        });
         registerProbabilityCurrent(handle,()=>{
+          owned();
           const machine=machines!.get(controller);
-          if(!machine||controller.computing||controller.driving)throw Error('Card current is unavailable');
+          if(!machine||controller.computing||controller.driving||controller.hasContinuation)throw Error('Card current is unavailable');
           return new ProbabilityCurrent(new CardMachine(program,(machine.storage as CardGraph<CardRoot<S>>).fork()));
         });
-        registerProbabilityRoot(handle,control=>{
-          const machine=machines!.get(controller);
-          if(!machine||controller.computing||controller.driving)throw Error('Card current is unavailable');
-          let posterior:ReturnType<ProbabilityTracker<S,Setup,P,R>['forkForSearch']>|undefined,current:ProbabilityCurrent<S,Setup,P,R>|undefined;
-          try{
-            posterior=tracking?.get(controller)?.forkForSearch(control);
-            current=control.execute('fork',()=>new ProbabilityCurrent(new CardMachine(program,(machine.storage as CardGraph<CardRoot<S>>).fork())));
-            let closed=false;
-            return{current,posterior:posterior?.frontier??null,observation:posterior?.observation??null,close(){if(closed)return;closed=true;current!.close();for(const row of posterior?.frontier.outcomes??[])row.current.close();}};
-          }catch(error){current?.close();for(const row of posterior?.frontier.outcomes??[])control.execute('cleanup',()=>row.current.close());throw error;}
+        if(options.instructionsPerSlice!==undefined)registerContinuation(handle,{
+          pending:()=>{owned();return controller.hasContinuation;},
+          callId:()=>{idle();return controller.continuationCallId;},
+          matchesStop:state=>{idle();return controller.hasContinuation&&sameData(state,controller.state);},
+          schedule:check=>{idle();if(check)schedules.set(controller,check);else schedules.delete(controller);},
+          async save(){
+            idle();if(!controller.hasContinuation)throw Error('No original continuation to save');
+            savingContinuations.add(controller);
+            try{
+            let pending=pendingContinuations.get(controller);
+            if(!pending){
+              const work=continuations.get(controller);if(!work)throw Error('Missing original instruction current');
+              pending={id:randomUUID(),bytes:serialize({format:1,kind:'original-continuation',rule:definition.id,recordCore,
+                kernel:work.save(),host:controller.saveContinuation(),core:coreRecords?.get(controller)?.snapshot()??null})};
+              pendingContinuations.set(controller,pending);
+            }
+            await store!.put(pending.id,pending.bytes);
+            return InstanceSnapshotSchema.parse({snapshotId:pending.id});
+            }finally{savingContinuations.delete(controller);}
+          },
+          async resume(){idle();pendingContinuations.delete(controller);return controller.resumeContinuation();},
+          transfer(){idle();return remember(controller.transferContinuation(),controller);},
+          async close(){idle();await controller.closeContinuation();}
         });
         const transfer = handle.transfer;
         handle.transfer = async () => { const result = await transfer(); if (result.ok) remember(result.value, controller); return result; };
         return handle;
       }
-      function instantiate(setup: Setup, restored?: { machine: CardMachine<S, Setup, P, R>; state: InstanceStop<P, R>; records: Records<InstanceRecord<Setup, P, R>> | any[]; core?: CardTraceRecords | undefined; shared?: true; tracking?:ProbabilityTracker<S,Setup,P,R>|ProbabilityTrackingSnapshot<S> }): Instance<P, R> {
-        const budget = options.stepBudget ?? (controlled ? 1_000_000 : Infinity);
+      async function driveWork(work:ScheduledAdvance<S,Setup,P,R>,controller?:Controller<Setup,P,R>):Promise<RawStop>{
+        while(!work.ready){
+          try{work.step(options.instructionsPerSlice!);}
+          catch(error){
+            // The commit callback, not exception text, establishes whether
+            // this is a failure to publish an already executed instruction.
+            if(controller&&work.publicationPending&&work.machine.root.stop.kind!=='fault')throw new ExecutionSuspended('original-publication-failed: '+exceptionMessage(error));
+            throw error;
+          }
+          if(controller&&work.machine.root.stop.kind!=='fault'){
+            const reason=schedules.get(controller)?.();
+            if(reason)throw new ExecutionSuspended(reason);
+          }
+          if(!work.ready)await yieldTurn();
+        }
+        try{return ownStop(work.current());}
+        catch(error){
+          if(controller&&work.machine.root.stop.kind!=='fault')throw new ExecutionSuspended('original-publication-failed: '+exceptionMessage(error));
+          throw error;
+        }
+      }
+      async function drive(machine:CardMachine<S,Setup,P,R>,reply?:unknown):Promise<RawStop>{
+        return options.instructionsPerSlice===undefined?ownStop(machine.advance(reply)):driveWork(new ScheduledAdvance(machine,reply));
+      }
+      async function instantiate(setup: Setup, restored?: { machine: CardMachine<S, Setup, P, R>; state: InstanceStop<P, R>; records: Records<InstanceRecord<Setup, P, R>> | any[]; core?: CardTraceRecords | undefined; shared?: true;
+        accepted?:ControllerContinuation<Setup,P,R>['accepted'];scheduledPhase?:ScheduledSnapshot<S>['phase'] }): Promise<Instance<P, R>> {
+        // A renewable driver does not consume the legacy cumulative field.
+        // Zero makes accidental use of a bounded driver fail immediately.
+        const budget = options.instructionsPerSlice!==undefined?0:options.stepBudget ?? (controlled ? 1_000_000 : Infinity);
         let root: CardRoot<S> | undefined, storage = restored?.machine.storage;
         if (!restored) {
           const checked = read<Setup>(schemas.setup, setup);
@@ -143,14 +193,11 @@ export function createCardLoader(options: CardOptions = {}) {
         const machine = new CardMachine(program, storage!, observe);
         // A fork already has an isolated, immutable host stop. Re-exporting the
         // machine here would walk the entire pending view despite COW roots.
-        let model:ProbabilityTracker<S,Setup,P,R>|undefined;
-        try{model=trackingSpec?(restored?.tracking instanceof ProbabilityTracker?restored.tracking.fork(machine):new ProbabilityTracker(machine,trackingSpec,restored?.tracking)):undefined;}
-        catch(error){storage!.close?.();throw error;}
         let stop: RawStop | undefined;
-        try{stop = restored ? restored.state.kind === 'call' ? { kind: 'call', call: restored.state.call }
+        try{stop = restored?.accepted&&restored.accepted.phase!=='advance'?ownStop(machine.current()):restored ? restored.state.kind === 'call' ? { kind: 'call', call: restored.state.call }
           : restored.state.kind === 'done' ? { kind: 'done', result: restored.state.result }
-          : { kind: 'fault', error: restored.state.error } : ownStop(model?model.advance():machine.advance());}
-        catch(error){model?.close();storage!.close?.();throw error;}
+          : { kind: 'fault', error: restored.state.error } : await drive(machine);}
+        catch(error){storage!.close?.();throw error;}
         const instanceSchemas=ruleReplyGuard?{...schemas,ports:Object.fromEntries(Object.entries(schemas.ports).map(([port,declaration])=>{
           const schema=declaration as {input:any;output:{parse:(value:unknown)=>unknown}};
           return[port,{...schema,output:{parse(value:unknown){
@@ -161,17 +208,28 @@ export function createCardLoader(options: CardOptions = {}) {
         }))}as typeof schemas:schemas;
         const controller = new Controller<Setup, P, R>({
           current: () => stop!,
-          advance: async output => { stop = ownStop(model?model.advance(output):machine.advance(output)); },
-          dispose: () => { model?.close();storage!.close?.();stop=undefined;machines?.delete(controller);tracking?.delete(controller); },
+          advance: async output => {
+            if(options.instructionsPerSlice===undefined){stop=await drive(machine,output);return;}
+            pendingContinuations.delete(controller);
+            const work=new ScheduledAdvance(machine,output);continuations.set(controller,work);
+            stop=await driveWork(work,controller);
+          },
+          ...(options.instructionsPerSlice!==undefined?{resume:async()=>{
+            const work=continuations.get(controller);if(!work)throw Error('Missing original instruction current');
+            stop=await driveWork(work,controller);
+          }}:{}),
+          dispose: () => { storage!.close?.();stop=undefined;machines?.delete(controller);pendingSnapshots?.delete(controller);
+            continuations.delete(controller);schedules.delete(controller);pendingContinuations.delete(controller); },
           ...(controlled ? { snapshot: () => Buffer.from(serialize(machine.storage.export(machine.root))).toString('base64') } : {})
-        }, instanceSchemas, setup, restored ? { state: restored.state, records: restored.records, ...(restored.shared ? { shareState: true as const } : {}) } : undefined, recording);
+        }, instanceSchemas, setup, restored ? { state: restored.state, records: restored.records,
+          ...(restored.accepted?{accepted:restored.accepted}:{}),...(restored.shared ? { shareState: true as const } : {}) } : undefined, recording);
+        if(restored?.accepted)continuations.set(controller,ScheduledAdvance.adopt(machine,restored.scheduledPhase!));
         machines?.set(controller, machine);
-        if(model)tracking!.set(controller,model);
         if (core) coreRecords!.set(controller, core);
         if (controlled) controller.forkHandler = async () => {
           try {
             const storage = machine.storage as CardGraph<CardRoot<S>>;
-            return ok(instantiate(setup, { machine: new CardMachine(program, storage.fork()), state: controller.state, records: controller.records ?? [], core, shared: true,...(model?{tracking:model}:{}) }));
+            return ok(await instantiate(setup, { machine: new CardMachine(program, storage.fork()), state: controller.state, records: controller.records ?? [], core, shared: true }));
           } catch (error) { return fail('program_failed', exceptionMessage(error)); }
         };
         controllers?.set(controller.id, controller); return remember(controller.handle(), controller);
@@ -180,8 +238,42 @@ export function createCardLoader(options: CardOptions = {}) {
       // Break only the storage's cross-boundary physical leaf sharing here;
       // preserve aliases/cycles within each record and the generic default.
       const loaded: LoadedCore<Setup, P, R> = {
-        core: { async start(setup) { try { return ok(instantiate(setup)); } catch (error) { return fail('invalid_input', exceptionMessage(error)); } } },
+        core: { async start(setup) { try { return ok(await instantiate(setup)); } catch (error) { return fail('invalid_input', exceptionMessage(error)); } } },
       };
+      if(controlled&&options.instructionsPerSlice!==undefined)registerContinuationLoader(loaded,async snapshot=>{
+        let pending:CardStorage<CardRoot<S>>|undefined;
+        try{
+          const ref=InstanceSnapshotSchema.parse(snapshot),bytes=await store!.get(ref.snapshotId);
+          if(!bytes)throw Error('Original continuation snapshot not found');
+          const data=deserialize(bytes),host=data?.host;
+          if(!fields(data,['format','kind','rule','recordCore','kernel','host','core'])||data.format!==1||data.kind!=='original-continuation'||
+            data.rule!==definition.id||data.recordCore!==recordCore||!fields(host,['state','records','recording','accepted'])||
+            host.recording!==recording||!Array.isArray(host.records)||!recordCore&&data.core!==null||!recording&&host.records.length)throw Error('Invalid original continuation snapshot');
+          const accepted=host.accepted,state=host.state;
+          if(!fields(accepted,['callId','phase'])||!CallIdSchema.safeParse(accepted.callId).success||!['advance','publish','ready'].includes(accepted.phase)||
+            !['call','done'].includes(state?.kind))throw Error('Invalid accepted original continuation');
+          if(state.kind==='call'){
+            if(!fields(state,['kind','callId','call'])||!CallIdSchema.safeParse(state.callId).success||!fields(state.call,['port','input'])||!Object.hasOwn(schemas.ports,state.call.port))throw Error('Invalid original host call');
+            read(schemas.ports[state.call.port as keyof P]!.input,state.call.input);
+          }else{
+            if(!fields(state,['kind','result']))throw Error('Invalid original host result');read(schemas.result,state.result);
+          }
+          if(accepted.phase!=='ready'&&(state.kind!=='call'||state.callId!==accepted.callId)||
+            accepted.phase==='ready'&&state.kind==='call'&&state.callId===accepted.callId)throw Error('Original host phase disagrees with consumed call');
+          if(recording){
+            for(let index=0;index<host.records.length;index++)if(host.records[index]?.sequence!==index)throw Error('Invalid original host record sequence');
+            const returned=host.records.filter((row:InstanceRecord<Setup,P,R>)=>row.kind==='returned'&&row.callId===accepted.callId);
+            if(returned.length!==1||accepted.phase!=='ready'&&host.records.at(-1)!==returned[0])throw Error('Missing consumed reply record');
+          }
+          const work=ScheduledAdvance.restore(program,data.kernel);pending=work.machine.storage;
+          if(accepted.phase!=='advance'){
+            if(!work.ready||accepted.phase==='ready'&&!sameData(work.current(),state.kind==='call'?{kind:'call',call:state.call}:{kind:'done',result:state.result}))throw Error('Original host publication disagrees with Context');
+          }
+          const core=recordCore?new CardTraceRecords(traceLayout):undefined;core?.restore(data.core);
+          const instance=await instantiate(undefined as Setup,{machine:work.machine,state,records:host.records,core,accepted,scheduledPhase:data.kernel.phase});
+          pending=undefined;return instance;
+        }finally{pending?.close?.();}
+      });
       if (controllers) {
         const capture = createCapture(controllers, records => {
           const detached: typeof records = new Array(records.length);
@@ -204,24 +296,26 @@ export function createCardLoader(options: CardOptions = {}) {
           const status = await instance.inspect(); if (!status.ok) return status;
           if (c.computing || c.driving) return fail('instance_busy');
           if (c.state.kind === 'fault') return { ok: false, error: c.state.error };
-          const started=performance.now();let cost:ReturnType<ProbabilityTracker<S,Setup,P,R>['beginHostCost']>|undefined;
           try {
-            cost=tracking?.get(c)?.beginHostCost();
-            const machine = machines!.get(c)!;
-            const graph=(machine.storage as CardGraph<CardRoot<S>>).snapshot();
-            const bytes = serialize({ format: 1, rule: definition.id, root: graph.root, immutable:graph.immutable, state: c.state, records: c.records?.slice() ?? [], recordCore, core: coreRecords?.get(c)?.snapshot() ?? null,...(tracking?{tracking:tracking.get(c)!.snapshot()}:{}) });
-            const snapshotId = randomUUID(); await store!.put(snapshotId, bytes); return ok(InstanceSnapshotSchema.parse({ snapshotId }));
+            let pending=pendingSnapshots!.get(c);
+            if(!pending||pending.state!==c.state){
+              const machine=machines!.get(c)!,graph=(machine.storage as CardGraph<CardRoot<S>>).snapshot(false,ruleContextIdentityEpoch(program));
+              const bytes=serialize({format:1,rule:definition.id,cooperative:options.instructionsPerSlice!==undefined,
+                root:graph.root,immutable:graph.immutable,nullPrototypes:graph.nullPrototypes,contextValues:graph.contextValues,state:c.state,records:c.records?.slice()??[],recordCore,core:coreRecords?.get(c)?.snapshot()??null});
+              pending={state:c.state,id:randomUUID(),bytes};pendingSnapshots!.set(c,pending);
+            }
+            await store!.put(pending.id,pending.bytes);
+            if(pendingSnapshots!.get(c)===pending)pendingSnapshots!.delete(c);
+            return ok(InstanceSnapshotSchema.parse({snapshotId:pending.id}));
           } catch (error) { return fail('program_failed', exceptionMessage(error)); }
-          finally{cost?.update(performance.now()-started);}
         },
         async restore(snapshot) {
-          const started=performance.now();
           let pending:CardStorage<CardRoot<S>>|undefined;
           try {
             const ref = InstanceSnapshotSchema.parse(snapshot), bytes = await store!.get(ref.snapshotId); if (!bytes) return fail('snapshot_not_found');
             const data = deserialize(bytes);
-            if (data?.format !== 1 || data.rule !== definition.id || data.recordCore !== recordCore || (!recordCore && data.core !== null) || !Array.isArray(data.records) || !Array.isArray(data.immutable) || !data.root || !['call', 'done'].includes(data.state?.kind)) return fail('snapshot_incompatible');
-            if(Boolean(trackingSpec)!==Boolean(data.tracking))return fail('snapshot_incompatible');
+            if (data?.format !== 1 || data.rule !== definition.id || data.recordCore !== recordCore || (!recordCore && data.core !== null) || !Array.isArray(data.records) || !Array.isArray(data.immutable) || !Array.isArray(data.nullPrototypes)||!Array.isArray(data.contextValues) || !data.root || !['call', 'done'].includes(data.state?.kind)) return fail('snapshot_incompatible');
+            if((data.cooperative??false)!==(options.instructionsPerSlice!==undefined))return fail('snapshot_incompatible');
             program.validate(data.root);
             if (data.state.kind === 'call') {
               if (!fields(data.state, ['kind', 'callId', 'call']) || !CallIdSchema.safeParse(data.state.callId).success || !fields(data.state.call, ['port', 'input']) || !Object.hasOwn(schemas.ports, data.state.call.port)) return fail('snapshot_incompatible');
@@ -230,13 +324,12 @@ export function createCardLoader(options: CardOptions = {}) {
               if (!fields(data.state, ['kind', 'result'])) return fail('snapshot_incompatible');
               read(schemas.result, data.state.result);
             }
-            const storage = graphStorage<CardRoot<S>>(data.root,data.immutable), machine = new CardMachine(program, storage, options.trace);
+            const storage = graphStorage<CardRoot<S>>(data.root,data.immutable,data.nullPrototypes,data.contextValues), machine = new CardMachine(program, storage, options.trace);
             pending=storage;
             if (!sameData(machine.current(), data.state.kind === 'call' ? { kind: 'call', call: data.state.call } : { kind: 'done', result: data.state.result })) return fail('snapshot_incompatible');
             if (data.state.kind === 'call' && (!data.root.waiting || !data.root.frames.length)) return fail('snapshot_incompatible');
             const core = recordCore ? new CardTraceRecords(traceLayout) : undefined; core?.restore(data.core);
-            const instance=instantiate(undefined as Setup, { machine, state: data.state, records: data.records, core,...(data.tracking?{tracking:data.tracking}:{}) });pending=undefined;
-            if(data.tracking)tracking!.get(handles!.get(instance)!)!.includeHostCost({total:data.tracking.account.milliseconds,window:data.tracking.window.milliseconds},performance.now()-started);
+            const instance=await instantiate(undefined as Setup, { machine, state: data.state, records: data.records, core });pending=undefined;
             return ok(instance);
           } catch (error) { return fail('snapshot_incompatible', exceptionMessage(error)); }
           finally{pending?.close?.();}
@@ -249,41 +342,4 @@ export function createCardLoader(options: CardOptions = {}) {
       return ok(loaded);
     },
   };
-}
-
-/** Re-executes recorded accepted inputs, verifying every boundary, not winner only. */
-export async function replayCard<S, Setup, P extends { [K in keyof P]: PortShape }, R>(definition: CardDefinition<S, Setup, P, R>, records: readonly InstanceRecord<Setup, P, R>[], options: CardOptions & { coreTrace?: readonly CardTrace[] } = {}): Promise<Outcome<void>> {
-  const unwrap = <T>(value: Outcome<T>): T => { if (!value.ok) throw Error(value.error.message); return value.value; };
-  let instance: Instance<P, R> | undefined;
-  try {
-    if (records[0]?.kind !== 'started' || records.some((record, index) => record.sequence !== index)) throw Error('Invalid record prefix');
-    const actualTrace: CardTrace[] = [];
-    const loaded = unwrap(await createCardLoader(options.coreTrace ? { ...options, trace: event => { actualTrace.push({ ...event }); options.trace?.({ ...event }); } } : options).load(definition)); instance = unwrap(await loaded.core.start(records[0].setup));
-    let called: Extract<InstanceRecord<Setup, P, R>, { kind: 'called' }> | undefined;
-    const callIds = new Set<string>();
-    let terminal = false;
-    for (const record of records.slice(1)) {
-      if (terminal) throw Error('Records after terminal state');
-      const stop = unwrap(await instance.inspect());
-      if (record.kind === 'called') {
-        if (!CallIdSchema.safeParse(record.callId).success || callIds.has(record.callId)) throw Error('Invalid or reused recorded CallId');
-        if (called || stop.kind !== 'call' || !sameData(stop.call, record.call)) throw Error('Replay call mismatch at ' + record.sequence);
-        callIds.add(record.callId);
-        called = record;
-      } else if (record.kind === 'returned') {
-        if (!called || record.callId !== called.callId || record.reply.port !== called.call.port || stop.kind !== 'call') throw Error('Replay reply mismatch');
-        unwrap(await instance.bind({ [record.reply.port]: async () => ({ kind: 'reply', value: record.reply.output }) } as any));
-        const result = unwrap(await instance.run()); if (!result.accepted) throw Error('Replay reply rejected'); called = undefined;
-      } else if (record.kind === 'completed') {
-        if (called || stop.kind !== 'done' || !sameData(stop.result, record.result)) throw Error('Replay result mismatch');
-        terminal = true;
-      } else if (record.kind === 'faulted') {
-        if (called || stop.kind !== 'fault' || !sameData(stop.error, record.error)) throw Error('Replay fault mismatch');
-        terminal = true;
-      } else throw Error('Repeated start record');
-    }
-    if (!terminal) throw Error('Incomplete replay record');
-    if (options.coreTrace && !sameData(actualTrace, options.coreTrace)) throw Error('Core step replay mismatch');
-    await instance.close(); await loaded.capture?.release(instance.id); return ok(undefined);
-  } catch (error) { await instance?.close(); return fail('invalid_argument', exceptionMessage(error)); }
 }

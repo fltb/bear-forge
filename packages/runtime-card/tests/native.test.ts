@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { CardMachine, CardProgram, plainCardStorage } from '@bear-forge/card-engine';
-import { createCardLoader, readCardTrace, replayCard } from '../src/index.ts';
+import { createCardLoader, readCardTrace } from '../src/index.ts';
 import { definition } from './fixtures/nested.ts';
 const unwrap = (result: any): any => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
 
@@ -14,7 +14,7 @@ test('ordinary native interaction constructs no record logs, COW graph or snapsh
       const result = next(url, context);
       if (url.endsWith('/runtime/src/records.ts')) return { ...result, source: String(result.source).replace('export class Records<T> {', 'export class Records<T> { constructor() { throw Error("unused log constructed"); }') };
       if (url.endsWith('/runtime-card/src/store.ts')) return { ...result, source: String(result.source).replace('export function memorySnapshotStore(): SnapshotStore {', 'export function memorySnapshotStore(): SnapshotStore { throw Error("unused snapshot store constructed");') };
-      if (url.endsWith('/runtime-card/src/graph.ts')) return { ...result, source: String(result.source).replace('constructor(value: T, immutable?: readonly object[]) {', 'constructor(value: T, immutable?: readonly object[]) { throw Error("unused COW graph constructed");') };
+      if (url.endsWith('/runtime-card/src/graph.ts')) return { ...result, source: String(result.source).replace('constructor(value: T, immutable?: readonly object[],nullPrototypes?:readonly object[],contextValues?:readonly object[]) {', 'constructor(value: T, immutable?: readonly object[],nullPrototypes?:readonly object[],contextValues?:readonly object[]) { throw Error("unused COW graph constructed");') };
       return result;
     } });
     const { createCardLoader, readCardTrace } = await import(${JSON.stringify(new URL('../src/index.ts', import.meta.url).href)});
@@ -46,7 +46,9 @@ test('native auditing is explicit and retains complete isolated external and cor
   const records = unwrap(await loaded.capture.read(instance.id, { after: null, limit: 100 })).records;
   assert.deepEqual(records.map((r: any) => r.kind), ['started', 'called', 'returned', 'called', 'returned', 'completed']);
   const coreTrace = unwrap(readCardTrace(loaded, instance.id)); assert.ok(coreTrace.length);
-  assert.equal((await replayCard(definition, records, { controlled: false, coreTrace })).ok, true);
+  assert.deepEqual(records.filter((row:any)=>row.kind==='returned').map((row:any)=>row.reply.output),[2,4]);
+  assert.deepEqual(records.at(-1).result,unwrap(await instance.inspect()).result);
+  coreTrace[0].effect='detached mutation';assert.notEqual(unwrap(readCardTrace(loaded,instance.id))[0].effect,'detached mutation');
   const completed = records.at(-1); completed.result.sum = 999;
   assert.notEqual(unwrap(await instance.inspect()).result.sum, 999);
   unwrap(await instance.close()); unwrap(await loaded.capture.release(instance.id));

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { callback, Controller } from '../src/index.ts';
 import type { RawStop } from '../src/index.ts';
+import type { ControllerContinuation } from '../src/instance.ts';
 test('execution may mutate and republish a reply without inheriting host ownership certificates', async () => {
   for (const mode of ['cycle', 'accessor'] as const) {
     let getters = 0, raw: RawStop = { kind: 'call', call: { port: 'echo', input: null } };
@@ -98,4 +99,34 @@ test('execution faults use structured state rather than exception text or forged
     if (result.value.state.kind !== 'fault') throw new Error('missing fault');
     assert.equal(result.value.state.error.code, mode === 'budget' ? 'budget_exceeded' : mode === 'invalid-output' ? 'invalid_output' : 'program_failed', mode);
   }
+});
+
+test('private Controller publication retries never consume the accepted reply or append its return twice',async()=>{
+  type Ports={step:{input:number;output:number}};
+  const schemas={setup:z.null(),ports:{step:{input:z.number(),output:z.number()}},result:z.number()};
+  let raw:RawStop={kind:'call',call:{port:'step',input:0}},callbacks=0,advances=0;
+  let saved!:ControllerContinuation<null,Ports,number>;
+  let original!:Controller<null,Ports,number>;
+  original=new Controller<null,Ports,number>({current:()=>raw,async advance(value){
+    advances++;raw={kind:'done',result:value};saved=original.saveContinuation();
+    // The original edge is complete. Only the saved, direct current will be
+    // continued below; this obsolete owner exits without executing more code.
+    throw Error('Transferred direct current');
+  },dispose(){}},schemas,null);
+  const handle=original.handle();
+  const bound=await handle.bind({step:async()=>{callbacks++;return{kind:'reply',value:9};}});assert.equal(bound.ok,true);
+  assert.equal((await handle.run()).ok,true);assert.equal((await handle.close()).ok,true);
+  assert.equal(saved.accepted.phase,'advance');
+  let resumes=0,publications=0;
+  const restored=new Controller<null,Ports,number>({current(){
+    publications++;if(publications===1)throw Error('Export pending');return raw;
+  },async advance(){throw Error('Consumed replies cannot be advanced again');},async resume(){resumes++;},dispose(){}},schemas,null,saved,saved.recording);
+  assert.equal(publications,0,'restoring pending host data does not inspect or publish the execution');
+  await assert.rejects(()=>restored.resumeContinuation(),/Export pending/);
+  const after=restored.saveContinuation();assert.equal(after.accepted.phase,'publish');
+  assert.deepEqual(after.records,saved.records);assert.deepEqual(after.state,saved.state);
+  const next=await restored.resumeContinuation();assert.deepEqual(next,{accepted:true,state:{kind:'done',result:9},pause:null});
+  assert.equal(resumes,1);assert.equal(publications,2);assert.equal(callbacks,1);assert.equal(advances,1);
+  assert.deepEqual(restored.records!.slice().map(row=>row.kind),['started','called','returned','completed']);
+  assert.equal((await restored.handle().close()).ok,true);
 });

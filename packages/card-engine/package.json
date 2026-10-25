@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm run typecheck && npm test",
-    "test:probability": "node --experimental-strip-types --test tests/probability.test.ts tests/rules-layout.test.ts tests/rules-modules.test.ts tests/architecture.test.ts tests/rules-schema.test.ts"
+    "test:probability": "node --experimental-strip-types --test tests/probability.test.ts tests/probability-cursor.test.ts tests/rules-layout.test.ts tests/rules-modules.test.ts tests/architecture.test.ts tests/rules-schema.test.ts"
   },
   "dependencies": {
     "@bear-forge/contracts": "*",

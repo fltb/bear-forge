@@ -2,8 +2,8 @@ import { createGameBinder } from '@bear-forge/game-host';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { promisify, isDeepStrictEqual } from 'node:util';
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CompiledProgram } from '@bear-forge/contracts/loading';
@@ -24,18 +24,7 @@ const unwrap = <T,>(x: {
     value: T;
   }).value;
 };
-function answer(call: any, strategy: 'small' | 'large') {
-  const port = reference.contract.ports[call.port as keyof DouDizhuPorts];
-  if (port.kind === 'event') return port.receive(call.input).output;
-  const received = port.receive(call.input),
-    request = received.requests[0]!;
-  const options = reference.contract.inputs.action.describe(received.view, request);
-  if (options.kind !== 'exact') throw Error('Expected exact legal choices');
-  const selected = strategy === 'small' ? options.values.find(action => action.kind === 'play') ?? options.values.at(-1)! : options.values.at(-1)!;
-  const prepared = port.respond(received.view, request, selected);
-  if (!prepared.valid) throw Error(prepared.reason);
-  return prepared.output;
-}
+import { currentReply } from './current-reply.ts';
 test('frozen old game and compiled candidate calls, replies, facts and final frame agree through real restore', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'bear-ddz-migration-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -66,7 +55,7 @@ test('frozen old game and compiled candidate calls, replies, facts and final fra
   const expected: any[] = [];
   const result = await reference.program.run(setup, {
     async call(call: any) {
-      const output = answer(call, strategy);
+      const output = currentReply(reference.contract,call,strategy);
       expected.push({
         call: structuredClone(call),
         output: structuredClone(output)
@@ -76,7 +65,7 @@ test('frozen old game and compiled candidate calls, replies, facts and final fra
   } as any);
   let instance = unwrap(await loaded.core.start(setup));
   const actual: any[] = [];
-  let partialDoubleForkChecked = false;
+  let partialDoubleForkChecked = false,directForkChecked=false;
   while (true) {
     const state = unwrap(await instance.inspect());
     assert.notEqual(state.kind, 'fault', JSON.stringify(state));
@@ -96,18 +85,11 @@ test('frozen old game and compiled candidate calls, replies, facts and final fra
     const recorded = expected[actual.length];
     assert.ok(recorded, 'controlled execution emitted an extra call');
     assert.deepEqual(state.call, recorded.call, `seed ${seed}, strategy ${strategy}, call ${actual.length}`);
-    const output = structuredClone(recorded.output);
-    let forkNext: any;
+    const output=currentReply(game.contract,state.call,strategy);assert.deepEqual(output,recorded.output);
+    let advanced=false;
     if (!partialDoubleForkChecked && state.call.port === 'decision'
       && state.call.input.state.phase === 'doubling' && state.call.input.state.stage?.slots.length === 1) {
       assert.ok(instance.fork);
-      const checkpoint = unwrap(await loaded.persistence!.save(instance));
-      await writeFile(join(directory, 'continuation.json'), JSON.stringify({
-        checkpoint, state, tape: expected.slice(actual.length), result,
-      }));
-      await promisify(execFile)(process.execPath, ['--experimental-strip-types',
-        new URL('./restore-migration-child.ts', import.meta.url).pathname, directory]);
-      unwrap(await loaded.persistence!.release(checkpoint));
       const probeInstance = unwrap(await instance.fork());
       const probe: any = unwrap(await createGameBinder().bind({ instance: probeInstance, contract: game.contract }));
       const peer: any = unwrap(await probe.fork());
@@ -127,7 +109,9 @@ test('frozen old game and compiled candidate calls, replies, facts and final fra
       assert.equal((unwrap(await peer.validate({ player: request.player, reply })) as any).valid, false);
       assert.deepEqual(unwrap(await probe.inspect()), before);
       assert.deepEqual(unwrap(await peer.inspect()), peerBefore);
-      unwrap(await probe.bind({ player: request.player, async onRequest() { return { kind: 'reply', value: reply.action }; } }));
+      const options:any=unwrap(await probe.describe({requestId:request.id,type:request.type}));
+      const alternative=options.values.find((action:any)=>!isDeepStrictEqual(action,output.action));assert.ok(alternative,'isolation probe uses a different legal action');
+      unwrap(await probe.bind({player:request.player,async onRequest(){return{kind:'reply',value:alternative};}}));
       assert.equal((unwrap(await probe.run()) as any).accepted.kind, 'action');
       const after = unwrap(await probe.inspect());
       assert.equal((unwrap(await probe.validate({ player: request.player, reply })) as any).valid, false);
@@ -136,39 +120,39 @@ test('frozen old game and compiled candidate calls, replies, facts and final fra
       unwrap(await peer.close()); unwrap(await probe.close());
       unwrap(await loaded.capture!.release(peerBefore.requests[0].id.instanceId));
       unwrap(await loaded.capture!.release(probeInstance.id));
-      const branch = unwrap(await instance.fork());
-      assert.notEqual(branch.id, instance.id);
-      unwrap(await branch.bind({ decision: async () => ({ kind: 'reply', value: structuredClone(output) }) }));
-      assert.equal(unwrap(await branch.run()).accepted, true);
-      assert.deepEqual(unwrap(await instance.inspect()), state, 'child cannot consume the remaining parent farmer slot');
-      forkNext = unwrap(await branch.inspect());
-      unwrap(await branch.close());
-      unwrap(await loaded.capture!.release(branch.id));
+      assert.deepEqual(unwrap(await instance.inspect()),state,'the alternative child cannot consume the remaining parent farmer slot');
+      const checkpoint=unwrap(await loaded.persistence!.save(instance));
+      await writeFile(join(directory,'continuation.json'),JSON.stringify({checkpoint,state,strategy}));
+      unwrap(await instance.close());unwrap(await loaded.capture!.release(instance.id));
+      await promisify(execFile)(process.execPath,['--experimental-strip-types',new URL('./restore-migration-child.ts',import.meta.url).pathname,directory]);
+      const continued=JSON.parse(await readFile(join(directory,'continued.json'),'utf8'));
+      assert.deepEqual(continued.output,output,'child chooses from its restored current');
+      instance=unwrap(await loaded.persistence!.restore(continued.snapshot));assert.deepEqual(unwrap(await instance.inspect()),continued.state);
+      unwrap(await loaded.persistence!.release(checkpoint));unwrap(await loaded.persistence!.release(continued.snapshot));
+      advanced=true;
       partialDoubleForkChecked = true;
     }
     actual.push({
       call: structuredClone(state.call),
       output: structuredClone(output)
     });
-    unwrap(await instance.bind({
-      [state.call.port]: async () => ({
-        kind: 'reply',
-        value: output
-      })
-    } as any));
-    const step = unwrap(await instance.run());
-    assert.equal(step.accepted, true);
-    assert.equal(step.pause, null);
-    if (forkNext) {
-      const parentNext = unwrap(await instance.inspect());
-      assert.equal(parentNext.kind, forkNext.kind);
-      assert.equal(parentNext.kind, 'call');
-      if (parentNext.kind === 'call') assert.deepEqual(parentNext.call, forkNext.call);
+    if(!advanced){
+      const parent=instance;
+      if(!directForkChecked&&state.call.port==='decision'){
+        assert.ok(instance.fork);instance=unwrap(await instance.fork());assert.notEqual(instance.id,parent.id);
+      }
+      unwrap(await instance.bind({[state.call.port]:async()=>({kind:'reply',value:output})} as any));
+      const step=unwrap(await instance.run());assert.equal(step.accepted,true);assert.equal(step.pause,null);
+      if(instance!==parent){
+        assert.deepEqual(unwrap(await parent.inspect()),state,'advancing the child leaves its parent current intact');
+        unwrap(await parent.close());unwrap(await loaded.capture!.release(parent.id));directForkChecked=true;
+      }
     }
     assert.ok(actual.length < 600);
   }
   assert.deepEqual(actual, expected);
-  assert.ok(partialDoubleForkChecked, 'fork must cover a partially submitted private choice');
+  assert.ok(partialDoubleForkChecked,'fork and cold process must cover a partially submitted private choice');
+  assert.ok(directForkChecked,'the advanced fork must become the only continuation');
   unwrap(await instance.close());
   unwrap(await loaded.capture!.release(instance.id));
   }

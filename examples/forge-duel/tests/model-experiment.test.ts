@@ -19,10 +19,14 @@ test('frozen model experiment survives real process death, feeds relation eviden
       policies:['model-own'],opponents:['first'],engine:'controlled',checkpointEvery:10,maxSteps:1000,maxAttempts:2,minimumBlocks:64,margin:.05,bootstrap:2000,analysisSeed:9});
     const configPath=join(directory,'config.json'),output=join(directory,'experiment');await writeFile(configPath,JSON.stringify(config));
     await assert.rejects(promisify(execFile)(process.execPath,['--experimental-strip-types',fileURLToPath(new URL('./model-experiment-child.ts',import.meta.url)),output,configPath]),(e:any)=>e.signal==='SIGKILL');
+    const files=new ExperimentFiles(output),saved:any=await files.read('checkpoint-discovery-0-model-own-first-0-0-0');
+    const prior:any=await files.read('attempt-discovery-0-model-own-first-0-0-0');
+    assert.equal(saved.step,10);assert.equal(prior.attempt,1);
     const recovered=await runExperiment(output);
     assert.equal(recovered.results.length,16);assert.ok(recovered.results.every(r=>r.status==='ended'));
-    const files=new ExperimentFiles(output),first:any=await files.read('task-discovery-0-model-own-first-0-0-0');
-    assert.equal(first.attempt,2);
+    const first:any=await files.read('task-discovery-0-model-own-first-0-0-0');
+    assert.equal(first.attempt,prior.attempt,'direct continuation belongs to the same attempt');
+    assert.deepEqual(first.decisions.slice(0,saved.decisions.length),saved.decisions);
     const modelDecisions=first.decisions.filter((d:any)=>d.accepted.player==='0');
     assert.ok(modelDecisions.length>0&&modelDecisions.every((d:any)=>d.proposal.policyVersion.startsWith('ppo:')));
     const trajectory=trajectories(first)['0']!;assert.equal(trajectory.transitions.length,modelDecisions.length);

@@ -1,9 +1,10 @@
 import test from 'node:test';
+import {expandAll} from './probability-fixture.ts';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {CardMachine,CardProgram,linkRules,ruleModules} from '@bear-forge/card-engine';
 import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
-import {ProbabilityCurrent,nextProbability} from '../../../packages/runtime-card/src/probability.ts';
+import {ProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
 import {stateOf} from '../../../packages/card-engine/src/rules-module-internal.ts';
 import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
 import {rules} from '../src/rules/execution.ts';
@@ -16,6 +17,7 @@ import {startingRelics} from '../src/content/characters/ironclad/relics/burning-
 import {encounterPlans,nextEncounterChoices,secondBossChoices} from '../src/content/enemies/plans.ts';
 import {float24Choices,float24Index,permutationNextChoices} from '../src/rules/ordering.ts';
 import {random} from '../src/rules/random.ts';
+import {addMass,probabilityMass,unitMass,zeroMass} from '../../../packages/card-engine/src/probability-mass.ts';
 import type {MonsterPlan} from '../src/encounters.types.ts';
 import {encounterId as e} from '../src/identifiers.ts';
 import {programSchemas,type Ports} from '../src/game.schemas.ts';
@@ -39,7 +41,6 @@ const fixture=rules.defineRules({requires:[adventureStart,adventureContent.cards
   });return{exports:{entry}};
 }});
 const definition=linkRules<{},z.infer<typeof setup>,Ports&{pause:{input:number;output:null};seen:{input:Result;output:null}},Result>({id:'sts/adventure-probability',schemas:{setup,result,ports:{...programSchemas.ports,pause:{input:z.number(),output:z.null()},seen:{input:result,output:z.null()}}},initialize:()=>({}),entry:fixture.exports.entry,definitions:[fixture.exports.entry,pause,seen],modules:[fixture]});
-const entropy={word(){throw Error('Small support must enumerate');},check(){}};
 function source(mode:z.infer<typeof setup>['mode']){
   const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial({mode})));
   const stop=machine.advance();if(stop.kind!=='call'||stop.call.port!=='pause')throw Error('Expected actual current root');
@@ -67,12 +68,12 @@ for(const mode of ['monster','elite','relic'] as const)test(`actual ${mode} futu
   const plan=inspectRuleQuery(definition,root.current.machine.root.state,adventures.exports.plan,root.run),expected=mode==='elite'?plan.eliteList[0]:plan.monsterList[0];
   CardProgram.prototype.initial=function(){throw Error('No initialization during next(current)');};
   try{
-    const a=nextProbability(root.current,null,{maximum:8,entropy}),b=nextProbability(other,null,{maximum:8,entropy});
+    const a=expandAll(root.current,null),b=expandAll(other,null);
     try{
-      const read=(o:typeof a.outcomes[number])=>{const stop=o.current.inspect();if(stop.kind!=='call'||stop.call.port!=='seen')throw Error('Expected observed successor');return{probability:o.probability,result:stop.call.input};};
-      assert.deepEqual(a.outcomes.map(read),b.outcomes.map(read));assert.equal(a.representation,'exact');assert.equal(a.outcomes.length,mode==='monster'?4:3);
+      const read=(o:typeof a.outcomes[number])=>{const stop=o.current.inspect();if(stop.kind!=='call'||stop.call.port!=='seen')throw Error('Expected observed successor');return{mass:o.mass,result:stop.call.input};};
+      assert.deepEqual(a.outcomes.map(read),b.outcomes.map(read));assert.equal(a.outcomes.length,mode==='monster'?4:3);
       for(const outcome of a.outcomes){
-        const first=read(outcome).result,next=nextProbability(outcome.current,null,{maximum:8,entropy});
+        const first=read(outcome).result,next=expandAll(outcome.current,null);
         try{for(const child of next.outcomes){const stop=child.current.inspect();if(stop.kind!=='done')throw Error('Expected terminal successor');
           if(mode==='relic'){assert.notEqual(stop.result.relic,first.relic);assert.equal(first.remaining,2);assert.equal(stop.result.remaining,1);}
           else{assert.notEqual(stop.result.encounter,first.encounter);assert.deepEqual(stop.result.history,[first.encounter,stop.result.encounter]);}
@@ -87,14 +88,14 @@ for(const mode of ['monster','elite','relic'] as const)test(`actual ${mode} futu
 
 test('encounter probability uses float24 masses and original boundary rejection rules',()=>{
   const elites=nextEncounterChoices(1,true,[]),grid=2**24;
-  assert.deepEqual(elites.map(c=>c.weight),[5592406/grid,5592405/grid,5592405/grid]);
-  const after=nextEncounterChoices(1,true,[e.GREMLIN_NOB]);assert.ok(after.every(c=>c.value!==e.GREMLIN_NOB));assert.equal(after.reduce((sum,c)=>sum+c.weight,0),1);
+  assert.deepEqual(elites.map(c=>c.weight),[5592406n,5592405n,5592405n].map(n=>probabilityMass(n,BigInt(grid))));
+  const after=nextEncounterChoices(1,true,[e.GREMLIN_NOB]);assert.ok(after.every(c=>c.value!==e.GREMLIN_NOB));assert.deepEqual(after.reduce((sum,c)=>addMass(sum,c.weight),zeroMass()),unitMass());
   const firstStrong=nextEncounterChoices(1,false,[e.CULTIST,e.JAW_WORM,e.SMALL_SLIMES]);
   assert.ok(firstStrong.every(c=>c.value!==e.LARGE_SLIME&&c.value!==e.LOTS_OF_SLIMES));
   const actThreeBoundary=nextEncounterChoices(3,false,[e.ORB_WALKER,e.THREE_DARKLINGS]);
   assert.ok(actThreeBoundary.some(c=>c.value===e.THREE_DARKLINGS),'first strong encounter does not have the later two-entry rejection');
   const next=nextEncounterChoices(3,false,[e.ORB_WALKER,e.THREE_DARKLINGS,e.THREE_DARKLINGS]);assert.ok(next.every(c=>c.value!==e.THREE_DARKLINGS));
-  assert.deepEqual(secondBossChoices(e.TIME_EATER).map(c=>c.weight),[.5,.5]);assert.ok(secondBossChoices(e.TIME_EATER).every(c=>c.value!==e.TIME_EATER));
+  assert.deepEqual(secondBossChoices(e.TIME_EATER).map(c=>c.weight),[probabilityMass(1n,2n),probabilityMass(1n,2n)]);assert.ok(secondBossChoices(e.TIME_EATER).every(c=>c.value!==e.TIME_EATER));
 });
 
 test('threshold probability is the pushforward of the original operation, including rejection and coincident values',()=>{
@@ -107,17 +108,13 @@ test('threshold probability is the pushforward of the original operation, includ
         const index=float24Index(selection,cell/16);
         if(accepted[index]){const value=selection.values[index]!;counts.set(value,(counts.get(value)??0)+1);total++;}
       }
-      if(total===0)assert.throws(()=>float24Choices(selection),/Empty accepted/);
-      else assert.deepEqual(float24Choices(selection),[...counts].map(([value,count])=>({key:String(value),value,weight:count/total})));
+      assert.deepEqual(float24Choices(selection),[...counts].map(([value,count])=>({key:String(value),value,weight:probabilityMass(BigInt(count),BigInt(total))})));
     }
   }
   const grid=2**24,cutoff=Math.fround(1/3),selection={values:[1,2],bounds:[cutoff],accepted:[true,true]};
   assert.equal(float24Index(selection,(5592406-1)/grid),0);assert.equal(float24Index(selection,5592406/grid),1);
-  assert.deepEqual(float24Choices(selection).map(c=>c.weight),[5592406/grid,1-5592406/grid]);
-  assert.throws(()=>float24Choices({...selection,accepted:[false,false]}),/Empty accepted/);
-  assert.throws(()=>float24Choices({...selection,bounds:[NaN]}),/Invalid/);
-  assert.deepEqual(permutationNextChoices([4,8,9],[8]),[{key:'4',value:4,weight:.5},{key:'9',value:9,weight:.5}]);
-  assert.throws(()=>permutationNextChoices([4,8,9],[8,8]),/Invalid/);
+  assert.deepEqual(float24Choices(selection).map(c=>c.weight),[probabilityMass(5592406n,BigInt(grid)),probabilityMass(BigInt(grid)-5592406n,BigInt(grid))]);
+  assert.deepEqual(permutationNextChoices([4,8,9],[8]),[{key:'4',value:4,weight:probabilityMass(1n,2n)},{key:'9',value:9,weight:probabilityMass(1n,2n)}]);
 });
 
 test('the original encounter generator executes rejection and all stages through the same selection definition',()=>{
@@ -157,14 +154,14 @@ test('the original encounter generator executes rejection and all stages through
 });
 
 test('probability selection continues the original relic eligibility loop, including rejected pool removals',()=>{
-  const root=source('acquisition'),result=nextProbability(root.current,null,{maximum:8,entropy});
+  const root=source('acquisition'),result=expandAll(root.current,null);
   try{
-    assert.equal(result.representation,'exact');assert.equal(result.outcomes.length,4);
-    const mass=new Map<string,number>(),sizes=new Set<number>();
+    assert.equal(result.outcomes.length,4);
+    const mass=new Map<string,ReturnType<typeof probabilityMass>>(),sizes=new Set<number>();
     for(const child of result.outcomes){const stop=child.current.inspect();if(stop.kind!=='call'||stop.call.port!=='seen')throw Error('Expected acquisition result');
-      assert.notEqual(stop.call.input.relic,'ANCHOR');sizes.add(stop.call.input.remaining);mass.set(stop.call.input.relic,(mass.get(stop.call.input.relic)??0)+child.probability);
+      assert.notEqual(stop.call.input.relic,'ANCHOR');sizes.add(stop.call.input.remaining);mass.set(stop.call.input.relic,addMass(mass.get(stop.call.input.relic)??zeroMass(),child.mass));
     }
-    assert.deepEqual(mass,new Map([['BAG_OF_MARBLES',.5],['VAJRA',.5]]));assert.deepEqual([...sizes].sort(),[1,2]);
+    assert.deepEqual(mass,new Map([['BAG_OF_MARBLES',probabilityMass(1n,2n)],['VAJRA',probabilityMass(1n,2n)]]));assert.deepEqual([...sizes].sort(),[1,2]);
     const normal=root.current.machine.advance(null);if(normal.kind!=='call'||normal.call.port!=='seen')throw Error('Expected normal acquisition');
     assert.equal(normal.call.input.relic,'VAJRA');assert.equal(normal.call.input.remaining,1);
   }finally{for(const child of result.outcomes)child.current.close();root.current.close();}

@@ -1,5 +1,5 @@
 import {atomProbabilityFor} from './rules-probability.ts';
-import {probabilityOperation,initialForwardAccount,type ProbabilityCoordinate} from './probability.ts';
+import {probabilityOperation,type ProbabilityCoordinate} from './probability.ts';
 import { makeEntityKind } from './rules-entities.ts';
 import type { LifecycleBinding } from './rules-entities.types.ts';
 import { resolveCheckpoint } from './rules-checkpoints.ts';
@@ -95,12 +95,11 @@ export function defineRules<E>(config: { requires: readonly RuleModule<any>[]; b
             return readRuleValue(record.components[index]);
           }});
         };
-        const execute = (scope:CardScope<any>,raw:I,coordinate?:ProbabilityCoordinate,forward?:import('./probability.ts').ForwardProbabilityResult):Borrowed<O>=>{
-          const forwardStarted=forward?performance.now():0;
+        const execute = (scope:CardScope<any>,raw:I,coordinate?:ProbabilityCoordinate):Borrowed<O>=>{
           const state=stateOf(scope.state);
           const input=inputPlan.own(raw);
           const reader=read(scope);
-          const proposal=forward!==undefined ? probability!.forward!.commit(reader,input,forward) : coordinate === undefined ? run(reader,input) : typeof coordinate==='bigint'?probability!.run(reader,input,coordinate):probability!.runSample!(reader,input,coordinate.value);
+          const proposal=coordinate === undefined ? run(reader,input) : probability!.run(reader,input,coordinate);
           const checkedWrites:{entity:number;index:number;value:unknown}[]=[],checkedEvents:{event:number;payload:unknown;dispatch:'immediate'|'queued'}[]=[];
           const touched=new Map<number,Set<number>>();
           for(const write of proposal.writes){
@@ -124,31 +123,14 @@ export function defineRules<E>(config: { requires: readonly RuleModule<any>[]; b
 
           for(const write of checkedWrites)state.entities[write.entity]!.components[write.index]=write.value;
           for(let index=0;index<envelopes.length;index++)commitEvent(scope.state,envelopes[index]!,checkedEvents[index]!.dispatch);
-          if(forward){
-            const previous=state.probabilityAccount??initialForwardAccount(),cost=forward.cost;
-            state.probabilityAccount={random:forward.random,milliseconds:previous.milliseconds+cost.milliseconds+performance.now()-forwardStarted,nodes:previous.nodes+cost.nodes,advances:previous.advances+cost.advances,words:previous.words+cost.words,captures:previous.captures+1};
-          }
           return result;
         };
         if (probability) probabilityOperation(execute,{
           space:scope=>probability.space(inputPlan.own(scope.input)),
+          ...(probability.boundaryValue?{boundaryValue:(scope:CardScope<any>)=>probability.boundaryValue!(inputPlan.own(scope.input))}:{}),
           ...(probability.publication?{publication:(scope:CardScope<any>,result:unknown)=>probability.publication!(read(scope),inputPlan.own(scope.input),result)}:{}),
           ...(probability.constraints?{constraints:(scope:CardScope<any>,result:unknown)=>probability.constraints!(read(scope),inputPlan.own(scope.input),result)}:{}),
-          ...(probability.forward?{
-            forward:{plan:(scope:CardScope<any>)=>{
-              const plan=probability.forward!.plan(inputPlan.own(scope.input));if(!plan)return null;
-              const account=stateOf(scope.state).probabilityAccount??initialForwardAccount();
-              return{...plan,random:account.random,milliseconds:Math.max(0,Math.min(plan.milliseconds,60_000-account.milliseconds))};
-            },word:probability.forward.word,
-              project:(scope:CardScope<any>)=>probability.forward!.project(scope.state,inputPlan.own(scope.input))},
-            resolveForward:(scope:CardScope<any>,result:import('./probability.ts').ForwardProbabilityResult)=>execute(scope,scope.input,undefined,result),
-          }:{}),
           resolve:(scope,coordinate)=>execute(scope,scope.input,coordinate),
-          ...(probability.partition?{partition:(scope:CardScope<any>,hint:unknown,maximum:number,source:import('./probability.ts').ProbabilityEntropy)=>probability.partition!(inputPlan.own(scope.input),hint,maximum,source)}:{}),
-          ...(probability.sample&&probability.runSample?{
-            sample:(scope:CardScope<any>,source:import('./probability.ts').ProbabilityEntropy)=>probability.sample!(inputPlan.own(scope.input),source),
-            resolveSample:(scope:CardScope<any>,value:unknown)=>execute(scope,scope.input,{kind:'sample',value}),
-          }:{}),
         });
         return execute;
       }});effects.push(effect);return effect;

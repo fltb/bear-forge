@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, mkdir, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExperimentFiles } from '../src/files.ts';
@@ -37,10 +37,21 @@ test('a durable task survives summary failure and is never replaced by a retry',
     id: value.id, doubled: value.amount * 2
   }));
   assert.deepEqual(await resumed.results(), [row]);
-  assert.deepEqual(await resumed.summaries(), [{ id: 'task', doubled: 14 }]);
   await resumed.commit(row.id, { id: row.id, amount: 99 });
+  assert.deepEqual(await resumed.read('summary-task'),{id:'task',doubled:14});
   assert.deepEqual(await resumed.results(), [row]);
   assert.deepEqual(await resumed.summaries(), [{ id: 'task', doubled: 14 }]);
+});
+
+test('a failed atomic replacement removes its temporary file without deleting the original target',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'bear-write-cleanup-'));
+  try{
+    await mkdir(join(directory,'blocked.bin'));
+    const files=new ExperimentFiles(directory,(row:{id:string})=>row);
+    await assert.rejects(files.write('blocked',{id:'blocked'}));
+    assert.deepEqual(await readdir(directory),['blocked.bin']);
+    assert.deepEqual(await readdir(join(directory,'blocked.bin')),[]);
+  }finally{await rm(directory,{recursive:true,force:true});}
 });
 test('frozen registration compares boundary data rather than serialization order', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'bear-registration-'));

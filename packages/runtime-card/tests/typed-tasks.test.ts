@@ -5,7 +5,7 @@ import {promisify} from 'node:util';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {createCardLoader,fileSnapshotStore,replayCard} from '../src/index.ts';
+import {createCardLoader,fileSnapshotStore} from '../src/index.ts';
 import {definition,initializations} from './fixtures/typed-tasks.ts';
 const exec=promisify(execFile);
 const unwrap=<T>(r:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};
@@ -15,7 +15,8 @@ for(const controlled of [false,true])test(`first queued and event-activated task
     const stop=unwrap(await instance.inspect());assert.equal(stop.kind,'call');if(stop.kind!=='call')throw Error('Missing queued wait');assert.equal(stop.call.input,7);
     unwrap(await instance.bind({choose:async()=>({kind:'reply',value:4})}));unwrap(await instance.run());
     const end=unwrap(await instance.inspect());assert.deepEqual(end.kind==='done'?end.result:end,[0,2,1,4,9,0]);
-    const records=unwrap(await loaded.capture!.read(instance.id,{after:null,limit:100})).records;assert.equal((await replayCard(definition,records,{controlled})).ok,true);
+    const records=unwrap(await loaded.capture!.read(instance.id,{after:null,limit:100})).records;assert.deepEqual(records.filter(row=>row.kind==='returned').map(row=>row.reply.output),[4]);
+  assert.equal(records.at(-1)?.kind,'completed');
   }finally{await instance.close();await loaded.capture!.release(instance.id);}
 });
 test('a running queued task cold-restores and forks without losing its remaining queue or repeating its prefix',async()=>{

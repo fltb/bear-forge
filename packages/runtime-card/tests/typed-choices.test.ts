@@ -5,7 +5,7 @@ import {promisify} from 'node:util';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {createCardLoader,replayCard,readCardTrace,fileSnapshotStore} from '../src/index.ts';
+import {createCardLoader,readCardTrace,fileSnapshotStore} from '../src/index.ts';
 import {definition} from './fixtures/typed-choices.ts';
 const unwrap=<T>(r:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};
 const exec=promisify(execFile);
@@ -21,7 +21,9 @@ for(const controlled of [false,true])test(`invalid choice replies keep the same 
   }
   unwrap(await instance.bind({choose:async()=>({kind:'reply',value:{indices:[2,0]}})}));assert.equal(unwrap(await instance.run()).accepted,true);
   const done=unwrap(await instance.inspect());assert.equal(done.kind,'done');if(done.kind!=='done')throw Error('done missing');assert.deepEqual(done.result,[10,30]);
-  assert.equal((await replayCard(d,unwrap(await loaded.capture!.read(instance.id,{after:null,limit:100})).records,{controlled})).ok,true);
+  const accepted=unwrap(await loaded.capture!.read(instance.id,{after:null,limit:100})).records;
+  assert.deepEqual(accepted.filter(row=>row.kind==='returned').map(row=>row.reply.output),[{indices:[2,0]}]);
+  assert.deepEqual(accepted.filter(row=>row.kind==='completed').map(row=>row.result),[[10,30]]);
   await instance.close();await loaded.capture!.release(instance.id);
 });
 

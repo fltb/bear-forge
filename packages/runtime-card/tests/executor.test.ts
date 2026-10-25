@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { serialize, deserialize } from 'node:v8';
 import { card as c, CardProgram, CardMachine, plainCardStorage } from '@bear-forge/card-engine';
 import type { CardDefinition } from '@bear-forge/card-engine';
-import { createCardLoader, replayCard, readCardTrace, memorySnapshotStore } from '../src/index.ts';
+import { createCardLoader, readCardTrace, memorySnapshotStore } from '../src/index.ts';
 import { CardGraph } from '../src/graph.ts';
 const unwrap = <T>(value: { ok: true; value: T } | { ok: false; error: unknown }): T => { assert.equal(value.ok, true, JSON.stringify(value)); if (!value.ok) throw Error('failed'); return value.value; };
 import {definition} from './fixtures/nested.ts';
@@ -21,18 +21,28 @@ test('local result slots are data keys, including __proto__, constructor and toS
   }
 });
 
-test('replay and restore reject altered alias relationships even when all fields are equal', async () => {
+test('captured aliases stay isolated and restore rejects altered alias relationships even when all fields are equal', async () => {
   const d = { id: 'alias-record', schemas: { setup: z.null(), result: z.any(), ports: { choose: { input: z.any(), output: z.null() } } }, initialize: () => ({ n: 1 }), entry: 'main', effects: [{ id: 'main', steps: [c.request<{ n: number }>(s => ({ port: 'choose', input: { a: s.state, b: s.state } })), c.return<{ n: number }>(s => ({ a: s.state, b: s.state }))] }] };
   for (const controlled of [false, true]) {
     const store = memorySnapshotStore(), loaded: any = unwrap(await createCardLoader({ controlled, recordCore: true, snapshots: store }).load(d)), instance = unwrap<any>(await loaded.core.start(null));
     const snapshot = controlled ? unwrap<any>(await loaded.persistence.save(instance)) : null;
     unwrap(await instance.bind({ choose: async () => ({ kind: 'reply', value: null }) })); unwrap(await instance.run());
     const records: any[] = unwrap<any>(await loaded.capture.read(instance.id, { after: null, limit: 100 })).records;
-    assert.equal((await replayCard(d, records, { controlled })).ok, true);
-    const called = structuredClone(records), completed = structuredClone(records);
-    called[1].call.input.b = structuredClone(called[1].call.input.b);
-    completed.at(-1).result.b = structuredClone(completed.at(-1).result.b);
-    assert.equal((await replayCard(d, called, { controlled })).ok, false); assert.equal((await replayCard(d, completed, { controlled })).ok, false);
+    assert.equal(records[1].call.input.a,records[1].call.input.b);
+    assert.equal(records.at(-1).result.a,records.at(-1).result.b);
+    records[1].call.input.b = structuredClone(records[1].call.input.b);
+    records.at(-1).result.b = structuredClone(records.at(-1).result.b);
+    const fresh=unwrap<any>(await loaded.capture.read(instance.id,{after:null,limit:100})).records;
+    assert.equal(fresh[1].call.input.a,fresh[1].call.input.b);
+    assert.equal(fresh.at(-1).result.a,fresh.at(-1).result.b);
+    if(controlled){
+      const terminal=unwrap<any>(await loaded.persistence.save(instance));
+      const data=deserialize((await store.get(terminal.snapshotId))!);
+      data.state.result.b=structuredClone(data.state.result.b);
+      await store.put(terminal.snapshotId,serialize(data));
+      assert.equal((await loaded.persistence.restore(terminal)).ok,false);
+      unwrap(await loaded.persistence.release(terminal));
+    }
     if (snapshot) {
       const data = deserialize((await store.get(snapshot.snapshotId))!); data.state.call.input.b = structuredClone(data.state.call.input.b);
       await store.put(snapshot.snapshotId, serialize(data)); assert.equal((await loaded.persistence.restore(snapshot)).ok, false);
@@ -66,7 +76,7 @@ test('COW graph preserves cycles/aliases/holes and separates large arrays by bou
   parent.close(); assert.equal(child.root.a.n, 8); child.close();
 });
 
-test('Instance boundaries, invalid replies, fork/restore, records, replay and transfer preserve semantics', async () => {
+test('Instance boundaries, invalid replies, fork/restore, records and transfer preserve semantics', async () => {
   const store = memorySnapshotStore(), loaded = unwrap(await createCardLoader({ snapshots: store }).load(definition));
   let parent = unwrap(await loaded.core.start(1)); const first = unwrap(await parent.inspect()); assert.equal(first.kind, 'call');
   unwrap(await parent.bind({ choose: async () => ({ kind: 'reply', value: 'bad' as any }) }));
@@ -85,13 +95,17 @@ test('Instance boundaries, invalid replies, fork/restore, records, replay and tr
     const result = unwrap(await instance.inspect()); assert.equal(result.kind, 'done');
     const records = unwrap(await loaded.capture!.read(instance.id, { after: null, limit: 1000 })).records;
     const coreTrace = unwrap(readCardTrace(loaded, instance.id));
-    assert.equal((await replayCard(definition, records, { coreTrace })).ok, true);
-    assert.equal((await replayCard(definition, records, { coreTrace: coreTrace.slice(1) })).ok, false);
-    const bad = structuredClone(records); (bad.at(-1) as any).result.sum++; assert.equal((await replayCard(definition, bad)).ok, false);
-    const reused = structuredClone(records), ids = reused.filter(r => r.kind === 'called');
-    const replaced = ids[1]!.callId;
-    for (const record of reused) if ('callId' in record && record.callId === replaced) record.callId = ids[0]!.callId;
-    assert.equal((await replayCard(definition, reused)).ok, false);
+    assert.deepEqual(records.filter(row=>row.kind==='returned').map(row=>row.reply.output),replies);
+    const called=records.filter(row=>row.kind==='called');
+    assert.equal(new Set(called.map(row=>row.callId)).size,called.length);
+    const completed=records.at(-1);assert.equal(completed?.kind,'completed');
+    if(completed?.kind!=='completed'||result.kind!=='done')throw Error('Missing original completion');
+    assert.deepEqual(completed.result,result.result);
+    assert.deepEqual(coreTrace.slice(0,prefix.length),prefix);
+    assert.ok(coreTrace.length>prefix.length);
+    completed.result.sum++;
+    const unchanged=unwrap(await instance.inspect());
+    assert.equal(unchanged.kind,'done');if(unchanged.kind==='done')assert.deepEqual(unchanged.result,result.result);
     unwrap(await instance.close()); unwrap(await loaded.capture!.release(instance.id));
   }
   const incompatible = unwrap(await createCardLoader({ snapshots: store }).load({ ...definition, id: 'test/other' })); assert.equal((await incompatible.persistence!.restore(snapshot)).ok, false);
@@ -120,7 +134,10 @@ test('diagnostic observer mutation or failure cannot corrupt core records or exe
   assert.equal(unwrap(await instance.inspect()).kind, 'call'); assert.ok(unwrap(readCardTrace(loaded, instance.id)).every(event => event.effect !== 'corrupted'));
   for (const value of [2, 4]) { unwrap(await instance.bind({ choose: async () => ({ kind: 'reply', value }) })); unwrap(await instance.run()); }
   const records = unwrap(await loaded.capture!.read(instance.id, { after: null, limit: 1000 })).records, coreTrace = unwrap(readCardTrace(loaded, instance.id));
-  assert.equal((await replayCard(definition, records, { coreTrace, trace() { throw Error('observer'); } })).ok, true); await instance.close();
+  assert.ok(coreTrace.every(event=>event.effect!=='corrupted'));
+  assert.deepEqual(records.filter(row=>row.kind==='returned').map(row=>row.reply.output),[2,4]);
+  const done=unwrap(await instance.inspect());assert.equal(done.kind,'done');if(done.kind==='done')assert.equal(done.result.sum,13);
+  await instance.close();await loaded.capture!.release(instance.id);
 });
 
 test('loader snapshots store compact trace data and reject corrupted trace positions',async()=>{

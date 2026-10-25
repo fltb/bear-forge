@@ -15,7 +15,6 @@ import {stsPorts,adventureChoices} from '../src/adapters/ports.ts';
 import {detailEvents} from '../src/adapters/detail-events.ts';
 import {programSchemas,type Ports,type Frame} from '../src/game.schemas.ts';
 import type {RelicId} from '../src/identifiers.ts';
-import {withStsProbabilityTracking} from '../src/search/tracking.ts';
 
 const schema=programSchemas.setup.extend({
   mode:z.enum(['room','relic','keys','transition','neow']),act:z.number().int().min(1).max(4).default(1),
@@ -55,4 +54,4 @@ const module=rules.defineRules({requires:[stsPorts,adventureContent.cards,advent
     b.return(query(stsPorts.exports.frame,{run,actions:[],selection:null})),
   );});return{exports:{entry}};
 }});
-export const searchWindowsDefinition=withStsProbabilityTracking(linkRules<{},WindowSetup,Ports,Frame>({id:'sts/search-original-windows',schemas:{...programSchemas,setup:schema},initialize:()=>({}),entry:module.exports.entry,definitions:[module.exports.entry],modules:[module]}));
+export const searchWindowsDefinition=linkRules<{},WindowSetup,Ports,Frame>({id:'sts/search-original-windows',schemas:{...programSchemas,setup:schema},initialize:()=>({}),entry:module.exports.entry,definitions:[module.exports.entry],modules:[module]});

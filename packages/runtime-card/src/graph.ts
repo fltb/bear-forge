@@ -1,10 +1,12 @@
-import {registerProbabilityFork} from '../../card-engine/src/probability.ts';
 import { types } from 'node:util';
+import {serialize,deserialize} from 'node:v8';
+import {type PackedGraphData,encodeGraphData,decodeGraphData,copyGraphData,sameGraphData,graphDataBytes} from './graph-codec.ts';
+import {createHash} from 'node:crypto';
 import { CowStore } from './cow-index.ts';
 import {CowProperties} from './cow-properties.ts';
 import { arrayPrototypeIsPlain } from '../../boundary/src/values.ts';
-import { isImmutableRuleValue, admitImmutableRuleBlock, immutableRuleEpoch, immutableRuleBirth } from '../../card-engine/src/rules-values.ts';
-import { Publication } from './publication.ts';
+import { isImmutableRuleValue, isContextRuleValue, admitImmutableRuleBlock, immutableRuleBirth } from '../../card-engine/src/rules-values.ts';
+import { Publication,publishNativeStop } from './publication.ts';
 
 type Reference = { readonly ref: number };
 type Block = { readonly block: object };
@@ -13,13 +15,61 @@ type Row = { array: boolean; nullPrototype: boolean; length: number; props: CowP
 type Identity = { next: number; originals: WeakMap<object, Reference> };
 type EdgeCursor = { value: Value; advance(): boolean };
 type Collection = { live: Set<number>; pending: number[]; scan: EdgeCursor | null; sweep: number; cutoff: number };
-const proxies = new WeakMap<object, { graph: CardGraph<any>; id: number; reference: Reference }>();
+type GraphImage<T>={root:T;immutable:object[];nullPrototypes:object[];contextValues:object[]};
+export type PackedGraphImage=PackedGraphData&{anchors:object[];key?:string};
+/** Context-owned identities may be reconstructed with their complete alias
+ * graph. Program/external identities cannot: opaque placeholders refer to the
+ * same retained immutable anchors, including anchors nested inside a block.
+ * The placeholder table is separate from user fields, so no data key is magic.
+ * V8 preserves aliases, cycles, holes, bigint and non-finite scalar values. */
+export function packGraphImage<T>(image:GraphImage<T>,contextAfter:number):PackedGraphImage{
+  const seen=new Map<object,object>(),anchors:object[]=[],references:object[]=[],nulls:object[]=[];
+  const copy=(value:any):any=>{
+    if(value===null||typeof value!=='object')return value;
+    if(seen.has(value))return seen.get(value);
+    const contextual=isContextRuleValue(value)&&(immutableRuleBirth(value)??0)>contextAfter;
+    if(isImmutableRuleValue(value)&&!contextual){
+      const reference={};seen.set(value,reference);anchors.push(value);references.push(reference);return reference;
+    }
+    const out=Array.isArray(value)?new Array(value.length):{};seen.set(value,out);
+    if(Object.getPrototypeOf(value)===null)nulls.push(out);
+    for(const key of Reflect.ownKeys(value)){
+      if(Array.isArray(value)&&key==='length')continue;
+      const field=Object.getOwnPropertyDescriptor(value,key)!;
+      Object.defineProperty(out,key,{value:copy(field.value),writable:true,enumerable:true,configurable:true});
+    }
+    return out;
+  };
+  const copied=copy(image);
+  const raw=serialize({image:copied,references,nulls});
+  return{...encodeGraphData(raw),anchors,key:createHash('sha256').update(raw).digest('hex')};
+}
+export function unpackGraphImage<T>(packed:PackedGraphImage):GraphImage<T>{
+  return decodeGraphImage<T>(packed,decodeGraphData(packed));
+}
+function decodeGraphImage<T>(packed:PackedGraphImage,raw:Uint8Array):GraphImage<T>{
+  const decoded=deserialize(raw) as {image:GraphImage<T>;references:object[];nulls:object[]};
+  const references=new Map(decoded.references.map((reference,i)=>[reference,packed.anchors[i]!])),seen=new Set<object>();
+  const restore=(value:any):any=>{
+    if(value===null||typeof value!=='object')return value;
+    if(references.has(value))return references.get(value);
+    if(seen.has(value))return value;seen.add(value);
+    for(const key of Object.keys(value))Object.defineProperty(value,key,{value:restore(value[key]),writable:true,enumerable:true,configurable:true});
+    return value;
+  };
+  const image=restore(decoded.image) as GraphImage<T>;
+  for(const value of decoded.nulls)Object.setPrototypeOf(value,null);
+  const contextual=new Set(image.contextValues);
+  for(const value of image.immutable)admitImmutableRuleBlock(value,()=>{},node=>contextual.has(node));
+  return image;
+}
+const proxies = new WeakMap<object, { graph: CardGraph<any>; id: number; reference: Reference; generation:number }>();
 const blocks = new WeakMap<object, Block>();
 // Only the loader's no-projection execution may keep detached exports private.
 // Public graphs always produce fresh, unbranded values.
 const privateGraphs = new WeakSet<object>();
-export function privateCardGraph<T>(value: T, immutable?: readonly object[]): CardGraph<T> {
-  const graph = new CardGraph(value, immutable); privateGraphs.add(graph); return graph;
+export function privateCardGraph<T>(value: T, immutable?: readonly object[],nullPrototypes?:readonly object[],contextValues?:readonly object[]): CardGraph<T> {
+  const graph = new CardGraph(value, immutable,nullPrototypes,contextValues); privateGraphs.add(graph); return graph;
 }
 const pageWidth = 64;
 const numeric = (key: string): number | undefined => {
@@ -35,6 +85,12 @@ const clone = (row: Row): Row => ({ ...row, props: row.props.fork(), pages: row.
 
 /** Branch-local views of data identities; shared nodes contain no live proxies. */
 export class CardGraph<T> {
+  /** Retain a detached encoding; decode the complete Context only on access. */
+  static restorePacked<T>(packed:PackedGraphImage,contextAfter:number):CardGraph<T>{
+    const graph=privateCardGraph<T>(undefined as T);
+    graph.parked={...copyGraphData(packed),anchors:[...packed.anchors]};
+    graph.parkedContextAfter=contextAfter;return graph;
+  }
   private rows = new CowStore<Row>();
   private identity: Identity = { next: 0, originals: new WeakMap() };
   private views = new Map<number, object>();
@@ -46,29 +102,88 @@ export class CardGraph<T> {
   private allocationAtBoundary = 0;
   private writesAtBoundary = 0;
   private restoring: Set<object> | null = null;
+  private restoringNull:Set<object>|null=null;
+  private restoringContext:Set<object>|null=null;
   private open = true;
   private rootValue: Value;
-  constructor(value: T, immutable?: readonly object[]) {
-    registerProbabilityFork(this,()=>this.fork() as CardGraph<any>,()=>process.memoryUsage().rss);
+  private generation=0;
+  private parked:PackedGraphImage|null=null;
+  private parkedContextAfter:number|null=null;
+  // Activation for observation/equality does not itself change Context data.
+  // Retain the immutable image until a managed write invalidates it, so a pure
+  // read followed by parking need not export/compress the same graph again.
+  private cleanImage:{image:PackedGraphImage;contextAfter:number}|null=null;
+  constructor(value: T, immutable?: readonly object[],nullPrototypes?:readonly object[],contextValues?:readonly object[]) {
     if(immutable)this.restoring=new Set(immutable);
+    if(nullPrototypes)this.restoringNull=new Set(nullPrototypes);
+    if(contextValues)this.restoringContext=new Set(contextValues);
     this.rootValue = this.encode(value);
-    if(this.restoring?.size)throw Error('Snapshot contains unreachable immutable blocks');
     this.restoring=null;
+    this.restoringNull=null;
+    this.restoringContext=null;
     // The complete import already encoded every alias. Subsequent computation
     // uses managed references, never retained transferred source objects.
     if (this.identity.next) this.identity.originals = new WeakMap();
     this.allocationAtBoundary=this.identity.next;this.writesAtBoundary=0;
   }
-  get root(): T { if(!this.open)throw Error('Closed card storage');return this.decode(this.rootValue) as T; }
+  private activate():void{
+    if(!this.open)throw Error('Closed card storage');
+    if(!this.parked)return;
+    const image=this.parked,contextAfter=this.parkedContextAfter!;
+    const saved=unpackGraphImage<T>(image),loaded=new CardGraph(saved.root,saved.immutable,saved.nullPrototypes,saved.contextValues);
+    // Import data before exchanging ownership. Failure retains the complete
+    // parked image; no Program operation or previous input is executed.
+    this.rows=loaded.rows;this.identity=loaded.identity;this.rootValue=loaded.rootValue;
+    this.collectionAt=loaded.collectionAt;this.allocationAtBoundary=loaded.allocationAtBoundary;this.writesAtBoundary=0;
+    this.cleanImage={image,contextAfter};this.parked=null;this.parkedContextAfter=null;this.epoch++;
+  }
+  get root(): T { this.activate();return this.decode(this.rootValue) as T; }
+  get isParked():boolean{return this.parked!==null;}
+  /** Read an owned publication from the complete retained image. Observation
+   * needs no writable proxy/radix graph. Decode with the ordinary identity and
+   * immutable admission path, then publish just the requested root field.
+   * The parked Context stays intact; its next operation still activates it. */
+  exportRootField<K extends keyof T>(key:K):T[K]{
+    if(!this.open)throw Error('Closed card storage');
+    if(!this.parked)return this.export(this.root[key]);
+    const image=unpackGraphImage<T>(this.parked),value=image.root[key];
+    return privateGraphs.has(this)?publishNativeStop(value,item=>this.materialize(item)):this.materialize(value);
+  }
+  /** Candidate bucket only. External anchors and full graph equality must
+   * still be checked; a digest match never establishes equivalence. */
+  candidateKey(contextAfter=0):string{
+    this.park(contextAfter);const image=this.parked!;
+    return image.key??=createHash('sha256').update(decodeGraphData(image)).digest('hex');
+  }
+  get parkedBytes():number{return this.parked?graphDataBytes(this.parked):0;}
+  /** Detached durable bytes from the complete parked image. Reclassification
+   * at a different ownership boundary still uses the ordinary full export. */
+  packedSnapshot(contextAfter=0):PackedGraphImage{
+    this.park(contextAfter);
+    const image=this.parkedContextAfter===contextAfter?this.parked!:
+      packGraphImage(this.snapshot(true,contextAfter),contextAfter);
+    return{...copyGraphData(image),anchors:[...image.anchors]};
+  }
+  /** Private retained search storage only: keep all current data and immutable
+   * identity anchors, release the proxy/radix execution representation. */
+  park(contextAfter=0):void{
+    if(!this.open)throw Error('Closed card storage');
+    if(this.parked)return;
+    const saved=this.cleanImage?.contextAfter===contextAfter?this.cleanImage.image:packGraphImage(this.snapshot(true,contextAfter),contextAfter);
+    this.parked=saved;this.parkedContextAfter=contextAfter;this.rows.clear();this.views.clear();this.identity={next:0,originals:new WeakMap()};
+    this.cleanImage=null;this.collection=null;this.rootValue=undefined;this.generation++;this.epoch++;
+  }
   private encode(value: any): Value {
     if (value === null) return value;
     if (typeof value !== 'object') { if (typeof value === 'function' || typeof value === 'symbol') throw TypeError('Card state must contain data only'); return value; }
     const view = proxies.get(value);
     if (view) {
       if (view.graph !== this) throw TypeError('Foreign card instance reference');
+      if(view.generation!==this.generation)throw Error('Released card view');
       return view.reference;
     }
-    if(this.restoring?.has(value))admitImmutableRuleBlock(value,node=>this.restoring!.delete(node));
+    if(this.restoring?.has(value))admitImmutableRuleBlock(value,node=>this.restoring!.delete(node),node=>this.restoringContext?.has(node)===true);
+    const savedNull=this.restoringNull?.has(value)===true;
     if (isImmutableRuleValue(value)) { let block = blocks.get(value); if (!block) { block = {block:value}; blocks.set(value, block); } return block; }
     if (types.isProxy(value)) throw TypeError('External proxy in card state');
     const known = this.identity.originals.get(value);
@@ -76,7 +191,7 @@ export class CardGraph<T> {
     const array = Array.isArray(value), proto = Object.getPrototypeOf(value);
     if (!array && proto !== null && proto !== Object.prototype) throw TypeError('Non-data card object');
     if (array && proto !== Array.prototype) throw TypeError('Non-standard card array');
-    const id = this.identity.next++, row: Row = { array, nullPrototype: proto === null, length: array ? value.length : 0, props: new CowProperties(), pages: new CowStore() };
+    const id = this.identity.next++, row: Row = { array, nullPrototype: savedNull||proto === null, length: array ? value.length : 0, props: new CowProperties(), pages: new CowStore() };
     const reference = {ref:id};
     this.identity.originals.set(value, reference); this.rows.set(id, row); this.shade(reference);
     for (const key of Reflect.ownKeys(value)) {
@@ -97,6 +212,7 @@ export class CardGraph<T> {
     return index === undefined ? row.props.has(key) : Object.hasOwn(row.pages!.get(Math.floor(index / pageWidth)) ?? {}, key);
   }
   private put(row: Row, key: string, value: Value): void {
+    this.cleanImage=null;
     this.writesAtBoundary++;
     this.shade(value);
     const index = numeric(key);
@@ -113,10 +229,12 @@ export class CardGraph<T> {
     if ('block' in value) return value.block;
     const id = value.ref, existing = this.views.get(id); if (existing) return existing;
     const graph = this, initial = this.rows.get(id), privateExport = privateGraphs.has(this); if (!initial) throw Error('Missing card node');
+    const generation=this.generation;
     let cached = initial, at = graph.epoch, writtenAt = -1;
-    const row = () => { if (at !== graph.epoch) { const result = graph.rows.get(id); if (!result) throw Error('Released card node'); cached = result; at = graph.epoch; } return cached; };
+    const row = () => { if (at !== graph.epoch) { if(generation!==graph.generation)throw Error('Released card view');const result = graph.rows.get(id); if (!result) throw Error('Released card node'); cached = result; at = graph.epoch; } return cached; };
     const writable = () => {
-      if (writtenAt !== graph.epoch) { cached = graph.rows.edit(id, clone); at = writtenAt = graph.epoch; }
+      graph.cleanImage=null;
+      if (writtenAt !== graph.epoch) { if(generation!==graph.generation)throw Error('Released card view');cached = graph.rows.edit(id, clone); at = writtenAt = graph.epoch; }
       if (privateExport) delete cached.exportCache;
       return cached;
     };
@@ -172,14 +290,28 @@ export class CardGraph<T> {
       setPrototypeOf() { throw TypeError('Card prototype is fixed'); },
       preventExtensions() { throw TypeError('Card state cannot be frozen'); },
     });
-    this.views.set(id, proxy); proxies.set(proxy, { graph: this, id, reference: value }); return proxy;
+    this.views.set(id, proxy); proxies.set(proxy, { graph: this, id, reference: value,generation }); return proxy;
   }
   /** Conservative equality of complete current graphs. Reference IDs are
    * paired bijectively, preserving aliases/cycles across different allocations.
    * Immutable data is compared with the same alias guarantee. No root field
    * is omitted, including frames, queues and remaining execution budget. */
-  sameCurrent(other:CardGraph<T>,check:()=>void,createdAfter=immutableRuleEpoch()):boolean{
+  sameCurrent(other:CardGraph<T>,check:()=>void,createdAfter?:number,contextAfter=0):boolean{
     if(!this.open||!other.open)throw Error('Closed card storage');
+    check();
+    // Equal lossless bytes plus the exact same external identity table prove
+    // equality of the entire decoded graph. Unlike a digest, this is not a
+    // candidate test. Only use the ownership boundary that encoded both data
+    // images; a different comparison boundary needs the structural fallback.
+    if(createdAfter===undefined&&this.parked&&other.parked&&this.parkedContextAfter===contextAfter&&other.parkedContextAfter===contextAfter&&
+      sameGraphData(this.parked,other.parked)){
+      if(this.parked.anchors.length!==other.parked.anchors.length||!this.parked.anchors.every((anchor,i)=>anchor===other.parked!.anchors[i]))return false;
+      // The complete proof also permits sharing this immutable representation.
+      // Each owner still decodes independently on access; closing either owner
+      // does not release the other, and exported bytes remain detached.
+      other.parked=this.parked;return true;
+    }
+    this.activate();other.activate();
     const pending:[Value,Value][]=[[this.rootValue,other.rootValue]],leftIds=new Map<number,number>(),rightIds=new Map<number,number>();let visited=0;
     const leftBlocks=new Map<object,object>(),rightBlocks=new Map<object,object>();
     const sameBlocks=(first:object,second:object):boolean=>{
@@ -187,9 +319,11 @@ export class CardGraph<T> {
       while(work.length){
         if((visited++&255)===0)check();const [x,y]=work.pop()!;
         if(x===null||y===null||typeof x!=='object'||typeof y!=='object'){if(!Object.is(x,y))return false;continue;}
-        // Values that existed before this chance expansion may also be
-        // referenced by shared Program code. They are identity anchors.
-        if((immutableRuleBirth(x)??0)<=createdAfter||(immutableRuleBirth(y)??0)<=createdAfter){if(x!==y)return false;continue;}
+        // Context-owned values may be renamed with their complete alias
+        // topology. External Program-held objects remain identity anchors.
+        const fresh=createdAfter!==undefined&&(immutableRuleBirth(x)??0)>createdAfter&&(immutableRuleBirth(y)??0)>createdAfter;
+        const contextual=isContextRuleValue(x)&&isContextRuleValue(y)&&(immutableRuleBirth(x)??0)>contextAfter&&(immutableRuleBirth(y)??0)>contextAfter;
+        if(!fresh&&!contextual){if(x!==y)return false;continue;}
         if(leftBlocks.has(x)||rightBlocks.has(y)){if(leftBlocks.get(x)!==y||rightBlocks.get(y)!==x)return false;continue;}
         leftBlocks.set(x,y);rightBlocks.set(y,x);
         if(Object.getPrototypeOf(x)!==Object.getPrototypeOf(y))return false;
@@ -217,12 +351,18 @@ export class CardGraph<T> {
     }
     check();return true;
   }
-  own<V>(value: V): V { return this.decode(this.encode(value)); }
-  export<V>(value: V): V { return this.materialize(value); }
-  snapshot():{root:T;immutable:object[]}{
-    const immutable:object[]=[];return{root:this.materialize(this.root,immutable),immutable};
+  own<V>(value: V): V { this.activate();return this.decode(this.encode(value)); }
+  export<V>(value: V): V { this.activate();return this.materialize(value); }
+  snapshot(shareImmutable=false,contextAfter=0):{root:T;immutable:object[];nullPrototypes:object[];contextValues:object[]}{
+    if(!this.open)throw Error('Closed card storage');
+    const immutable:object[]=[],nullPrototypes:object[]=[],contextValues:object[]=[];
+    // Saving an inactive current must not rebuild all execution indexes just
+    // to export them again. Copy its data directly, retaining null-prototype
+    // metadata, aliases and immutable ownership exactly as a live export does.
+    const source=this.parked?unpackGraphImage<T>(this.parked):null;
+    return{root:this.materialize(source?source.root:this.root,immutable,shareImmutable,nullPrototypes,contextValues,contextAfter,source?new Set(source.nullPrototypes):undefined),immutable,nullPrototypes,contextValues};
   }
-  private materialize<V>(value: V, immutable?:object[]): V {
+  private materialize<V>(value: V, immutable?:object[],shareImmutable=false,nullPrototypes?:object[],contextValues?:object[],contextAfter=0,sourceNull?:ReadonlySet<object>): V {
     if (value === null || typeof value !== 'object') {
       if (typeof value === 'function' || typeof value === 'symbol') throw TypeError('Non-data export');
       return value;
@@ -230,19 +370,28 @@ export class CardGraph<T> {
     const privateExport = !immutable && privateGraphs.has(this);
     if (privateExport && isImmutableRuleValue(value)) { const publication = new Publication(); return publication.finish(publication.borrow(value)); }
     const root = privateExport ? proxies.get(value) : undefined;
+    if(root?.graph===this&&root.generation!==this.generation)throw Error('Released card view');
     if (!immutable && root?.graph === this && Object.getPrototypeOf(Array.prototype) === Object.prototype) return this.exportPrivate(root.id);
     const seen = new Map<object, any>();
+    const marked=new Set<object>();
+    const markContext=(value:object)=>{
+      const pending=[value];
+      while(pending.length){const next=pending.pop()!;if(marked.has(next))continue;marked.add(next);if(isContextRuleValue(next)&&(immutableRuleBirth(next)??0)>contextAfter)contextValues?.push(next);
+        for(const child of Object.values(next))if(child!==null&&typeof child==='object')pending.push(child);
+      }
+    };
     const ids = new Map<number, any>();
     const plainArrayBase = arrayPrototypeIsPlain();
     const encoded = (value: Value): any => value !== null && typeof value === 'object' ? 'block' in value ? visit(value.block) : node(value.ref) : value;
     const node = (id: number): any => {
       if (ids.has(id)) return ids.get(id);
       const row = this.rows.get(id); if (!row) throw Error('Missing card node');
-      const out = row.array ? new Array(row.length) : Object.create(row.nullPrototype ? null : Object.prototype); ids.set(id, out);
+      const out = row.array ? new Array(row.length) : Object.create(row.nullPrototype&&!nullPrototypes ? null : Object.prototype); ids.set(id, out);
+      if(row.nullPrototype)nullPrototypes?.push(out);
       const inherited = row.array ? Array.prototype : Object.prototype;
       const put = (key: string, value: Value) => {
         const item = encoded(value);
-        if (row.array && !plainArrayBase || !row.nullPrototype && key in inherited) Object.defineProperty(out, key, { value: item, writable: true, configurable: true, enumerable: true });
+        if (row.array && !plainArrayBase || (!row.nullPrototype||nullPrototypes) && key in inherited) Object.defineProperty(out, key, { value: item, writable: true, configurable: true, enumerable: true });
         else out[key] = item;
       };
       row.pages!.forEach(values => { for (const key of Object.keys(values)) put(key, values[key]!); });
@@ -252,12 +401,20 @@ export class CardGraph<T> {
     const visit = (x: any): any => {
       if (x === null || typeof x !== 'object') { if (typeof x === 'function' || typeof x === 'symbol') throw TypeError('Non-data export'); return x; }
       if (seen.has(x)) return seen.get(x);
+      // Search saves many sibling Contexts in one image. Preserve shared
+      // frozen blocks in that image; only mutable containers need detaching.
+      // The immutable references also survive serialization as admission data.
+      if(immutable&&shareImmutable&&isImmutableRuleValue(x)){seen.set(x,x);immutable.push(x);markContext(x);return x;}
       const view = proxies.get(x);
       if (view && view.graph !== this) throw TypeError('Foreign card instance reference');
+      if(view&&view.generation!==this.generation)throw Error('Released card view');
       if (view) return node(view.id);
       if (!view && types.isProxy(x)) throw TypeError('External proxy');
-      const out = Array.isArray(x) ? new Array(x.length) : Object.create(Object.getPrototypeOf(x)); seen.set(x, out);
+      const nullPrototype=Object.getPrototypeOf(x)===null||sourceNull?.has(x)===true;
+      const out = Array.isArray(x) ? new Array(x.length) : Object.create(nullPrototype?(nullPrototypes?Object.prototype:null):Object.getPrototypeOf(x)); seen.set(x, out);
+      if(nullPrototype)nullPrototypes?.push(out);
       if(immutable&&isImmutableRuleValue(x))immutable.push(out);
+      if(contextValues&&isContextRuleValue(x)&&(immutableRuleBirth(x)??0)>contextAfter)contextValues.push(out);
       for (const key of Reflect.ownKeys(x)) {
         if (Array.isArray(x) && key === 'length') continue;
         if (typeof key !== 'string') throw TypeError('Symbol data');
@@ -306,7 +463,15 @@ export class CardGraph<T> {
     return publication.finish(node(root));
   }
   fork(): CardGraph<T> {
-    const next = new CardGraph<T>(undefined as T); next.rows = this.rows.fork(); next.identity.next = this.identity.next; next.rootValue = this.rootValue;
+    if(!this.open)throw Error('Closed card storage');
+    if(this.parked){
+      // The packed data and identity anchors are immutable. Each branch
+      // decodes its own owned graph only when it actually resumes execution.
+      const next=new CardGraph<T>(undefined as T);next.parked=this.parked;next.parkedContextAfter=this.parkedContextAfter;
+      if(privateGraphs.has(this))privateGraphs.add(next);return next;
+    }
+    this.activate();
+    const next = new CardGraph<T>(undefined as T); next.rows = this.rows.fork(); next.identity.next = this.identity.next; next.rootValue = this.rootValue;next.cleanImage=this.cleanImage;
     next.collectionAt = this.collectionAt; next.allocationAtBoundary = this.identity.next; this.epoch++;
     if (privateGraphs.has(this)) privateGraphs.add(next);
     return next;
@@ -367,6 +532,7 @@ export class CardGraph<T> {
     }
   }
   boundary(): void {
+    this.activate();
     this.identity.originals = new WeakMap();
     const allocated = this.identity.next - this.allocationAtBoundary;
     this.allocationAtBoundary = this.identity.next;
@@ -379,15 +545,17 @@ export class CardGraph<T> {
     if (this.collection) this.collectSlice(Math.max(256, allocated * 4 + writes * 2));
   }
   collect(): void {
+    this.activate();
     this.beginCollection();
     while (this.collection) this.collectSlice(4096);
   }
   /** Short probability continuations fork again at the next random point.
    * Finish due collection there so child forks do not keep restarting it. */
   finishCollection(): void {
+    this.activate();
     if (!this.collection && this.rows.size >= this.collectionAt) this.beginCollection();
     while (this.collection) this.collectSlice(4096);
   }
-  close(): void { this.rows.clear(); this.views.clear(); this.collection = null; this.rootValue=undefined;this.open=false;this.epoch++; }
+  close(): void { this.rows.clear(); this.views.clear(); this.collection = null; this.parked=null;this.cleanImage=null;this.rootValue=undefined;this.open=false;this.generation++;this.epoch++; }
   get nodeCount() { return this.rows.size; }
 }

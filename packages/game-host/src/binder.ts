@@ -1,11 +1,14 @@
-import { fields } from '@bear-forge/boundary';
+import { fields,sameData } from '@bear-forge/boundary';
 import { types } from 'node:util';
 import { copyOwned as copy, readOwned as read, retainOwned, isOwned, isOwnedTree, isDenseTree } from '../../boundary/src/values.ts';
 import { callback, exceptionMessage } from '@bear-forge/runtime';
 import { invokeOwnedStop, inputlessReply } from '../../runtime/src/stop-ownership.ts';
+import {ExecutionSuspended,continuationControl,retainsEventReceipt} from '../../runtime/src/continuation.ts';
+import {InstanceIdSchema,CallIdSchema} from '@bear-forge/contracts/instance';
 import { RequestIdSchema, GameErrorSchema, JsonValueSchema, InputOptionsSchema } from '@bear-forge/contracts/game';
 import type { BaseGameBinder } from '@bear-forge/contracts/loading';
-import {registerCurrentFork,registerCurrentAccess} from './current.ts';
+import {registerCurrentFork,registerCurrentAccess,registerGameContinuation,registerGameExecution,saveGameContinuation,registerGameDelivery} from './current.ts';
+import type {GameContinuation,GameDeliverySnapshot,DeliveryProgress,DeliveryRow} from './current.ts';
 /** GameContract adapters only read stable published data. Unknown provider
  * values first become private DTOs; players and parsers still receive copies. */
 function adapterValue<T>(value: T): T {
@@ -63,13 +66,58 @@ function* dataItems(values: unknown[]): Iterable<unknown> {
 }
 const equal = (a: any, b: any) => a.instanceId === b.instanceId && a.callId === b.callId && a.key === b.key;
 /** Owns an Instance through its public transfer/bind/run interfaces. */
-type Derived = { view: any; hasView: boolean; state: any; raw: any; requests: any[]; events: any[]; eventOutput: any; port: any };
-async function bindGame(input: any, shared?: Derived): Promise<any> {
+type Derived = { view: any; hasView: boolean; state: any; raw: any; requests: any[]; events: any[]; eventOutput: any; port: any; delivery?:DeliveryProgress|null };
+async function bindGame(input: any, shared?: Derived, resumed?:GameContinuation): Promise<any> {
       if (!fields(input, ['instance', 'contract'], ['persistence']) || !input.instance || typeof input.instance.transfer !== 'function' || !input.contract) return reject('invalid_argument');
-      const ownership = await input.instance.transfer();
+      let restored:any;
+      if(resumed){
+        try{
+          restored=copy(resumed);
+          const source=continuationControl(input.instance);
+          if(!source?.pending()||!fields(restored,['instanceId','derived','run'])||!InstanceIdSchema.safeParse(restored.instanceId).success||
+            !fields(restored.run,['accepted','pending'])||!fields(restored.run.pending,['callId','accepted'])||
+            restored.run.pending.callId!==source.callId()||!fields(restored.derived,['view','hasView','state','raw','requests','events','eventOutput'])||
+            !source.matchesStop(restored.derived.raw))throw Error('Game continuation differs from the consumed original call');
+          const d=restored.derived,c=input.contract,r=restored.run;
+          if(d.raw.kind!=='call'||d.raw.callId!==r.pending.callId||typeof d.hasView!=='boolean'||!Array.isArray(d.requests)||!Array.isArray(d.events)||
+            !Object.hasOwn(c.ports,d.raw.call.port))throw Error('Invalid saved game current');
+          const p=c.ports[d.raw.call.port];
+          if(d.hasView)read(c.schemas.view,d.view);
+          if(p.kind==='request'){
+            if(!d.hasView||!fields(d.state,['kind','requests'])||d.state.kind!=='request'||!sameData(d.state.requests,d.requests)||d.events.length||d.eventOutput!==undefined)throw Error('Invalid saved request current');
+            const ids=new Set<string>();
+            for(const request of d.requests){
+              if(!fields(request,['id','player','type','data','observation','options']))throw Error('Invalid saved request');
+              const id=RequestIdSchema.parse(request.id);
+              if(id.instanceId!==restored.instanceId||id.callId!==d.raw.callId||ids.has(id.key)||!Object.hasOwn(c.schemas.actions,request.type))throw Error('Invalid saved request identity');
+              ids.add(id.key);read(c.schemas.player,request.player);read(c.schemas.actions[request.type].request,request.data);
+              read(c.schemas.observation,request.observation);read(InputOptionsSchema,read(c.inputs[request.type].options,request.options));
+            }
+            if(r.accepted!==null||r.pending.accepted===null)throw Error('Request continuation must contain its one pending choice');
+          }else if(p.kind==='event'){
+            if(!fields(d.state,['kind','callId'])||d.state.kind!=='event'||d.state.callId!==d.raw.callId||d.requests.length||r.pending.accepted!==null)throw Error('Invalid saved event current');
+            for(const event of d.events)read(c.schemas.event,event);
+          }else throw Error('Invalid saved game port');
+          for(const accepted of [r.accepted,r.pending.accepted]){
+            if(accepted===null)continue;
+            if(accepted?.kind==='action'){
+              if(!fields(accepted,['kind','player','reply'])||!fields(accepted.reply,['requestId','type','action']))throw Error('Invalid saved accepted action');
+              const id=RequestIdSchema.parse(accepted.reply.requestId),type=accepted.reply.type;
+              if(id.instanceId!==restored.instanceId||!Object.hasOwn(c.schemas.actions,type))throw Error('Saved action identity changed');
+              read(c.schemas.player,accepted.player);read(c.schemas.actions[type].action,jsonValue(accepted.reply.action));
+              if(accepted===r.pending.accepted&&!d.requests.some((request:any)=>equal(request.id,id)&&request.player===accepted.player&&request.type===type))throw Error('Pending choice has no original request');
+            }else if(accepted?.kind==='control'){
+              if(!fields(accepted,['kind','callId','input'])||!CallIdSchema.safeParse(accepted.callId).success)throw Error('Invalid saved control');
+              if(accepted===r.pending.accepted){if(accepted.callId!==d.raw.callId||!p.session)throw Error('Control call changed');read(p.session.inputSchema,accepted.input);}
+            }else throw Error('Invalid saved accepted choice');
+          }
+        }catch(error){return reject('invalid_argument',exceptionMessage(error));}
+      }
+      const ownership = restored ? ok(continuationControl(input.instance)!.transfer()) : await input.instance.transfer();
       if (!ownership.ok) return reject('invalid_argument', ownership.error.message);
       const instance = ownership.value,
         contract = input.contract;
+      const continuation=continuationControl(instance);
       const playerValue = (value: unknown): string => {
         const player = read(contract.schemas.player, value);
         if (typeof player !== 'string') throw Error('Invalid player');
@@ -81,6 +129,13 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
         driving = false,
         computing = false;
       let activeDriver: AbortController | null = null;
+      let savingContinuation=false;
+      let runOrigin=instance.id;
+      let runTransaction:{accepted:any;pending:{callId:string;accepted:any}|null}|null=null;
+      let deliveryProgress:DeliveryProgress|null=null;
+      const deliveryRows=new Map<string,DeliveryRow>();
+      const deliveryKey=(event:number,player:string)=>JSON.stringify([event,player]);
+      const resetDelivery=()=>{deliveryProgress=null;deliveryRows.clear();};
       let view: any,
         hasView = false,
         state: any,
@@ -89,7 +144,7 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
         events: any[] = [],
         eventOutput: any,
         port: any;
-      const availability = (stable = false) => closed ? reject('game_closed') : computing || stable && driving ? reject('game_busy') : null;
+      const availability = (stable = false) => closed ? reject('game_closed') : savingContinuation || runTransaction?.pending || computing || stable && driving ? reject('game_busy') : null;
       async function fault(error: any) {
         state = {
           kind: 'fault',
@@ -98,9 +153,10 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
         closed = true;
         view = raw = eventOutput = port = undefined;
         hasView = false; requests = []; events = [];
+        resetDelivery();
         bindings.clear(); controlHandler = null;
         activeDriver?.abort();
-        await instance.close();
+        if(continuation?.pending())await continuation.close();else await instance.close();
         return copy(state);
       }
       async function refresh(stop?: any): Promise<any> {
@@ -109,6 +165,7 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
           if (!inspected.ok) throw Error(inspected.error.message);
           raw = inspected.value;
         } else raw = stop;
+        if(deliveryProgress&&(raw.kind!=='call'||raw.callId!==deliveryProgress.callId))resetDelivery();
         if (raw.kind === 'fault') {
           // Program termination remains readable. Only adapter contract failures
           // revoke the owned instance and close the game handle.
@@ -380,53 +437,157 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
       async function deliver(signal: AbortSignal) {
         const recipients = [...bindings].filter(([, binding]) => binding.onEvent)
           .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
-        const indices = new Map<string, number>();
-        for (const event of events) {
-          for (const [player, binding] of recipients) {
-            let projected,
-              visible = false;
-            try {
-              const packet = contract.projectEvent(adapterValue(event), player);
-              visible = packet !== null;
-              if (visible) {
-                if (!fields(packet, ['event'])) throw Error('Invalid event projection');
-                projected = read(contract.schemas.playerEvent, packet.event);
-              }
-            } catch (e) {
-              await fault(reject('invalid_output', exceptionMessage(e)).error);
-              return {
-                pause: null
-              };
+        // Ordinary public callbacks retain the frozen batch-retry contract.
+        // Only registered local receipts belong to the private durable ledger;
+        // their acknowledged prefix must never be applied to policy state twice.
+        if(deliveryProgress){
+          const ordinary=new Set(recipients.filter(([,binding])=>!retainsEventReceipt(binding.onEvent)).map(([player])=>player));
+          deliveryProgress.rows=deliveryProgress.rows.filter(row=>{
+            if(!ordinary.has(row.player))return true;
+            deliveryRows.delete(deliveryKey(row.event,row.player));return false;
+          });
+        }
+        if(!deliveryProgress)deliveryProgress={instanceId:instance.id,callId:raw.callId,rows:[]};
+        const indices=new Map<string,number>();
+        for(let event=0;event<events.length;event++){
+          for(const [player,binding] of recipients){
+            if(signal.aborted)return{pause:'cancelled'};
+            const key=deliveryKey(event,player);let row=deliveryRows.get(key);
+            if(!row){
+              try{
+                const packet=contract.projectEvent(adapterValue(events[event]),player);
+                let delivery:DeliveryRow['delivery']=null;
+                if(packet!==null){
+                  if(!fields(packet,['event']))throw Error('Invalid event projection');
+                  delivery={id:{instanceId:deliveryProgress.instanceId,callId:deliveryProgress.callId,index:indices.get(player)??0},
+                    event:read(contract.schemas.playerEvent,packet.event)};
+                }
+                row={event,player,delivery,acknowledged:delivery===null};
+                deliveryProgress.rows.push(row);deliveryRows.set(key,row);
+              }catch(error){await fault(reject('invalid_output',exceptionMessage(error)).error);return{pause:null};}
             }
-            if (!visible) continue;
-            const index = indices.get(player) ?? 0;
-            indices.set(player, index + 1);
-            const delivery = {
-              id: {
-                instanceId: instance.id,
-                callId: raw.callId,
-                index
-              },
-              event: projected
-            };
-            const reply = await callback<any>(() => binding.onEvent(copy(delivery), {
-              player,
-              signal
-            }), signal);
-            if ('pause' in reply) return reply;
-            if (reply.value !== null) return {
-              pause: 'invalid_reply'
-            };
+            if(row.delivery===null)continue;
+            indices.set(player,row.delivery.id.index+1);
+            if(row.acknowledged)continue;
+            // A registered policy handler performs its local receipt before
+            // resolving. Await that receipt even if cancellation races its
+            // Promise; the next packet remains cancellable at this boundary.
+            const receiptSignal=retainsEventReceipt(binding.onEvent)?new AbortController().signal:signal;
+            const reply=await callback<any>(()=>binding.onEvent(copy(row!.delivery),{player,signal}),receiptSignal);
+            if('pause' in reply)return reply;
+            if(reply.value!==null)return{pause:'invalid_reply'};
+            row.acknowledged=true;
           }
         }
-        return {
-          output: eventOutput
-        };
+        return signal.aborted?{pause:'cancelled'}:{output:eventOutput};
       }
-      const game: any = {
-        id: instance.id,
-        async bind(value: any) {
-          const error = availability(true);
+      async function driveGame(options: any = {}, resume=false) {
+          const error = resume ? (closed||savingContinuation||driving||computing||!runTransaction?.pending||!continuation?.pending()?reject('game_busy'):null) : availability(true);
+          if (error) return error;
+          if (!fields(options, [], ['signal']) || options.signal !== undefined && !(options.signal instanceof AbortSignal)) return reject('invalid_argument');
+          if (state.kind === 'ended' || state.kind === 'fault') return ok({
+            state: copy(state),
+            accepted: null,
+            pause: null
+          });
+          driving = true;
+          const turn:{accepted:any;pending:{callId:string;accepted:any}|null}=resume?runTransaction!:{accepted:null,pending:null};
+          let suspended=false;
+          runTransaction=turn;
+          if(!resume)runOrigin=instance.id;
+          const driver = new AbortController();
+          activeDriver = driver;
+          const abort = () => driver.abort();
+          options.signal?.addEventListener('abort', abort, { once: true });
+          if (options.signal?.aborted) abort();
+          const signal = driver.signal;
+          try {
+            while (true) {
+              if(turn.pending){
+                if(signal.aborted)throw new ExecutionSuspended('cancelled');
+                computing=true;
+                const step=await continuation!.resume();
+                if(!step.accepted)throw Error('Original continuation lost its accepted reply');
+                if(turn.pending.accepted)turn.accepted=turn.pending.accepted;
+                await refresh(step.state);turn.pending=null;computing=false;
+                continue;
+              }
+              if (state.kind === 'ended' || state.kind === 'fault') return ok({
+                state: copy(state),
+                accepted: copy(turn.accepted),
+                pause: null
+              });
+              if (signal.aborted) return ok({
+                state: copy(state),
+                accepted: copy(turn.accepted),
+                pause: 'cancelled'
+              });
+              if (turn.accepted && state.kind === 'request') return ok({
+                state: copy(state),
+                accepted: copy(turn.accepted),
+                pause: null
+              });
+              const next = state.kind === 'event' ? await deliver(signal) : await choose(signal);
+              if (state.kind === 'fault') return ok({
+                state: copy(state),
+                accepted: copy(turn.accepted),
+                pause: null
+              });
+              if ('pause' in next) return ok({
+                state: copy(state),
+                accepted: copy(turn.accepted),
+                pause: next.pause
+              });
+              computing = true;
+              const bound = await instance.bind({
+                [raw.call.port]: inputlessReply(next.output)
+              });
+              if (!bound.ok) throw Error(bound.error.message);
+              turn.pending={callId:raw.callId,accepted:next.accepted??null};
+              const step = await invokeOwnedStop(instance, 'run', { signal });
+              if (!step.ok) throw Error(step.error.message);
+              if (step.value.accepted && turn.pending.accepted) turn.accepted = turn.pending.accepted;
+              if (!step.value.accepted) {
+                turn.pending=null;
+                computing = false;
+                if (step.value.pause === 'invalid_reply') {
+                  await fault(reject('invalid_output', 'Game adapter produced an invalid port reply').error);
+                  return ok({
+                    state: copy(state),
+                    accepted: copy(turn.accepted),
+                    pause: null
+                  });
+                }
+                return ok({
+                  state: copy(state),
+                  accepted: copy(turn.accepted),
+                  pause: step.value.pause
+                });
+              }
+              await refresh(step.value.state);
+              turn.pending=null;
+              computing = false;
+            }
+          } catch (e) {
+            if(e instanceof ExecutionSuspended&&turn.pending&&continuation?.pending()){suspended=true;throw e;}
+            computing = false;
+            await fault(reject('program_failed', exceptionMessage(e)).error);
+            return ok({
+              state: copy(state),
+              accepted: copy(turn.accepted),
+              pause: null
+            });
+          } finally {
+            options.signal?.removeEventListener('abort', abort);
+            activeDriver = null;
+            if(!suspended)runTransaction=null;
+            driver.abort();
+            driving = false;
+            computing = false;
+          }
+        }
+      async function bindPlayer(value: any, continuing=false) {
+          const error = continuing ? (closed||driving||computing||savingContinuation||!runTransaction?.pending?reject('game_busy'):null) : availability(true);
           if (error) return error;
           try {
             if (value === null) bindings.clear();else {
@@ -441,14 +602,18 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
           } catch (e) {
             return reject('invalid_argument', exceptionMessage(e));
           }
-        },
-        async bindControl(handler: any) {
-          const error = availability(true);
+        }
+      async function bindControlHandler(handler: any, continuing=false) {
+          const error = continuing ? (closed||driving||computing||savingContinuation||!runTransaction?.pending?reject('game_busy'):null) : availability(true);
           if (error) return error;
           if (handler !== null && typeof handler !== 'function') return reject('invalid_argument');
           controlHandler = handler;
           return ok(undefined);
-        },
+        }
+      const game: any = {
+        id: instance.id,
+        bind(value: any) { return bindPlayer(value); },
+        bindControl(handler: any) { return bindControlHandler(handler); },
         async inspect() {
           const error = availability();
           return error ?? ok(copy(state));
@@ -502,94 +667,7 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
             reason: prepared.value.reason
           }) : prepared;
         },
-        async run(options: any = {}) {
-          const error = availability(true);
-          if (error) return error;
-          if (!fields(options, [], ['signal']) || options.signal !== undefined && !(options.signal instanceof AbortSignal)) return reject('invalid_argument');
-          if (state.kind === 'ended' || state.kind === 'fault') return ok({
-            state: copy(state),
-            accepted: null,
-            pause: null
-          });
-          driving = true;
-          let accepted: any = null;
-          const driver = new AbortController();
-          activeDriver = driver;
-          const abort = () => driver.abort();
-          options.signal?.addEventListener('abort', abort, { once: true });
-          if (options.signal?.aborted) abort();
-          const signal = driver.signal;
-          try {
-            while (true) {
-              if (state.kind === 'ended' || state.kind === 'fault') return ok({
-                state: copy(state),
-                accepted: copy(accepted),
-                pause: null
-              });
-              if (signal.aborted) return ok({
-                state: copy(state),
-                accepted: copy(accepted),
-                pause: 'cancelled'
-              });
-              if (accepted && state.kind === 'request') return ok({
-                state: copy(state),
-                accepted: copy(accepted),
-                pause: null
-              });
-              const next = state.kind === 'event' ? await deliver(signal) : await choose(signal);
-              if (state.kind === 'fault') return ok({
-                state: copy(state),
-                accepted: copy(accepted),
-                pause: null
-              });
-              if ('pause' in next) return ok({
-                state: copy(state),
-                accepted: copy(accepted),
-                pause: next.pause
-              });
-              computing = true;
-              const bound = await instance.bind({
-                [raw.call.port]: inputlessReply(next.output)
-              });
-              if (!bound.ok) throw Error(bound.error.message);
-              const step = await invokeOwnedStop(instance, 'run', { signal });
-              if (!step.ok) throw Error(step.error.message);
-              if (step.value.accepted && next.accepted) accepted = next.accepted;
-              if (!step.value.accepted) {
-                computing = false;
-                if (step.value.pause === 'invalid_reply') {
-                  await fault(reject('invalid_output', 'Game adapter produced an invalid port reply').error);
-                  return ok({
-                    state: copy(state),
-                    accepted: copy(accepted),
-                    pause: null
-                  });
-                }
-                return ok({
-                  state: copy(state),
-                  accepted: copy(accepted),
-                  pause: step.value.pause
-                });
-              }
-              await refresh(step.value.state);
-              computing = false;
-            }
-          } catch (e) {
-            computing = false;
-            await fault(reject('program_failed', exceptionMessage(e)).error);
-            return ok({
-              state: copy(state),
-              accepted: copy(accepted),
-              pause: null
-            });
-          } finally {
-            options.signal?.removeEventListener('abort', abort);
-            activeDriver = null;
-            driver.abort();
-            driving = false;
-            computing = false;
-          }
-        },
+        run(options: any) { return driveGame(options); },
         async close() {
           const error = availability(true);
           if (error) return error;
@@ -597,7 +675,7 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
           bindings.clear();
           controlHandler = null;
           view = raw = state = eventOutput = port = undefined;
-          hasView = false; requests = []; events = [];
+          hasView = false; requests = []; events = [];resetDelivery();
           const result = await instance.close();
           return result.ok ? ok(undefined) : reject('program_failed', result.error.message);
         }
@@ -607,7 +685,7 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
         if (error) return error;
         if (state.kind === 'fault') return { ok: false, error: copy(state.error) };
         const fork = await instance.fork();
-        return fork.ok ? bindGame({ ...input, instance: fork.value }, { view, hasView, state, raw, requests, events, eventOutput, port }) : reject(fork.error.code === 'capability_unavailable' ? 'capability_unavailable' : 'program_failed', fork.error.message);
+        return fork.ok ? bindGame({ ...input, instance: fork.value }, { view, hasView, state, raw, requests, events, eventOutput, port, delivery:deliveryProgress }) : reject(fork.error.code === 'capability_unavailable' ? 'capability_unavailable' : 'program_failed', fork.error.message);
       };
       if (!Object.values(contract.ports).some((p: any) => p.kind === 'request' && p.session)) delete game.bindControl;
       if (input.persistence) game.save = async () => {
@@ -618,14 +696,58 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
         return saved.ok ? saved : reject('program_failed', saved.error.message);
       };
       try {
-        if (shared) {
+        if(restored){
+          ({view,hasView,state,raw,requests,events,eventOutput}=restored.derived);
+          port=contract.ports[raw.call.port];runTransaction=restored.run;runOrigin=restored.instanceId;
+        }else if (shared) {
           ({ view, hasView, raw, events, eventOutput, port } = shared);
+          deliveryProgress=shared.delivery?copy(shared.delivery):null;
+          if(deliveryProgress){
+            deliveryProgress.instanceId=instance.id;
+            for(const row of deliveryProgress.rows){
+              // Receipts already acknowledged keep their historical identity;
+              // only future deliveries acquire the restored/forked identity.
+              if(row.delivery&&!row.acknowledged)row.delivery.id.instanceId=instance.id;
+              deliveryRows.set(deliveryKey(row.event,row.player),row);
+            }
+          }
           requests = shared.requests.map(request => retainOwned({ ...request,
             id: { ...request.id, instanceId: instance.id }
           }, isOwnedTree(request), isDenseTree(request)));
           retainOwned(requests, requests.every(isOwnedTree), requests.every(isDenseTree));
           state = shared.state.kind === 'request' ? retainOwned({ kind: 'request', requests }, isOwnedTree(requests), isDenseTree(requests)) : shared.state;
         } else await refresh();
+        if(!closed)registerGameDelivery(game,()=>{
+          const error=availability(true);if(error)throw Error(error.error.message);
+          if(!deliveryProgress)return null;
+          if(state.kind!=='event'||raw.kind!=='call'||raw.callId!==deliveryProgress.callId)throw Error('Event receipts lost their original call');
+          return copy({derived:{view,hasView,state,raw,requests,events,eventOutput},progress:deliveryProgress});
+        });
+        if(!closed)registerGameContinuation(game,consumedCallId=>{
+          const turn=runTransaction;
+          if(closed||!turn?.pending||!((driving&&computing)||(!driving&&!computing&&continuation?.pending()))||raw?.kind!=='call'||
+            turn.pending.callId!==consumedCallId||raw.callId!==consumedCallId)throw Error('Game is not consuming this accepted call');
+          return copy({instanceId:runOrigin,
+            derived:{view,hasView,state,raw,requests,events,eventOutput},
+            run:{accepted:turn.accepted,pending:turn.pending}});
+        });
+        if(!closed&&continuation)registerGameExecution(game,{
+          pending:()=>!closed&&Boolean(runTransaction?.pending&&continuation.pending()),
+          schedule:check=>{if(closed||driving||computing||savingContinuation)throw Error('Game busy');continuation.schedule(check);},
+          async save(){
+            if(closed||driving||computing||savingContinuation||!runTransaction?.pending)throw Error('Game has no suspended original current');
+            const host=saveGameContinuation(game,continuation.callId());savingContinuation=true;
+            try{return{snapshot:await continuation.save(),game:host};}finally{savingContinuation=false;}
+          },
+          bind:value=>bindPlayer(value,true),
+          bindControl:handler=>bindControlHandler(handler,true),
+          resume:options=>driveGame(options,true),
+          async close(){
+            if(closed||driving||computing||savingContinuation||!runTransaction?.pending)throw Error('Game has no suspended original current');
+            await continuation.close();closed=true;bindings.clear();controlHandler=null;
+            view=raw=state=eventOutput=port=undefined;hasView=false;requests=[];events=[];runTransaction=null;resetDelivery();
+          }
+        });
         if(!closed)registerCurrentAccess(game,async operation=>{
           const error=availability(true);if(error)throw Error(error.error.code+': '+error.error.message);
           computing=true;try{return await operation(instance);}finally{computing=false;}
@@ -641,10 +763,48 @@ async function bindGame(input: any, shared?: Derived): Promise<any> {
           error: state.error
         } : ok(game);
       } catch (e) {
-        await instance.close();
+        if(continuation?.pending())await continuation.close();else await instance.close();
         return reject('invalid_output', exceptionMessage(e));
       }
   }
 export function createGameBinder(): BaseGameBinder {
   return { bind: bindGame };
+}
+/** Private composition restore: already returned callbacks and pure adapter
+ * results are loaded as data. The public binder still binds stable Instances. */
+export function restoreGameContinuation(input:any,saved:GameContinuation):Promise<any>{return bindGame(input,undefined,saved);}
+/** Stable event IO plus its already acknowledged host deliveries. The saved
+ * pure projections are data, so restoration does not project/deliver them again. */
+export async function restoreGameDelivery(input:any,snapshot:GameDeliverySnapshot):Promise<any>{
+  try{
+    const saved:any=copy(snapshot),c=input.contract;
+    if(!fields(saved,['derived','progress'])||!fields(saved.derived,['view','hasView','state','raw','requests','events','eventOutput'])||
+      !fields(saved.progress,['instanceId','callId','rows']))throw Error('Invalid saved event delivery');
+    const d=saved.derived,p=saved.progress;
+    InstanceIdSchema.parse(p.instanceId);CallIdSchema.parse(p.callId);
+    if(d.raw?.kind!=='call'||d.raw.callId!==p.callId||!Object.hasOwn(c.ports,d.raw.call.port)||c.ports[d.raw.call.port].kind!=='event'||
+      !fields(d.state,['kind','callId'])||d.state.kind!=='event'||d.state.callId!==p.callId||
+      typeof d.hasView!=='boolean'||!Array.isArray(d.requests)||d.requests.length||!Array.isArray(d.events)||!Array.isArray(p.rows))throw Error('Saved event delivery changed its IO');
+    const inspected=await invokeOwnedStop(input.instance,'inspect');
+    if(!inspected.ok||!sameData(inspected.value,d.raw))throw Error('Saved delivery differs from the current original IO');
+    if(d.hasView)read(c.schemas.view,d.view);
+    for(const event of d.events)read(c.schemas.event,event);
+    const previous=new Map<string,{event:number;visible:number;acknowledged:boolean}>();
+    for(const row of p.rows){
+      if(!fields(row,['event','player','acknowledged','delivery'])||!Number.isSafeInteger(row.event)||row.event<0||row.event>=d.events.length||
+        typeof row.player!=='string'||typeof row.acknowledged!=='boolean')throw Error('Invalid saved delivery receipt');
+      read(c.schemas.player,row.player);
+      const prior=previous.get(row.player)??{event:-1,visible:0,acknowledged:true};
+      if(row.event!==prior.event+1||!prior.acknowledged)throw Error('Saved delivery skipped an unacknowledged event');
+      let visible=prior.visible;
+      if(row.delivery!==null){
+        if(!fields(row.delivery,['id','event'])||!fields(row.delivery.id,['instanceId','callId','index']))throw Error('Invalid saved delivery packet');
+        InstanceIdSchema.parse(row.delivery.id.instanceId);
+        if(row.delivery.id.callId!==p.callId||row.delivery.id.index!==visible++||!row.acknowledged&&row.delivery.id.instanceId!==p.instanceId)throw Error('Saved event identity changed');
+        read(c.schemas.playerEvent,row.delivery.event);
+      }else if(!row.acknowledged)throw Error('Invisible event cannot await a receipt');
+      previous.set(row.player,{event:row.event,visible,acknowledged:row.acknowledged});
+    }
+    return bindGame(input,{...d,port:c.ports[d.raw.call.port],delivery:p});
+  }catch(error){return reject('invalid_argument',exceptionMessage(error));}
 }

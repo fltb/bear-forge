@@ -19,6 +19,8 @@
     "@bear-forge/runtime-native": "*"
   },
   "devDependencies": {
-    "@bear-forge/compiler": "*"
+    "@bear-forge/compiler": "*",
+    "@bear-forge/card-engine": "*",
+    "@bear-forge/runtime-card": "*"
   }
 }

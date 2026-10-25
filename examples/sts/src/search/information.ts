@@ -1,7 +1,7 @@
+import {deflateRawSync} from 'node:zlib';
 import type {PolicyRequest} from '@bear-forge/policies';
 import type {JsonValue} from '@bear-forge/contracts/game';
 import type {Action, Observation, StsEvent} from '../game.schemas.ts';
-import {ActionSchema, ObservationSchema, EventSchema} from '../game.schemas.ts';
 
 export type PublicDecision = {observation: Observation; actions: Action[]; events: StsEvent[]};
 
@@ -27,24 +27,20 @@ export function publicData(value: unknown): JsonValue {
     return Object.fromEntries(Object.entries(value).filter(([,v]) => v !== undefined).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
       .map(([k,v]) => [k,publicData(v)]));
   }
-  if (value === null || typeof value === 'boolean' || typeof value === 'string' || typeof value === 'number' && Number.isFinite(value)) return value;
-  throw Error('Non-data public information');
+  return value as JsonValue;
 }
 export const publicKey = (value: unknown): string => JSON.stringify(publicData(value));
+/** Lossless canonical-data key, not a hash or a reduced observation. Equality
+ * still compares every original public field: decoding is a left inverse. */
+export const compressedPublicKey = (value: unknown): string => deflateRawSync(publicKey(value),{level:1}).toString('base64');
 export function readVisibleEvents(visibleHistory:unknown[]):StsEvent[]{
-  return visibleHistory.map(delivery=>{
-    if(!delivery||typeof delivery!=='object'||!('event' in delivery))throw Error('Missing public event delivery');
-    return EventSchema.parse(delivery.event);
-  });
+  return (visibleHistory as {event:StsEvent}[]).map(delivery=>delivery.event);
 }
+/** Host-owned typed requests are already projected by the original contract. */
 export function publicDecision(request: PolicyRequest, visibleHistory: unknown[]): PublicDecision {
-  if (request.player !== '0' || request.type !== 'action' || request.options.kind !== 'exact') throw Error('Unsupported STS request');
-  // Strict external schemas reject captures, seeds, RNG, and undeclared fields.
-  const observation = ObservationSchema.parse(request.observation);
-  const actions = request.options.values.map(action => ActionSchema.parse(action));
-  if (publicKey(request.data) !== publicKey({screen: observation.game.screen})) throw Error('Inconsistent STS request screen');
-  const events = readVisibleEvents(visibleHistory);
-  return {observation, actions, events: publicEvents(events)};
+  return {observation:request.observation as Observation,
+    actions:(request.options as {kind:'exact';values:Action[]}).values,
+    events:publicEvents(readVisibleEvents(visibleHistory))};
 }
 /** The bits identify public candidate positions, never private entity numbers.
  * The current legal action domain supplies the identities. */

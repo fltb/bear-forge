@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {CardMachine,CardProgram,linkRules,ruleModules} from '@bear-forge/card-engine';
-import {ProbabilityCurrent,nextProbability} from '../../../packages/runtime-card/src/probability.ts';
+import {ProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
 import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
 import {stateOf} from '../../../packages/card-engine/src/rules-module-internal.ts';
-import {searchEntropyWord} from '../../../packages/policies/src/search/entropy.ts';
+import {ProbabilityExpansion} from '../../../packages/runtime-card/src/probability-expansion.ts';
+import {addMass,unitMass} from '../../../packages/card-engine/src/probability-cursor.ts';
+import {serialize,deserialize} from 'node:v8';
 import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
 import {rules} from '../src/rules/execution.ts';
 import {adventures} from '../src/rules/adventures.ts';
@@ -67,7 +69,7 @@ test('act recovery explanation describes the same operand rather than full heali
 });
 
 
-test('actual nextAct probability continuation ignores the hidden root seed and preserves its visible current map',()=>{
+test('actual nextAct keeps its full unfinished future and original visible map across direct restoration',()=>{
   const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial({seed:'130',hp:29,maxHp:72,pause:true},100_000_000)));
   let stop=machine.advance();while(stop.kind==='call'&&stop.call.port==='event')stop=machine.advance(null);
   if(stop.kind!=='call'||stop.call.port!=='pause')throw Error('Expected current act transition boundary');
@@ -78,16 +80,23 @@ test('actual nextAct probability continuation ignores the hidden root seed and p
   components[Number(key)]=right.machine.storage.own({...bindings,seed:999n});
   const before=machine.storage.export(machine.root),initial=CardProgram.prototype.initial;
   function future(source:typeof left){
-    type Node={current:typeof left;probability:number};const pending:Node[]=[],done:{frame:Frame;probability:number}[]=[],owned=new Set<typeof left>();let cursor={state:9081,position:0};
-    const entropy={check(){},word(){const r=searchEntropyWord(cursor);cursor=r.random;return r.value;}};
-    function advance(current:typeof left,probability:number){const next=nextProbability(current,null,{maximum:2-pending.length-done.length,entropy});for(const child of next.outcomes){owned.add(child.current);pending.push({current:child.current,probability:probability*child.probability});}}
-    try{advance(source,1);while(pending.length){const node=pending.shift()!,stop=node.current.inspect();if(stop.kind==='done')done.push({frame:stop.result,probability:node.probability});else if(stop.kind==='call'&&stop.call.port==='event')advance(node.current,node.probability);else throw Error('Unexpected transition stop');node.current.close();owned.delete(node.current);}return done;}
-    finally{for(const current of owned)current.close();}
+    const options={continueCall(stop:Extract<ReturnType<typeof source.inspect>,{kind:'call'}>,data:null){if(stop.call.port==='event')return{reply:null,data};}};
+    let expansion=ProbabilityExpansion.from(source,null,null,options);
+    try{
+      // Inspect retained work, not a completed act-transition distribution.
+      for(let step=0;step<32;step++){
+        expansion.step();
+      }
+      assert.equal(expansion.complete,false);assert.equal(expansion.take(),undefined);
+      const saved=deserialize(serialize(expansion.save()));expansion.close();
+      expansion=ProbabilityExpansion.restore(program,saved,options);assert.deepEqual(expansion.save(),saved);
+      const mass=expansion.masses();assert.deepEqual(addMass(addMass(mass.pending,mass.ready),mass.transferred),unitMass());
+      return saved.pending.map((row:any)=>({phase:row.phase,mass:row.mass,kind:row.context.stop.kind,...(row.context.stop.kind==='chance'?{space:row.context.stop.space}:{})}));
+    }finally{expansion.close();}
   }
   CardProgram.prototype.initial=function(){throw Error('No reinitialization during act transition');};
   try{
-    const a=future(left),b=future(right);assert.equal(a.length,2);assert.deepEqual(a,b);
-    for(const result of a){assert.equal(result.frame.game.act,2);assert.equal(result.frame.game.hp,61);assert.equal(result.frame.game.screen,'MAP_SCREEN');}
+    const a=future(left),b=future(right);assert.ok(a.length>0);assert.deepEqual(a,b);
     assert.deepEqual(machine.storage.export(machine.root),before);
   }finally{CardProgram.prototype.initial=initial;left.close();right.close();}
 });

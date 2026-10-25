@@ -10,6 +10,7 @@ import {cardInstances} from './card-instances.ts';
 import {potions} from './potions.ts';
 import {random} from './random.ts';
 import {ordering,type OrderChoice} from './ordering.ts';
+import {probabilityMass} from '../../../../packages/card-engine/src/probability-mass.ts';
 import {relics} from './relics.ts';
 import {entityId} from './resources.schemas.ts';
 import {adventureSetupSchema,adventureStateSchema,cardDefinitionSchema,relicDefinitionSchema,relicTiers,rewardsSchema,selectionSchema,selectedSchema} from './adventures.schemas.ts';
@@ -139,7 +140,7 @@ export const adventures=defineRules({requires:[resources,permanentDecks,potions,
   const takeRelic=defineEffect<{run:number;tier:RelicTier;front:boolean;publication?:{name:string;accepted:readonly string[]}},RelicDefinition>(b=>{
     const index=b.local<number>(),definition=b.local<RelicDefinition>();return sequence(b.assign(index,call(ordering.exports.select,{
       actual:b.read(v=>{const pool=v.query(pools.current,v.input.run).relicPools[v.input.tier];if(!pool.length)throw Error('Pinned source relic pool exhausted');return v.input.front?0:pool.length-1;}),
-      choices:b.read(v=>{const pool=v.query(pools.current,v.input.run).relicPools[v.input.tier];return pool.map((definition,value)=>{const key=v.query(relics.exports.definitionId,definition);return{key,value,weight:1/pool.length,...(v.input.publication?{publication:v.input.publication.accepted.includes(key)?{name:v.input.publication.name,value:key}:null}:{})};});}),
+      choices:b.read(v=>{const pool=v.query(pools.current,v.input.run).relicPools[v.input.tier];return pool.map((definition,value)=>{const key=v.query(relics.exports.definitionId,definition);return{key,value,weight:probabilityMass(1n,BigInt(pool.length)),...(v.input.publication?{publication:v.input.publication.accepted.includes(key)?{name:v.input.publication.name,value:key}:null}:{})};});}),
     })),b.assign(definition,call(consumeRelic,{run:b.read(v=>v.input.run),tier:b.read(v=>v.input.tier),index})),b.return(definition));
   });
   const {record,published}=history;

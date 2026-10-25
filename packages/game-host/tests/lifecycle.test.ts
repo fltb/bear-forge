@@ -1,9 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
+import {deserialize,serialize} from 'node:v8';
 import type { GameModule } from '@bear-forge/contracts/authoring';
 import { createNativeLoader } from '@bear-forge/runtime-native';
 import { createGameBinder } from '../src/index.ts';
+import {Controller,type RawStop} from '../../runtime/src/instance.ts';
+import {saveGameContinuation,type GameContinuation} from '../src/current.ts';
+import {registerEventReceipt} from '../../runtime/src/continuation.ts';
 
 type G = {
   setup: 'before' | 'after' | 'done' | 'event';
@@ -56,6 +60,41 @@ async function start(mode: G['setup'], contract = fixture.contract) {
   const instance = unwrap(await loaded.core.start(mode));
   return unwrap(await createGameBinder().bind<G>({ instance, contract }));
 }
+
+test('binder records both the pending accepted action and later event continuation as data',async()=>{
+  let raw:RawStop={kind:'call',call:{port:'ask',input:0}},advanced=0,decisions=0,events=0;
+  const snapshots:GameContinuation[]=[];
+  let game:Awaited<ReturnType<typeof start>>;
+  let controller!:Controller<G['setup'],G['ports'],G['programResult']>;
+  controller=new Controller<G['setup'],G['ports'],G['programResult']>({
+    current:()=>raw,async advance(output){
+      const host=controller.saveContinuation();
+      assert.throws(()=>saveGameContinuation(game,'wrong-call'),/not consuming/);
+      snapshots.push(deserialize(serialize(saveGameContinuation(game,host.accepted.callId))));
+      advanced++;
+      if(advanced===1){assert.equal(output,1);raw={kind:'call',call:{port:'event',input:1}};}
+      else{assert.equal(output,null);raw={kind:'done',result:1};}
+    },dispose(){}
+  },fixture.program.schemas,'event');
+  game=unwrap(await createGameBinder().bind<G>({instance:controller.handle(),contract:fixture.contract}));
+  assert.throws(()=>saveGameContinuation(game,'idle'),/not consuming/);
+  unwrap(await game.bind({player:'a',onRequest:async()=>{decisions++;return{kind:'reply',value:1};},
+    onEvent:async()=>{events++;return{kind:'reply',value:null};}}));
+  const result=unwrap(await game.run());assert.deepEqual(result.state,{kind:'ended',result:1});
+  assert.equal(decisions,1);assert.equal(events,1);assert.equal(advanced,2);assert.equal(snapshots.length,2);
+  const [action,event]=snapshots;
+  assert.equal(action!.run.accepted,null);assert.deepEqual(action!.run.pending.accepted,result.accepted);
+  assert.deepEqual(event!.run.accepted,result.accepted);assert.equal(event!.run.pending.accepted,null);
+  assert.equal(action!.derived.raw.kind,'call');assert.equal(event!.derived.raw.kind,'call');
+  if(action!.derived.raw.kind!=='call'||event!.derived.raw.kind!=='call')throw Error('Missing original host calls');
+  assert.equal(action!.run.pending.callId,action!.derived.raw.callId);
+  assert.equal(event!.run.pending.callId,event!.derived.raw.callId);
+  assert.notEqual(action!.run.pending.callId,event!.run.pending.callId);
+  assert.deepEqual(event!.derived.events,[1]);assert.equal(event!.derived.eventOutput,null);
+  assert.equal(Object.hasOwn(event!.derived,'port'),false,'static adapters cannot enter a current snapshot');
+  assert.throws(()=>saveGameContinuation(game,event!.run.pending.callId),/not consuming/);
+  unwrap(await game.close());
+});
 
 for (const kind of ['request', 'event'] as const) for (const mode of ['proxy', 'getter'] as const) {
   test(`adapter ${kind} collections reject ${mode} without executing it`, async () => {
@@ -416,24 +455,25 @@ test('empty player requests require a declared control session', async () => {
   unwrap(await game.close());
 });
 
-test('event delivery follows source order across players and restarts the same batch on retry', async () => {
+for(const localReceipt of [false,true])test(`event delivery keeps source order and ordinary batch retries with local receipt=${localReceipt}`, async () => {
   const game = await start('event', { ...fixture.contract, ports: { ...fixture.contract.ports,
     event: { kind: 'event', receive: event => ({ events: [event, event + 1], output: null }) }
   } });
   const seen: string[] = [];
   let pause = true;
-  for (const player of ['b', 'a'] as const) unwrap(await game.bind({ player,
-    onRequest: async () => ({ kind: 'reply', value: 1 }),
-    onEvent: async delivery => {
+  for (const player of ['b', 'a'] as const){
+    const onEvent=async (delivery:{event:number;id:{index:number}}) => {
       seen.push(`${player}:${delivery.event}:${delivery.id.index}`);
-      return pause && player === 'a' && delivery.event === 2 ? { kind: 'pause' } : { kind: 'reply', value: null };
-    }
-  }));
+      return pause && player === 'a' && delivery.event === 2 ? { kind: 'pause' as const } : { kind: 'reply' as const, value: null };
+    };
+    if(localReceipt&&player==='a')registerEventReceipt(onEvent);
+    unwrap(await game.bind({player,onRequest:async()=>({kind:'reply',value:1}),onEvent}));
+  }
   assert.equal(unwrap(await game.run()).pause, 'requested');
   assert.deepEqual(seen, ['a:1:0', 'b:1:0', 'a:2:1']);
   pause = false;
   assert.equal(unwrap(await game.run()).state.kind, 'ended');
-  assert.deepEqual(seen.slice(3), ['a:1:0', 'b:1:0', 'a:2:1', 'b:2:1']);
+  assert.deepEqual(seen.slice(3), localReceipt?['b:1:0', 'a:2:1', 'b:2:1']:['a:1:0', 'b:1:0', 'a:2:1', 'b:2:1']);
   unwrap(await game.close());
 });
 

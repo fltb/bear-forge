@@ -1,8 +1,16 @@
 # Bear Forge
 
-正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；受控执行采用共享 Program 与独立 Context，分支及恢复不重新初始化程序；完整验收进度见 docs/plan.md。训练入口包含现成 DouZero 学习器及两游戏共用的自研 Transformer/PPO，模型通过同一 Policy 和 Card Core 执行。STS/Card Core 的[三层整体优化设计与计划](docs/card-core-spec.md#whole-stack-optimization)已写定，实施与验收状态见 docs/plan.md；玩家搜索的[实现与验收规格](docs/player-search-spec.md)已落实到正式入口，独立效果评估已完成，结果与限制见 docs/plan.md；Rust 迁移继续后置。
+2026-10-25：STS 启发式搜索实验已按用户要求封存，未实现铁甲第四幕碎心；不再继续脚本调参。后续策略方向为 Transformer，先评估现有 Card Core 上的 STS 模拟器后端及共享前端/训练接口。封存状态、检查边界与未验证修改见 [实施清单](docs/plan.md)。
 
-完整介绍与审核入口：[项目介绍](docs/project-overview.md)。玩家搜索严格执行 `next(current)`：直接分支完整真实当前 Context，未来随机与隐藏排序由独立概率内核展开，保留带权 belief 和原后继 Context，不初始化后重跑历史。R0/R1/R2 已接入策略、CLI、实验恢复与原证据页面；两角色战斗、嵌套选择、地图、商店、事件、奖励、Neow 和三钥匙都有正式窗口验收。当前敌人意图按背板授权沿原路径复用，包括 Runic Dome；未来选招仍由原规则展开。卡牌、敌人与机制共用原数据和同一生产结算，公共协议不变。搜索界限只针对供应概率模型与有限前瞻叶子目标，不是完整游戏胜率；预算耗尽或根覆盖不全会明确回退。实际检查、成本及独立棋力结果见 [实施清单](docs/plan.md)。
+正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；受控执行采用共享 Program 与独立 Context，分支及恢复不重新初始化程序；完整验收进度见 docs/plan.md。训练入口包含现成 DouZero 学习器及两游戏共用的自研 Transformer/PPO，模型通过同一 Policy 和 Card Core 执行。STS/Card Core 的[三层整体优化设计与计划](docs/card-core-spec.md#whole-stack-optimization)已写定，实施与验收状态见 docs/plan.md；玩家搜索正按[局部决策与完整概率空间规格](docs/player-search-spec.md)重构，旧有界策略的评估仅为历史结果，当前未完成项见 docs/plan.md；Rust 迁移继续后置。
+
+完整介绍与审核入口：[项目介绍](docs/project-overview.md)。玩家搜索严格执行 `next(current)`：直接分支完整真实当前 Context，未来随机与隐藏排序由概率内核展开，不初始化后重跑历史。当前敌人意图按背板授权沿原路径复用，包括 Runic Dome；未来选招仍由原规则展开。卡牌、敌人与机制共用原数据和同一生产结算，公共协议不变。
+
+当前战斗目标是局部前瞻：尽量保血、尽快结束战斗、避开明显死亡，兼顾顺手的跨战斗收益。允许公开场面估值和游戏常识剪枝，不再等待整场终局证明。完整未来支持、条件概率、信息约束和未展开质量仍保留，估计不能冒充精确证明。真实动作执行后只能从实际后继继续，即使必死也不得回退重选；丢失最新现场时不能恢复旧检查点补跑。当前生产策略已编辑接入局部场面评价和动作选择，明确区分估计与证明；正式检查和真实碎心状态以实施清单为准，真实碎心尚未完成。生产实局、历史失败及检查证据见 [实施清单](docs/plan.md)，不得从历史记录恢复旧局重选。
+
+决策引擎信任宿主交付的类型化当前输入，只返回动作建议。请求/Context 守卫、重复 schema 解析、逐节点断言、概率游标重复验证、概率前沿与 Context 存档重验已删除；冒险与唯一动作不获取 Context，同根续搜直接使用已有根。真实推进和禁止回退由原宿主负责。
+
+STS 生产定义已解除历史后验跟踪包装，敌人原选招路径已移除有限粒子前向捕获及近似意图分布存储。共享加载器的历史后验跟踪、执行器的前向捕获以及原规则 Context 中的捕获额度也已删除；未来选招由精确前沿执行原随机调用与原 choose。旧有限 ProbabilityFrontier、采样生成、有限分区及样本提交入口已删除。第一至第三幕地图使用原构造状态逐次续行，保留每次随机调用的完整空间和重复拒绝的长尾；第四幕地图不消耗随机数。原地图算法与概率路径共用，逐次随机调用、未完成前沿保存及直接恢复的相关回归已通过；这不表示所有地图的完整联合空间已经穷尽。
 
 STS 手动逐步游玩与 JSONL 接口：[STS 交互入口](docs/sts-entry.md)。正式多 agent 卡组评审目前暂停，入口验收不计入正式对局。
 
@@ -108,7 +116,7 @@ npm run serve -- --output data/ppo-relations
 | packages/contracts | 公共 TS 类型与 Zod schema |
 | packages/game-sdk | 程序内使用的类型化端口薄封装 |
 | packages/card-engine | 卡牌声明与专用同步执行器；另保留通用程序使用的旧 async 组合库 |
-| packages/runtime-card | 并列专用卡牌后端：同步结算、COW 分支、保存恢复和记录重放；不经过通用编译器 |
+| packages/runtime-card | 并列专用卡牌后端：同步结算、COW 分支、保存恢复与当前状态续行；不经过通用编译器 |
 | packages/training | 自研 Transformer/PPO、接受轨迹、概率采样及学习器进程连接 |
 | examples/doudizhu | 真实斗地主规则、卡牌定义与外侧适配 |
 | packages/contracts/tests | 协议类型、schema、依赖边界测试；support 存放可复用的协议测试夹具 |
@@ -158,9 +166,9 @@ npm run serve -- --output ./data/demo
 
 ## 专用卡牌路径
 
-同一 cardDefinition 的原生/受控模式都经过卡牌 Core，没有无 Core 的正式卡牌模式。斗地主、Forge Duel 的 card:run/card:replay 接此路径；STS仅使用受控的 sts play，通用card:run/card:replay拒绝STS；build:games装配STS受控产物。demo/experiment继续使用既有游戏。旧 async 游戏入口移入 tests/generic，作为通用后端的兼容性夹具；旧参考仅生成差分期望，正式 BaseGame 基准使用生产契约。
+同一 cardDefinition 的原生/受控模式都经过卡牌 Core，没有无 Core 的正式卡牌模式。斗地主、Forge Duel 的 card:run 接此路径；STS 使用受控的 sts play 或独立搜索实验入口，通用 card:run 拒绝 STS。历史重放命令对所有游戏禁用，runtime-card 不再导出 replayCard；build:games 装配 STS 受控产物。demo/experiment 继续使用既有游戏。旧 async 游戏入口在 tests/generic 中；已迁移的差分和基准按各自当前请求生成新回复，历史记录仅用于比较。尚未审查的历史动作带夹具不得执行，也不能充当本轮验收。
 
-当前基准为同一 Card Core 上的完整可交互 GameHost：原生游戏自身的多余路径单独核算，受控再核算新增能力的成本。默认原生不承担未启用的训练、记录、COW 或存档管理；游戏历史、观察、合法动作及实际事件交付保留。[完整游戏优化方案](docs/card-core-spec.md#gamehost-optimization) 与尚未完成项保留，当前按三层整体优化方案实施，实际完成状态见 plan.md。原生审计使用已有 recordCore:true；默认原生不发布 capture，--records 等显式消费者保留完整记录与重放。
+当前基准为同一 Card Core 上的完整可交互 GameHost：原生游戏自身的多余路径单独核算，受控再核算新增能力的成本。默认原生不承担未启用的训练、记录、COW 或存档管理；游戏历史、观察、合法动作及实际事件交付保留。[完整游戏优化方案](docs/card-core-spec.md#gamehost-optimization) 与尚未完成项保留，当前按三层整体优化方案实施，实际完成状态见 plan.md。原生审计使用已有 recordCore:true；默认原生不发布 capture，--records 只保存当次真实记录，不执行历史或声称重放核验通过。
 
 通用 Program/编译执行入口保留。专用卡牌规则导出为各游戏的 `cardDefinition`，通过 `createCardLoader({ controlled: true | false })` 装载；加载结果仍为既有 Core/Instance/capture/persistence，GameContract 与 BaseGameBinder 不变。专用 Card Core 解释静态效果步骤，内部同步推进，遇端口才返回；受控模式提供步骤预算、分支隔离、存档与记录，不宣称任意 JS 的编译沙箱保障。
 
@@ -175,7 +183,7 @@ npm run benchmark:card -w @bear-forge/forge-duel -- card-controlled
 npm run benchmark:card -w @bear-forge/doudizhu -- instance-controlled
 ```
 
-STS 从正常铁甲 A20 开局，CLI 使用首个合法动作策略。规则按稳定内核、类型化规则模块和组合实体装配；完整碎心动作带与独立 C++ 差分只用于测试，生产入口不读取它们。设计与扩展契约见 [第二层接口](docs/card-core-spec.md#第二层向上公开的完整接口目录2026-10-20设计收敛)，当前验收结果见 plan.md。
+STS 从正常铁甲 A20 开局，CLI 使用首个合法动作策略。规则按稳定内核、类型化规则模块和组合实体装配；历史碎心动作带不得驱动生产或测试执行，独立规则对照必须从各自当前状态产生新动作，禁止重放历史。设计与扩展契约见 [第二层接口](docs/card-core-spec.md#第二层向上公开的完整接口目录2026-10-20设计收敛)，当前验收结果见 plan.md。
 
 STS 的第三层按游戏内容和角色组织，入口如下：
 

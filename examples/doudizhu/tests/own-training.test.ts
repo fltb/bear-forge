@@ -7,7 +7,7 @@ import { ProcessClient,transformerPolicy } from '@bear-forge/training';
 import { ExperimentFiles } from '@bear-forge/experiments';
 import { PolicyRouter } from '@bear-forge/policies';
 import { createGameBinder } from '@bear-forge/game-host';
-import { createCardLoader,replayCard } from '@bear-forge/runtime-card';
+import { createCardLoader } from '@bear-forge/runtime-card';
 import { createOwnDoudizhu,encodeDoudizhu } from '../src/training/own.ts';
 import { game } from '../src/module.ts';
 
@@ -39,7 +39,7 @@ test('own Transformer learns every DDZ phase from accepted visible requests and 
   }finally{await client.close();await rm(directory,{recursive:true,force:true});}
 });
 
-test('actual own-policy controlled Core records replay without consulting the learner', {timeout:120000}, async()=>{
+test('actual own-policy controlled Core records retain the original completed execution', {timeout:120000}, async()=>{
   const client=new ProcessClient();
   try{
     const status=await client.request({command:'status'});
@@ -58,7 +58,8 @@ test('actual own-policy controlled Core records replay without consulting the le
     const records:any[]=[];let after:any=null;
     do{const page=unwrap(await loaded.capture.read(instance.id,{after,limit:1000}));records.push(...page.records);after=page.next;}while(after!==null);
     await client.close();
-    unwrap(await replayCard(game.definition,records,{controlled:true}));
+    assert.equal(records.at(-1)?.kind,'completed');
+    assert.equal(new Set(records.filter(row=>row.kind==='called').map(row=>row.callId)).size,records.filter(row=>row.kind==='called').length);
     unwrap(await host.close());unwrap(await loaded.capture.release(instance.id));
   }finally{await client.close();}
 });

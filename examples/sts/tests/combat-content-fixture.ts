@@ -19,7 +19,7 @@ import {potionId,type RelicId} from '../src/identifiers.ts';
 
 const {defineRules,defineEffect,sequence,when,forEach,call,query}=rules;
 const setupSchema=programSchemas.setup.extend({
-  bottledCard:z.enum(['SECRET_WEAPON','SECRET_TECHNIQUE','VIOLENCE','VOLIBEAR_C07','VOLIBEAR_U17','DEEP_BREATH']).optional(),bottledUpgraded:z.boolean().optional(),encounter:z.int32(),relics:z.array(z.custom<RelicId>()),potion:z.int32().nullable(),
+  bottledCard:z.enum(['HAVOC','SECRET_WEAPON','SECRET_TECHNIQUE','VIOLENCE','VOLIBEAR_C07','VOLIBEAR_U17','DEEP_BREATH','SHRUG_IT_OFF','POMMEL_STRIKE','WHIRLWIND']).optional(),bottledUpgraded:z.boolean().optional(),encounter:z.int32(),relics:z.array(z.custom<RelicId>()),potion:z.int32().nullable(),
   durable:z.boolean(),elite:z.boolean(),spentOmamori:z.int32().min(0).max(2).optional(),
 });
 export type CombatContentCase=z.infer<typeof setupSchema>;
@@ -39,7 +39,7 @@ const fixture=defineRules({requires:[adventureProgram,volibearAdventureProgram],
       when(b.read(v=>v.input.potion!==null),call(potions.exports.obtain,{inventory:b.read(v=>state(v).potions),potion:b.read(v=>v.input.potion!)})),
       when(b.read(v=>v.input.bottledCard!==undefined),sequence(
         call(permanentDecks.exports.obtain,{deck:b.read(v=>state(v).deck),definition:query(adventures.exports.card,{run,id:b.read(v=>v.input.bottledCard!)}),count:1,upgraded:b.read(v=>v.input.bottledUpgraded??false),specialData:0,upgrade:false}),
-        call(permanentDecks.exports.bottle,{deck:b.read(v=>state(v).deck),index:b.read(v=>v.query(permanentDecks.exports.current,state(v).deck).cards.length-1),type:b.read(v=>v.input.bottledCard==='VOLIBEAR_C07'?0 as const:1 as const)}),
+        call(permanentDecks.exports.bottle,{deck:b.read(v=>state(v).deck),index:b.read(v=>v.query(permanentDecks.exports.current,state(v).deck).cards.length-1),type:b.read(v=>v.input.bottledCard==='VOLIBEAR_C07'||v.input.bottledCard==='POMMEL_STRIKE'||v.input.bottledCard==='WHIRLWIND'?0 as const:1 as const)}),
       )),
       call(adventures.exports.setRoom,{run,room:b.read(v=>v.input.elite?'ELITE':'MONSTER'),event:0}),
       call(stsPorts.exports.initialize,run),when(b.read(v=>v.input.detailedEvents===true),call(detailEvents.exports.initialize,run)),call(combatProgram.exports.run,{run,encounter:b.read(v=>v.input.encounter)}),

@@ -3,18 +3,25 @@ import { createGameBinder } from '@bear-forge/game-host';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { promisify, isDeepStrictEqual } from 'node:util';
 import { createControlledLoader, programDigest } from '@bear-forge/runtime-controlled';
 import type { CompiledProgram } from '@bear-forge/contracts/loading';
 import type { Setup, State } from '../src/forge.schemas.ts';
 import type { Ports } from '../src/game.types.ts';
 import { game as reference } from './reference/module.ts';
-import { baseDeck, legal } from './reference/rules.ts';
+import { baseDeck } from './reference/rules.ts';
 
 function unwrap<T>(value: { ok: true; value: T } | { ok: false; error: unknown }): T {
   assert.equal(value.ok, true, JSON.stringify(value));
   if (!value.ok) throw Error('operation failed');
   return value.value;
+}
+
+function answer(contract:any,call:any){
+  if(call.port==='event')return null;
+  const port=contract.ports.decision,{view,requests}=port.receive(call.input),request=requests[0];
+  const options=contract.inputs.move.describe(view,request),reply=port.respond(view,request,options.values[0]);
+  assert.equal(reply.valid,true);return reply.output;
 }
 
 test('frozen Forge reference equals compiled candidate across decision restores and fork continuation', async () => {
@@ -30,22 +37,23 @@ test('frozen Forge reference equals compiled candidate across decision restores 
   }).load(artifact));
   for (const seed of [87, 991]) {
     const setup: Setup = { profile: 'forge-duel-v1', seed, first: '0', decks: { '0': [...baseDeck], '1': [...baseDeck] } };
-    const tape: Array<{ call: any; output: any }> = [];
+    const transcript: Array<{ call: any; output: any }> = [];
     const expected = await reference.program.run(setup, {
       async call(call: any) {
-        assert.ok(tape.length < 600);
-        const output = call.port === 'event' ? null : legal(call.input)[0]!;
-        tape.push(structuredClone({ call, output }));
+        assert.ok(transcript.length < 600);
+        const output = answer(reference.contract,call);
+        transcript.push(structuredClone({ call, output }));
         return output;
       },
     } as any);
     let instance = unwrap(await loaded.core.start(setup));
     let forkChecked = false;
-    for (const recorded of tape) {
+    for (const recorded of transcript) {
       const current = unwrap(await instance.inspect());
       assert.equal(current.kind, 'call', JSON.stringify(current));
       if (current.kind !== 'call') throw Error('expected waiting call');
       assert.deepEqual(current.call, recorded.call);
+      const output=answer(game.contract,current.call);assert.deepEqual(output,recorded.output);
       if (current.call.port === 'decision') {
         const snapshot = unwrap(await loaded.persistence!.save(instance));
         unwrap(await instance.close());
@@ -61,7 +69,7 @@ test('frozen Forge reference equals compiled candidate across decision restores 
       const before: any = unwrap(await probe.inspect());
       const peerBefore: any = unwrap(await peer.inspect());
       const request = before.requests[0];
-      const reply = { requestId: request.id, type: request.type, action: recorded.output };
+      const reply = { requestId: request.id, type: request.type, action: output };
       const wrongPlayer = request.player === '0' ? '1' : '0';
       assert.deepEqual(unwrap(await probe.validate({ player: request.player, reply })), { valid: true });
       for (const invalid of [
@@ -74,7 +82,9 @@ test('frozen Forge reference equals compiled candidate across decision restores 
       assert.equal((unwrap(await peer.validate({ player: request.player, reply })) as any).valid, false);
       assert.deepEqual(unwrap(await probe.inspect()), before);
       assert.deepEqual(unwrap(await peer.inspect()), peerBefore);
-      unwrap(await probe.bind({ player: request.player, async onRequest() { return { kind: 'reply', value: reply.action }; } }));
+      const options:any=unwrap(await probe.describe({requestId:request.id,type:request.type}));
+      const alternative=options.values.find((action:any)=>!isDeepStrictEqual(action,output));assert.ok(alternative,'isolation probe uses a different legal action');
+      unwrap(await probe.bind({player:request.player,async onRequest(){return{kind:'reply',value:alternative};}}));
       assert.equal((unwrap(await probe.run()) as any).accepted.kind, 'action');
       const after = unwrap(await probe.inspect());
       assert.equal((unwrap(await probe.validate({ player: request.player, reply })) as any).valid, false);
@@ -85,29 +95,20 @@ test('frozen Forge reference equals compiled candidate across decision restores 
       unwrap(await loaded.capture!.release(probeInstance.id));
           const branch = unwrap(await instance.fork());
           assert.notEqual(branch.id, instance.id);
-          unwrap(await branch.bind({ decision: async () => ({ kind: 'reply', value: structuredClone(recorded.output) }) }));
+          unwrap(await branch.bind({ decision: async () => ({ kind: 'reply', value: output }) }));
           const advanced = unwrap(await branch.run());
           assert.equal(advanced.accepted, true);
           // Advancing a child must not consume the parent's pending request.
           assert.deepEqual(unwrap(await instance.inspect()), current);
-          unwrap(await instance.bind({ decision: async () => ({ kind: 'reply', value: structuredClone(recorded.output) }) }));
-          assert.equal(unwrap(await instance.run()).accepted, true);
-          const parentState = unwrap(await instance.inspect());
-          const branchState = unwrap(await branch.inspect());
-          assert.equal(parentState.kind, 'call');
-          assert.equal(branchState.kind, 'call');
-          if (parentState.kind === 'call' && branchState.kind === 'call') {
-            // New calls have branch-specific credentials; compare the complete
-            // semantic payload, never discard business IDs within it.
-            assert.deepEqual(parentState.call, branchState.call);
-          }
-          unwrap(await branch.close());
-          unwrap(await loaded.capture!.release(branch.id));
+          // The advanced child becomes the sole continuation. The old
+          // parent is never driven through the already-completed edge.
+          unwrap(await instance.close());unwrap(await loaded.capture!.release(instance.id));
+          instance=branch;
           forkChecked = true;
           continue;
         }
       }
-      unwrap(await instance.bind({ [recorded.call.port]: async () => ({ kind: 'reply', value: structuredClone(recorded.output) }) } as any));
+      unwrap(await instance.bind({ [current.call.port]: async () => ({ kind: 'reply', value: output }) } as any));
       assert.equal(unwrap(await instance.run()).accepted, true);
     }
     const final = unwrap(await instance.inspect());

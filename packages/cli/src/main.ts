@@ -1,5 +1,5 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 import {build} from 'esbuild';
 import {pathToFileURL} from 'node:url';
 import {createCardLoader} from '@bear-forge/runtime-card';
@@ -8,7 +8,7 @@ import type { TaskResult } from '@bear-forge/forge-duel/experiment/execution';
 import { analyze } from '@bear-forge/forge-duel/experiment/analysis';
 import { createEvidenceServer } from '@bear-forge/forge-duel-viewer';
 import { runEvaluation } from '@bear-forge/forge-duel/evaluation/execution';
-import { runCardGame, replayCardGame } from './card.ts';
+import { runCardGame } from './card.ts';
 export function argumentsOf(args: string[]) {
   const flags: Record<string, string | boolean> = {};
   for (let i = 0; i < args.length; i++) {
@@ -19,13 +19,13 @@ export function argumentsOf(args: string[]) {
   return flags;
 }
 export async function main(args = process.argv.slice(2)) {
+  if(args[0]==='card:replay')throw Error('Historical replay is disabled');
   if(args[0]==='sts'){const {runSts}=await import('./sts.ts');await runSts(args.slice(1));return;}
   const [command, ...rest] = args,
     flags = argumentsOf(rest);
   const allowed: Record<string, string[]> = {
     'build:games': [],
     'card:run': ['game', 'native', 'seed', 'records'],
-    'card:replay': ['game', 'native', 'records'],
     evaluate: ['output','config','resume'],
     experiment: ['output', 'config', 'resume', 'concurrency', 'memory-mb', 'compute-steps'],
     analyze: ['output', 'experiment'],
@@ -35,18 +35,13 @@ export async function main(args = process.argv.slice(2)) {
   for (const key of Object.keys(flags)) if (!allowed[command!]?.includes(key)) throw Error('Unknown option --' + key);
   const budgets = Object.fromEntries([['concurrency', 'concurrency'], ['memory-mb', 'memoryBudgetMB'], ['compute-steps', 'computeStepBudget']].filter(([flag]) => flags[flag!] !== undefined).map(([flag, field]) => [field, Number(flags[flag!])]));
   const directory = typeof flags.output === 'string' ? flags.output : './data/forge';
-  if (command === 'card:run' || command === 'card:replay') {
+  if (command === 'card:run') {
     if (flags.game !== 'forge-duel' && flags.game !== 'doudizhu' && flags.game !== 'sts') throw Error('--game must be forge-duel, doudizhu or sts');
     if (flags.native !== undefined && flags.native !== true) throw Error('--native takes no value');
     if (flags.game === 'sts') throw Error('Use sts play; generic STS run and replay are disabled');
     const seed = Number(flags.seed ?? 991);
     if (typeof seed === 'number' && (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff)) throw Error('Invalid seed');
     if (flags.records !== undefined && typeof flags.records !== 'string') throw Error('--records requires a path');
-    if (command === 'card:replay') {
-      if (typeof flags.records !== 'string') throw Error('--records is required');
-      console.log(JSON.stringify(await replayCardGame({ game: flags.game, controlled: flags.native !== true, records: flags.records })));
-      return;
-    }
     console.log(JSON.stringify(await runCardGame({ game: flags.game, controlled: flags.native !== true, seed, ...(typeof flags.records === 'string' ? { records: flags.records } : {}) })));
     return;
   }
@@ -56,8 +51,18 @@ export async function main(args = process.argv.slice(2)) {
     });
     for (const name of ['doudizhu', 'forge-duel', 'sts']) {
       const outfile = resolve('build', name + '.card.mjs');
+      const libraries=resolve('packages')+sep;
       await build({ entryPoints: [resolve('examples', name, 'src/module.ts')], outfile,
-        bundle: true, platform: 'node', format: 'esm', target: 'node22', packages: 'external' });
+        bundle: true, platform: 'node', format: 'esm', target: 'node22', packages: 'external',
+        // Relative private library imports must share the very same linked
+        // metadata as package imports and the host. Bundling either half
+        // would create a second atom/identity registry inside the game.
+        plugins:[{name:'shared-workspace-libraries',setup(builder){
+          builder.onResolve({filter:/^\.\.?\//},args=>{
+            const target=resolve(args.resolveDir,args.path);
+            if(target.startsWith(libraries))return{path:'./'+relative(dirname(outfile),target).split(sep).join('/'),external:true};
+          });
+        }}] });
       const {game} = await import(pathToFileURL(outfile).href);
       const linked = await createCardLoader({controlled:name==='sts',recordCore:false}).load(game.definition);
       if (!linked.ok) throw Error(linked.error.message);

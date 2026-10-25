@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {CardMachine,CardProgram,linkRules,type CardDefinition} from '@bear-forge/card-engine';
-import {SearchBudget,defaultSearchLimits} from '@bear-forge/policies';
 import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
 import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
-import {ProbabilityCurrent,nextProbabilityFrontier,saveProbabilityFrontier,restoreProbabilityFrontier,type ProbabilityFrontier} from '../../../packages/runtime-card/src/probability.ts';
-import {searchEntropyWord} from '../../../packages/policies/src/search/entropy.ts';
+import {ProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
+import {ProbabilityExpansion} from '../../../packages/runtime-card/src/probability-expansion.ts';
+import {addMass,multiplyMass,unitMass,zeroMass,type ProbabilityMass} from '../../../packages/card-engine/src/probability-mass.ts';
 import {rules} from '../src/rules/execution.ts';
 import {adventures} from '../src/rules/adventures.ts';
 import {resources} from '../src/rules/resources.ts';
@@ -23,7 +23,7 @@ import type {RelicId} from '../src/identifiers.ts';
 
 type RestSetup=Setup&{owned:RelicId[];red:boolean};
 type Current=ProbabilityCurrent<{},RestSetup,Ports,Frame>;
-type Frontier=ProbabilityFrontier<{},RestSetup,Ports,Frame,null>;
+type Frontier={outcomes:{current:Current;mass:ProbabilityMass}[]};
 const {defineEffect,sequence,call,query,forEach}=rules;
 const programs=new Map<string,CardProgram<{},RestSetup,Ports,Frame>>();
 const definitions=new WeakMap<object,CardDefinition<{},RestSetup,Ports,Frame>>();
@@ -68,19 +68,32 @@ function frame(current:Current):Frame{
   if(stop.kind==='call'&&stop.call.port==='decision')return stop.call.input;
   throw Error('Expected public boundary: '+JSON.stringify(stop));
 }
-const frontier=(current:Current):Frontier=>({representation:'exact',outcomes:[{current,probability:1,data:null}]});
+const frontier=(current:Current):Frontier=>({outcomes:[{current,mass:unitMass()}]});
 const close=(value:Frontier)=>{for(const row of value.outcomes)row.current.close();};
+function saveFrontier(source:Frontier){return{outcomes:source.outcomes.map(row=>({context:row.current.machine.storage.export(row.current.machine.root),mass:row.mass}))};}
+function restoreFrontier(program:CardProgram<{},RestSetup,Ports,Frame>,saved:ReturnType<typeof saveFrontier>):Frontier{
+  return{outcomes:saved.outcomes.map(row=>{program.validate(row.context);return{current:new ProbabilityCurrent(new CardMachine(program,privateCardGraph(row.context))),mass:row.mass};})};
+}
+const options={continueCall(stop:Extract<ReturnType<Current['inspect']>,{kind:'call'}>,data:null){return stop.call.port==='event'?{reply:contract.ports.event.receive(stop.call.input).output,data}:undefined;}};
+function expand(current:Current,action:Action){
+  const received=contract.ports.decision.receive(frame(current)),request=received.requests[0]!;
+  const prepared=contract.ports.decision.respond(received.view,request,action);
+  if(!prepared.valid)throw Error(prepared.reason);
+  return ProbabilityExpansion.from(current,prepared.output,null,options);
+}
+// Used for the finite deterministic rest/selection examples below. Random
+// rewards keep their live expansion instead of demanding a materialized list.
 function step(source:Frontier,action:Action):Frontier{
-  const budget=new SearchBudget({...defaultSearchLimits,mode:'work'},new AbortController().signal);
-  let random={state:76,position:0};
-  return nextProbabilityFrontier(source,current=>{
-    const before=frame(current),received=contract.ports.decision.receive(before),request=received.requests[0]!;
-    const prepared=contract.ports.decision.respond(received.view,request,action);
-    if(!prepared.valid)throw Error(prepared.reason);return prepared.output;
-  },{maximum:budget.limits.worlds,entropy:{check:()=>budget.check(),word(){const draw=searchEntropyWord(random);random=draw.random;return draw.value;}},
-    execute(phase,operation){if(phase==='fork')budget.allocateNode();return budget.measureSync(operation,phase);},
-    continueCall(stop,data){return stop.call.port==='event'?{reply:contract.ports.event.receive(stop.call.input).output,data}:undefined;},
-  });
+  const result:Frontier={outcomes:[]};
+  try{
+    for(const parent of source.outcomes){
+      const expansion=expand(parent.current,action);
+      try{for(;;){const row=expansion.take();if(row)result.outcomes.push({current:row.current,mass:multiplyMass(parent.mass,row.mass)});
+        else if(expansion.complete)break;else expansion.step();}}
+      finally{expansion.close();}
+    }
+    assert.deepEqual(result.outcomes.reduce((sum,row)=>addMass(sum,row.mass),zeroMass()),unitMass());return result;
+  }catch(error){close(result);throw error;}
 }
 function withoutInitialization(run:()=>void){
   const initial=CardProgram.prototype.initial;
@@ -90,37 +103,37 @@ function withoutInitialization(run:()=>void){
 
 for(const character of ['ironclad','volibear'] as const){
   test(`${character}: original rest healing and red key produce isolated successors`,()=>{
-    const root=fixture(character,['REGAL_PILLOW']),before=saveProbabilityFrontier(frontier(root));
+    const root=fixture(character,['REGAL_PILLOW']),before=saveFrontier(frontier(root));
     try{withoutInitialization(()=>{
       for(const bits of [0,2]){
         const next=step(frontier(root),{bits});
         try{
-          assert.equal(next.representation,'exact');assert.equal(next.outcomes.length,1);assert.equal(next.outcomes[0]!.probability,1);
+          assert.equal(next.outcomes.length,1);assert.deepEqual(next.outcomes[0]!.mass,unitMass());
           const after=frame(next.outcomes[0]!.current);
           assert.equal(after.game.screen,'MAP_SCREEN');assert.equal(after.game.hp,bits===0?57:20);
           assert.equal(after.game.keys.red,bits===2);assert.deepEqual(after.game.deck,frame(root).game.deck);
           assert.deepEqual(after.history,[{kind:'game',bits}]);
         }finally{close(next);}
       }
-      assert.deepEqual(saveProbabilityFrontier(frontier(root)),before);
+      assert.deepEqual(saveFrontier(frontier(root)),before);
     });}finally{root.close();}
   });
 
   test(`${character}: original smith selection resumes from its saved current exactly once`,()=>{
-    const root=fixture(character),before=saveProbabilityFrontier(frontier(root));
+    const root=fixture(character),before=saveFrontier(frontier(root));
     try{withoutInitialization(()=>{
       const nested=step(frontier(root),{bits:1});
       try{
         assert.equal(nested.outcomes.length,1);const current=nested.outcomes[0]!.current,selection=frame(current);
         assert.equal(selection.game.select?.type,3);assert.ok(selection.game.select!.cards.length>0);
         assert.deepEqual(selection.history,[{kind:'game',bits:1}]);
-        const picked=selection.game.select!.cards[0]!,action=selection.actions[0]!,saved=saveProbabilityFrontier(nested);
+        const picked=selection.game.select!.cards[0]!,action=selection.actions[0]!,saved=saveFrontier(nested);
         // Destroy the original nested Context; restoration must use only the
         // saved current frames, including the unfinished room caller.
         close(nested);
-        const restored=restoreProbabilityFrontier(root.machine.program,saved);
+        const restored=restoreFrontier(root.machine.program,saved);
         try{
-          assert.deepEqual(saveProbabilityFrontier(restored),saved);
+          assert.deepEqual(saveFrontier(restored),saved);
           const done=step(restored,action);
           try{
             assert.equal(done.outcomes.length,1);const after=frame(done.outcomes[0]!.current);
@@ -129,7 +142,7 @@ for(const character of ['ironclad','volibear'] as const){
             assert.deepEqual(after.game.deck,frame(root).game.deck.map((card,index)=>index===picked.deckIndex?{...card,upgraded:true}:card));
           }finally{close(done);}
         }finally{close(restored);}
-        assert.deepEqual(saveProbabilityFrontier(frontier(root)),before);
+        assert.deepEqual(saveFrontier(frontier(root)),before);
       }finally{close(nested);}
     });}finally{root.close();}
   });
@@ -170,23 +183,30 @@ for(const character of ['ironclad','volibear'] as const){
   });
 
   for(const relic of ['DREAM_CATCHER','SHOVEL'] as const)test(`${character}: ${relic} reaches weighted original reward windows from current`,()=>{
-    const root=fixture(character,[relic]),before=saveProbabilityFrontier(frontier(root));
+    const root=fixture(character,[relic]),before=saveFrontier(frontier(root));
     try{withoutInitialization(()=>{
-      const next=step(frontier(root),{bits:relic==='SHOVEL'?5:0});
+      let expansion=expand(root,{bits:relic==='SHOVEL'?5:0});
       try{
-        assert.equal(next.representation,'particles');assert.ok(next.outcomes.length>1&&next.outcomes.length<=8);
-        assert.ok(Math.abs(next.outcomes.reduce((sum,row)=>sum+row.probability,0)-1)<1e-12);
+        expansion.step();const saved=expansion.save();expansion.close();expansion=ProbabilityExpansion.restore(root.machine.program,saved,options);
         const rewards=new Set<string>();
-        for(const row of next.outcomes){
-          const after=frame(row.current);assert.equal(after.game.screen,'REWARDS');
-          assert.equal(after.game.hp,relic==='SHOVEL'?20:42);
-          assert.deepEqual(after.game.deck,frame(root).game.deck);assert.ok(after.actions.length>1);
-          if(relic==='SHOVEL')assert.equal(after.game.rewards!.relics.length,1);
-          else{assert.equal(after.game.rewards!.cards.length,1);assert.equal(after.game.rewards!.cards[0]!.length,3);}
-          rewards.add(JSON.stringify(after.game.rewards));
+        // Inspect distinct delivered rewards, retaining every unvisited branch
+        // and its mass. Two observations are a test assertion, not a world cap.
+        while(rewards.size<2){
+          const row=expansion.take();
+          if(!row){assert.equal(expansion.complete,false);expansion.step();continue;}
+          try{
+            const after=frame(row.current);assert.equal(after.game.screen,'REWARDS');
+            assert.equal(after.game.hp,relic==='SHOVEL'?20:42);
+            assert.deepEqual(after.game.deck,frame(root).game.deck);assert.ok(after.actions.length>1);
+            if(relic==='SHOVEL')assert.equal(after.game.rewards!.relics.length,1);
+            else{assert.equal(after.game.rewards!.cards.length,1);assert.equal(after.game.rewards!.cards[0]!.length,3);}
+            assert.ok(row.mass.numerator>0n);rewards.add(JSON.stringify(after.game.rewards));
+          }finally{row.current.close();}
+          const mass=expansion.masses();assert.deepEqual(addMass(addMass(mass.pending,mass.ready),mass.transferred),unitMass());
         }
-        assert.ok(rewards.size>1);assert.deepEqual(saveProbabilityFrontier(frontier(root)),before);
-      }finally{close(next);}
+        const mass=expansion.masses();assert.ok(mass.pending.numerator+mass.ready.numerator>0n,'unvisited rewards remain represented');
+        assert.deepEqual(saveFrontier(frontier(root)),before);
+      }finally{expansion.close();}
     });}finally{root.close();}
   });
 }

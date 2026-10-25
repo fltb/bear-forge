@@ -1,14 +1,18 @@
 import {adventureDraws} from '../src/content/rewards/draws.ts';
 import test from 'node:test';
+import {expandAll,visitAll} from './probability-fixture.ts';
+import {ProbabilityExpansion} from '../../../packages/runtime-card/src/probability-expansion.ts';
+import {probabilityCursor,nextProbabilityCoordinate} from '../../../packages/card-engine/src/probability-cursor.ts';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {CardProgram,CardMachine,linkRules,ruleModules} from '@bear-forge/card-engine';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {createGameBinder} from '@bear-forge/game-host';
 import {forkGameCurrent} from '../../../packages/game-host/src/current.ts';
-import {ProbabilityCurrent,nextProbability,nextProbabilityFrontier,conditionedNextProbabilityFrontier,takeProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
+import {ProbabilityCurrent,takeProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
 import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
-import {generateProbability,permutationAt} from '../../../packages/card-engine/src/probability.ts';
+import {permutationAt} from '../../../packages/card-engine/src/probability.ts';
+import {probabilityMass,addMass,divideMass,unitMass,zeroMass} from '../../../packages/card-engine/src/probability-mass.ts';
 import {rules} from '../src/rules/execution.ts';
 import {random} from '../src/rules/random.ts';
 import {randomState,randomInt,randomBoolean,randomLong,randomFloat,javaShuffle,rngView} from '../src/rng.ts';
@@ -18,7 +22,6 @@ import {encounterId,potionId} from '../src/identifiers.ts';
 import {describeAction} from '../src/presentation.ts';
 import {observe,contract} from '../src/contract.ts';
 import type {Ports,Frame} from '../src/game.schemas.ts';
-import {searchEntropyWord} from '../../../packages/policies/src/search/entropy.ts';
 import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
 import {stateOf} from '../../../packages/card-engine/src/rules-module-internal.ts';
 import {adventures} from '../src/rules/adventures.ts';
@@ -65,9 +68,10 @@ test('probability execution uses the same random atoms but future coordinates do
     const current=parent.fork();
     try{
       assert.deepEqual(current.advance(null),{kind:'chance',space:{kind:'uniform',size:3n}});
-      const chance=current.advance(2n);assert.deepEqual(chance,{kind:'chance',space:{kind:'weighted',weights:[.75,.25]}});
+      const chance=current.advance(2n);assert.deepEqual(chance,{kind:'chance',space:{kind:'rational',weights:[probabilityMass(3n,4n),probabilityMass(1n,4n)]}});
       if(chance.kind!=='chance')throw Error('Expected chance');
-      assert.deepEqual(generateProbability(chance.space,8,{word(){throw Error('Exact');},check(){}}).outcomes,[{coordinate:0n,probability:.75},{coordinate:1n,probability:.25}]);
+      const cursor=probabilityCursor(chance.space),first=nextProbabilityCoordinate(cursor)!,second=nextProbabilityCoordinate(first.cursor)!;
+      assert.deepEqual([first.probability,second.probability],[probabilityMass(3n,4n),probabilityMass(1n,4n)]);assert.deepEqual(second.cursor.remaining,zeroMass());
       assert.deepEqual(current.advance(1n),{kind:'chance',space:{kind:'uniform',size:6n}});
       assert.deepEqual(current.advance(4n),{kind:'chance',space:{kind:'uniform',size:1n<<24n}});
       assert.deepEqual(current.advance((1n<<24n)-1n),{kind:'chance',space:{kind:'uniform',size:1n<<64n}});
@@ -107,29 +111,23 @@ test('real attack potion probability branches continue original nested card sele
   const view=observe(start.call.input),action=start.call.input.actions.find(a=>describeAction(view,a.bits).kind==='drink-potion');
   assert.ok(action);
   const before=machine.storage.export(machine.root);
-  type Node={current:typeof root;probability:number};
-  const owned=new Set<typeof root>();
-  let cursor={state:76,position:0};
-  const entropy={check(){},word(){const result=searchEntropyWord(cursor);cursor=result.random;return result.value;}};
-  function toDecision(source:typeof root,reply:unknown):Node[]{
-    const pending:Node[]=[],finished:Node[]=[];
-    const add=(parent:typeof root,reply:unknown,weight:number)=>{
-      const result=nextProbability(parent,reply,{maximum:8-pending.length-finished.length,entropy});
-      for(const o of result.outcomes){owned.add(o.current);pending.push({current:o.current,probability:weight*o.probability});}
-    };
-    add(source,reply,1);
-    while(pending.length){
-      const node=pending.shift()!,stop=node.current.inspect();
-      if(stop.kind==='call'&&stop.call.port==='event'){
-        add(node.current,null,node.probability);node.current.close();owned.delete(node.current);
-      }else finished.push(node);
+  const owned=new Set<typeof root>(),retained:ReturnType<typeof ProbabilityExpansion.from<unknown,unknown,Ports,Frame,null>>[]=[];
+  const events={continueCall(stop:Extract<ReturnType<typeof root.inspect>,{kind:'call'}>,data:null){if(stop.call.port==='event')return{reply:contract.ports.event.receive(stop.call.input).output,data};}};
+  function firstDecisions(source:typeof root,reply:unknown,count:number){
+    const expansion=ProbabilityExpansion.from(source,reply,null,events);retained.push(expansion);
+    const results:NonNullable<ReturnType<typeof expansion.take>>[]=[];
+    // Inspect original nested menus while retaining every unvisited outcome.
+    // This assertion window never claims to finish the action distribution.
+    while(results.length<count){
+      const next=expansion.take();if(next){owned.add(next.current);results.push(next);continue;}
+      if(expansion.complete)break;expansion.step();
     }
-    return finished;
+    const mass=expansion.masses();assert.deepEqual(addMass(addMass(mass.pending,mass.ready),mass.transferred),unitMass());return results;
   }
   try{
     CardProgram.prototype.initial=function(){throw Error('Search must not initialize');};
-    const results=toDecision(root,action);
-    assert.ok(results.length>1);assert.ok(Math.abs(results.reduce((sum,o)=>sum+o.probability,0)-1)<1e-12);
+    const results=firstDecisions(root,action,2);
+    assert.equal(results.length,2);assert.ok(results.every(row=>row.mass.numerator>0n));
     const offered=new Set<string>();
     for(const {current} of results){
       assert.equal(current.machine.program,program);
@@ -138,7 +136,7 @@ test('real attack potion probability branches continue original nested card sele
       const nested=observe(stop.call.input);
       assert.ok(nested.battle?.select?.candidates?.length);offered.add(JSON.stringify(nested.battle.select.candidates));
       const selected=stop.call.input.actions[0]!;
-      const children=toDecision(current,selected);
+      const children=firstDecisions(current,selected,1);assert.equal(children.length,1);
       for(const child of children){
         const after=child.current.inspect();
         if(after.kind!=='call'||after.call.port!=='decision')throw Error('Expected continuation after selection');
@@ -149,7 +147,7 @@ test('real attack potion probability branches continue original nested card sele
     assert.ok(offered.size>1,'probability coordinates must affect the original offered cards');
     assert.deepEqual(machine.storage.export(machine.root),before);
     assert.deepEqual(unwrap(await game.inspect()),gameBefore);
-  }finally{CardProgram.prototype.initial=initialize;for(const current of owned)current.close();root.close();unwrap(await game.close());}
+  }finally{CardProgram.prototype.initial=initialize;for(const expansion of retained)expansion.close();for(const current of owned)current.close();root.close();unwrap(await game.close());}
   await assert.rejects(forkGameCurrent(game),/game_closed/);
 });
 
@@ -172,18 +170,9 @@ test('real draw-potion futures ignore an unrevealed actual order while Frozen Ey
     };
     const left=make(false),right=make(true);
     function futures(source:typeof left){
-      type Node={current:typeof source.current;probability:number};
-      const pending:Node[]=[],done:Node[]=[],owned=new Set<typeof source.current>();let cursor={state:37,position:0};
-      const entropy={check(){},word(){const r=searchEntropyWord(cursor);cursor=r.random;return r.value;}};
-      const advance=(current:typeof source.current,reply:unknown,probability:number)=>{
-        const result=nextProbability(current,reply,{maximum:8-pending.length-done.length,entropy});
-        for(const child of result.outcomes){owned.add(child.current);pending.push({current:child.current,probability:probability*child.probability});}
-      };
-      try{
-        advance(source.current,source.action,1);
-        while(pending.length){const node=pending.shift()!,stop=node.current.inspect();if(stop.kind==='call'&&stop.call.port==='event'){advance(node.current,null,node.probability);node.current.close();owned.delete(node.current);}else done.push(node);}
-        return done.map(node=>{const stop=node.current.inspect();if(stop.kind!=='call'||stop.call.port!=='decision')throw Error('Expected next battle');return{probability:node.probability,hand:observe(stop.call.input).battle!.hand};});
-      }finally{for(const current of owned)current.close();}
+      const result=expandAll(source.current,source.action,{continueCall(stop,data){if(stop.call.port==='event')return{reply:null,data};}});
+      try{return result.outcomes.map(row=>{const stop=row.current.inspect();if(stop.kind!=='call'||stop.call.port!=='decision')throw Error('Expected next battle');return{mass:row.mass,hand:observe(stop.call.input).battle!.hand};});}
+      finally{for(const row of result.outcomes)row.current.close();}
     }
     const before=left.current.machine.storage.export(left.current.machine.root);
     try{
@@ -196,7 +185,7 @@ test('real draw-potion futures ignore an unrevealed actual order while Frozen Ey
 });
 
 
-for(const [id,upgraded] of [['SECRET_WEAPON',false],['SECRET_TECHNIQUE',false],['VIOLENCE',false],['VOLIBEAR_C07',false],['VOLIBEAR_U17',false],['VOLIBEAR_U17',true]] as const)test(`${id}${upgraded?'+':''} executes original card flow over probability-resolved draw order`,()=>{
+for(const [id,upgraded] of [['HAVOC',false],['SECRET_WEAPON',false],['SECRET_TECHNIQUE',false],['VIOLENCE',false],['VOLIBEAR_C07',false],['VOLIBEAR_U17',false],['VOLIBEAR_U17',true]] as const)test(`${id}${upgraded?'+':''} executes original card flow over probability-resolved draw order`,()=>{
   const program=new CardProgram(combatContentDefinition),machine=new CardMachine(program,privateCardGraph(program.initial({seed:'130',encounter:encounterId.CULTIST,relics:[],potion:null,durable:false,elite:false,detailedEvents:true,bottledCard:id,bottledUpgraded:upgraded,character:id.startsWith('VOLIBEAR')?'volibear':'ironclad'})));
   let stop=machine.advance();while(stop.kind==='call'&&stop.call.port==='event')stop=machine.advance(null);
   if(stop.kind!=='call'||stop.call.port!=='decision')throw Error('Expected actual battle');
@@ -206,17 +195,20 @@ for(const [id,upgraded] of [['SECRET_WEAPON',false],['SECRET_TECHNIQUE',false],[
   const order=query(zones.exports.members,draw),components=stateOf(other.machine.root.state).entities[draw]!.components,key=Object.entries(components).find(([,value])=>Array.isArray(value)&&JSON.stringify(value)===JSON.stringify(order))![0];components[Number(key)]=other.machine.storage.own([...order].reverse());
   const before=machine.storage.export(machine.root),initial=CardProgram.prototype.initial;
   function menus(source:typeof root){
-    const owned=new Set<typeof root>(),pending:{current:typeof root;probability:number}[]=[],done:{view:ReturnType<typeof observe>;probability:number}[]=[];let cursor={state:4627,position:0};
-    const entropy={check(){},word(){const r=searchEntropyWord(cursor);cursor=r.random;return r.value;}};
-    const advance=(parent:typeof root,reply:unknown,weight:number)=>{const next=nextProbability(parent,reply,{maximum:8-pending.length-done.length,entropy});for(const child of next.outcomes){owned.add(child.current);pending.push({current:child.current,probability:weight*child.probability});}};
-    try{advance(source,action,1);while(pending.length){const node=pending.shift()!,stop=node.current.inspect();if(stop.kind==='call'&&stop.call.port==='event')advance(node.current,null,node.probability);else if(stop.kind==='call'&&stop.call.port==='decision'){
-        const menu=observe(stop.call.input);done.push({view:menu,probability:node.probability});
+    // Compare the exact pushforward to public menus. Distinct random paths
+    // may publish the same menu; add their rational masses rather than retain
+    // thousands of identical full observations. This is only the test oracle,
+    // not an equivalence claim about their hidden execution Contexts.
+    const done=new Map<string,ReturnType<typeof probabilityMass>>();
+    visitAll(source,action,node=>{
+      const stop=node.current.inspect();if(stop.kind!=='call'||stop.call.port!=='decision')throw Error('Expected original card choice');
+      const menu=observe(stop.call.input),key=JSON.stringify(menu);done.set(key,addMass(done.get(key)??zeroMass(),node.mass));
         if(id==='VOLIBEAR_U17'){
           const candidates=menu.battle!.select!.candidates;assert.ok(candidates);assert.equal(candidates.length,upgraded?3:2);
           const knowledge=inspectRuleQuery(combatContentDefinition,node.current.machine.root.state,zones.exports.orderKnowledge,draw);
           assert.equal(knowledge.resolved,false);assert.ok(knowledge.blocks.some(block=>block.length>1),'scry must leave unrevealed order uncertain');
           const skip=stop.call.input.actions.find(action=>{const d=describeAction(menu,action.bits);return d.kind==='skip-selection'||d.kind==='select-cards'&&(d.details.indices as number[]).length===0;});assert.ok(skip);
-          const next=nextProbabilityFrontier({representation:'exact',outcomes:[{current:node.current,probability:1,data:null}]},()=>skip,{maximum:8,entropy,continueCall(stop,data){if(stop.call.port==='event')return{reply:null,data};}});
+          const next=expandAll(node.current,skip,{continueCall(stop,data){if(stop.call.port==='event')return{reply:null,data};}});
           try{
             assert.equal(next.outcomes.length,1,'the already revealed next card is deterministic');
             const after=next.outcomes[0]!.current.inspect();if(after.kind!=='call'||after.call.port!=='decision')throw Error('Expected original post-scry continuation');
@@ -224,12 +216,16 @@ for(const [id,upgraded] of [['SECRET_WEAPON',false],['SECRET_TECHNIQUE',false],[
             assert.ok(hand.some(card=>card.uniqueId===candidates[0]!.card.uniqueId));
           }finally{for(const row of next.outcomes)row.current.close();}
         }
-      }else throw Error('Expected card choice');node.current.close();owned.delete(node.current);}return done;}
-    finally{for(const current of owned)current.close();}
+    },{continueCall(stop,data){if(stop.call.port==='event')return{reply:null,data};}});
+    return [...done].sort(([a],[b])=>a<b?-1:a>b?1:0);
   }
   CardProgram.prototype.initial=function(){throw Error('No reinitialization in selection search');};
   try{
     const a=menus(root),b=menus(other);assert.ok(a.length>1);assert.deepEqual(a,b);assert.deepEqual(machine.storage.export(machine.root),before);
+    if(id==='HAVOC'){
+      assert.equal(a.length,order.length,'every hidden top card has its own original autoplay result');
+      for(const [,mass]of a)assert.deepEqual(mass,probabilityMass(1n,BigInt(order.length)));
+    }
     if(id==='VOLIBEAR_C07'){
       // Advance the actual current action once. No history or reconstructed root.
       let after=machine.advance(action);while(after.kind==='call'&&after.call.port==='event')after=machine.advance(null);
@@ -246,7 +242,7 @@ for(const [id,upgraded] of [['SECRET_WEAPON',false],['SECRET_TECHNIQUE',false],[
 });
 
 
-test('original STS random atom conditions an already published result across a support larger than the accepted-world cap',()=>{
+test('the original integer atom exposes all 32 future results independently of the actual observed draw',()=>{
   const root=defineEffect<string,{integer:number}>(b=>{
     const rng=b.local<number>(),integer=b.local<number>();
     return sequence(b.assign(rng,spawnEntity({definition:stream,owner:null,scope:0,setup:b.read(v=>BigInt(v.input))})),call(begin,null),
@@ -259,13 +255,11 @@ test('original STS random atom conditions an already published result across a s
   let retained:{current:{close():void}}[]=[];
   try{
     const observed=actual.advance(null);assert.equal(observed.kind,'done');if(observed.kind!=='done')throw Error('Expected actual published result');
-    const result=conditionedNextProbabilityFrontier({representation:'exact',outcomes:[{current,probability:1,data:null}]},()=>null,{
-      maximum:1,attempts:64,entropy:{word(){throw Error('Small conditioned space must enumerate');},check(){}},
-      likelihood(candidate){const stop=candidate.inspect();return stop.kind==='done'&&stop.result.integer===observed.result.integer?1:0;},
-    });
-    retained=result.frontier?.outcomes??[];
-    assert.equal(result.evidence,1/32);assert.ok(result.frontier);assert.equal(result.frontier.representation,'exact');assert.equal(result.frontier.outcomes.length,1);
-    assert.deepEqual(result.frontier.outcomes[0]!.current.inspect(),observed);assert.deepEqual(current.machine.storage.export(current.machine.root),before);
+    const result=expandAll(current,null);retained=result.outcomes;
+    assert.equal(result.outcomes.length,32);assert.ok(result.outcomes.every(row=>row.mass.numerator===1n&&row.mass.denominator===32n));
+    assert.deepEqual(result.outcomes.map(row=>{const stop=row.current.inspect();if(stop.kind!=='done')throw Error('Expected integer result');return stop.result.integer;}).sort((a,b)=>a-b),Array.from({length:32},(_,i)=>i));
+    const matching=result.outcomes.filter(row=>{const stop=row.current.inspect();return stop.kind==='done'&&stop.result.integer===observed.result.integer;});
+    assert.equal(matching.length,1);assert.deepEqual(matching[0]!.mass,probabilityMass(1n,32n));assert.deepEqual(current.machine.storage.export(current.machine.root),before);
   }finally{CardProgram.prototype.initial=initialize;for(const row of retained)row.current.close();current.close();actual.storage.close?.();}
 });
 
@@ -280,20 +274,15 @@ test('mapped integer entropy preserves normal RNG and coalesces only equal origi
   const definition=linkRules({id:'sts/mapped-original-int',schemas:{setup:z.string(),result:schema,ports:{begin:{input:z.null(),output:z.null()}}},initialize:()=>({}),entry:root,definitions:[root,begin],modules:[random]});
   const program=new CardProgram(definition),storage=privateCardGraph(program.initial('130')),machine=new CardMachine(program,storage);machine.advance();
   const current=new ProbabilityCurrent(new CardMachine(program,storage.fork()));
-  const conditioned=new ProbabilityCurrent(new CardMachine(program,storage.fork()));
-  const result=nextProbability(current,null,{maximum:8,entropy:{check(){},word(){throw Error('Three image values must enumerate exactly');}}});
+  const result=expandAll(current,null);
   try{
     const rng=randomState(130n),value=values[randomInt(rng,0,99)]!;
     assert.deepEqual(machine.advance(null),{kind:'done',result:{value,state:rngView(rng)}});
-    const publications=machine.takeProbabilityPublications(),mass=values.filter(item=>item===value).length/values.length;
-    const posterior=conditionedNextProbabilityFrontier({representation:'exact',outcomes:[{current:conditioned,probability:1,data:null}]},()=>null,{maximum:2,attempts:64,hint:publications,publications,entropy:{check(){},word:()=>123456},likelihood:()=>1});
-    try{
-      assert.equal(posterior.evidence,mass);assert.equal(posterior.frontier!.representation,'particles');assert.equal(posterior.frontier!.outcomes.length,1);
-      const observed=posterior.frontier!.outcomes[0]!.current.inspect();assert.equal(observed.kind,'done');if(observed.kind==='done')assert.equal(observed.result.value,value);
-    }finally{for(const row of posterior.frontier?.outcomes??[])row.current.close();}
-
-    assert.deepEqual(result.outcomes.map(row=>{const stop=row.current.inspect();assert.equal(stop.kind,'done');return{value:stop.kind==='done'?stop.result.value:null,probability:row.probability};}),[{value:2,probability:.03},{value:1,probability:.37},{value:0,probability:.6}]);
-  }finally{for(const row of result.outcomes)row.current.close();current.close();conditioned.close();machine.storage.close?.();}
+    const publications=machine.takeProbabilityPublications();assert.deepEqual(publications,[{kind:'discrete-result',name:'original-value',value}]);
+    assert.deepEqual(result.outcomes.map(row=>{const stop=row.current.inspect();if(stop.kind!=='done')throw Error('Expected original image result');return{value:stop.result.value,mass:row.mass};}),[
+      {value:2,mass:probabilityMass(3n,100n)},{value:1,mass:probabilityMass(37n,100n)},{value:0,mass:probabilityMass(60n,100n)},
+    ]);
+  }finally{for(const row of result.outcomes)row.current.close();current.close();machine.storage.close?.();}
 });
 
 test('original potion generation declares only explicitly published accepted results',()=>{
@@ -335,14 +324,15 @@ test('float24 price images retain all rounding preimages without publishing hidd
     const rng=randomState(130n),value=final(price(randomFloat(rng,.9,1.1))),actual=machine.advance(null);
     assert.deepEqual(actual,{kind:'done',result:{value,state:rngView(rng)}});
     const publications=machine.takeProbabilityPublications();assert.deepEqual(publications,[{kind:'discrete-result',name:'final-price',value}]);
-    let end=0,mass=0,matching=0;for(const row of image){if(final(row.value)===value){mass+=(row.end-end)/2**24;matching++;}end=row.end;}
-    assert.ok(matching>1,'the public price must not determine one hidden base value');
-    const posterior=conditionedNextProbabilityFrontier({representation:'exact',outcomes:[{current,probability:1,data:null}]},()=>null,{maximum:8,attempts:64,entropy:{check(){},word:()=>12345},hint:publications,publications,likelihood:()=>1});
+    let end=0,count=0n,matching=0;for(const row of image){if(final(row.value)===value){count+=BigInt(row.end-end);matching++;}end=row.end;}
+    assert.ok(matching>1,'one public price must retain multiple hidden base values');
+    const result=expandAll(current,null);
     try{
-      assert.equal(posterior.evidence,mass);assert.equal(posterior.frontier!.outcomes.length,matching);
-      for(const row of posterior.frontier!.outcomes){const stop=row.current.inspect();assert.equal(stop.kind,'done');if(stop.kind==='done')assert.equal(stop.result.value,value);}
+      assert.equal(result.outcomes.length,image.length);
+      const compatible=result.outcomes.filter(row=>{const stop=row.current.inspect();return stop.kind==='done'&&stop.result.value===value;});
+      assert.equal(compatible.length,matching);assert.deepEqual(compatible.reduce((mass,row)=>addMass(mass,row.mass),zeroMass()),probabilityMass(count,1n<<24n));
       assert.equal(current.machine.root.stop!.kind,'call');
-    }finally{for(const row of posterior.frontier?.outcomes??[])row.current.close();}
+    }finally{for(const row of result.outcomes)row.current.close();}
   }finally{current.close();storage.close();}
 });
 
@@ -363,14 +353,20 @@ test('grouped shuffle preserves the original RNG and executes order-dependent ca
     const rng=randomState(130n),shuffled=[...items];javaShuffle(shuffled,randomLong(rng));
     const order=[...shuffled.filter(i=>groups[0]!.includes(i)),...shuffled.filter(i=>groups[1]!.includes(i))];
     assert.deepEqual(machine.advance(null),{kind:'done',result:{order,checksum:order.reduce((sum,id)=>sum*7+id,0),state:rngView(rng)}});
-    let cursor={state:13,position:0};
-    const result=conditionedNextProbabilityFrontier({representation:'exact',outcomes:[{current,probability:1,data:null}]},()=>null,{maximum:8,attempts:64,hint:[{kind:'ordered-prefix',orderedMembers:[4]},{kind:'ordered-prefix',orderedMembers:[3]}],entropy:{check(){},word(){const next=searchEntropyWord(cursor);cursor=next.random;return next.value;}},likelihood:child=>{const stop=child.inspect();return stop.kind==='done'&&stop.result.order.at(-1)===4&&stop.result.order.at(-2)===3?1:0;}});
+    const result=expandAll(current,null);
     try{
-      assert.ok(Math.abs(result.evidence-1/6)<1e-12);assert.equal(result.frontier!.outcomes.length,2);
+      assert.equal(result.outcomes.length,12);
+      const matching=result.outcomes.filter(row=>{const stop=row.current.inspect();return stop.kind==='done'&&stop.result.order.at(-1)===4&&stop.result.order.at(-2)===3;});
+      const evidence=matching.reduce((mass,row)=>addMass(mass,row.mass),zeroMass());
+      assert.deepEqual(evidence,probabilityMass(1n,6n));assert.equal(matching.length,2);
       const checksums=new Set<number>();
-      for(const row of result.frontier!.outcomes){const stop=row.current.inspect();assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected original callback result');assert.equal(stop.result.checksum,stop.result.order.reduce((sum,id)=>sum*7+id,0));checksums.add(stop.result.checksum);}
+      for(const row of result.outcomes){
+        const stop=row.current.inspect();if(stop.kind!=='done')throw Error('Expected original callback result');
+        assert.equal(stop.result.checksum,stop.result.order.reduce((sum,id)=>sum*7+id,0));assert.deepEqual(row.mass,probabilityMass(1n,12n));
+        if(matching.includes(row)){checksums.add(stop.result.checksum);assert.deepEqual(divideMass(row.mass,evidence),probabilityMass(1n,2n));}
+      }
       assert.equal(checksums.size,2);assert.deepEqual(current.machine.storage.export(current.machine.root),before);
-    }finally{for(const row of result.frontier?.outcomes??[])row.current.close();}
+    }finally{for(const row of result.outcomes)row.current.close();}
   }finally{current.close();machine.storage.close?.();}
 });
 
@@ -412,7 +408,7 @@ test('original merchant publishes final prices after its sale and discount seque
   }
 });
 
-test('fixed encounter constraints reject an already-public different roster before its health product',async()=>{
+test('fixed encounter constraints describe the original roster without pruning an unconditional future',async()=>{
   const {encounters}=await import('../src/rules/encounters.ts');
   const {encounterContent}=await import('../src/content/enemies/encounters.ts');
   const {enemies}=await import('../src/rules/enemies.ts');
@@ -427,14 +423,13 @@ test('fixed encounter constraints reject an already-public different roster befo
   const definition=linkRules({id:'original-fixed-roster-constraint',schemas:{setup:z.number(),result:output,ports:{begin:{input:z.null(),output:z.null()}}},initialize:()=>({}),entry:effect,definitions:[effect,begin],modules:[encounterContent,random],initialEntities:[0]});
   const program=new CardProgram(definition);
   for(const encounter of [encounterId.THREE_SENTRIES,encounterId.AUTOMATON,encounterId.REPTOMANCER]){
-    const machine=new CardMachine(program,privateCardGraph(program.initial(encounter)));assert.equal(machine.advance().kind,'call');const root=new ProbabilityCurrent(machine),before=machine.storage.export(machine.root);let advances=0;
+    const machine=new CardMachine(program,privateCardGraph(program.initial(encounter)));assert.equal(machine.advance().kind,'call');const root=new ProbabilityCurrent(machine),before=machine.storage.export(machine.root);
     try{
-      const result=conditionedNextProbabilityFrontier({representation:'exact',outcomes:[{current:root,probability:1,data:null}]},()=>null,{maximum:8,attempts:64,publications:[{kind:'discrete-result',name:'combat-roster',value:JSON.stringify(['LAGAVULIN'])}],entropy:{check(){},word(){throw Error('Contradictory roster must be pruned before any health draw');}},execute:(phase,run)=>{if(phase==='advance')advances++;return run();},likelihood:()=>{throw Error('Contradictory roster cannot reach a public outcome');}});
-      assert.equal(result.frontier,null);assert.equal(result.evidence,0);assert.equal(advances,2);assert.deepEqual(machine.storage.export(machine.root),before);
-      const future=nextProbability(root,null,{maximum:8,untilBoundary:'public-constraint',entropy:{check(){},word(){throw Error('No hidden draw before fixed roster');}}});
+      const future=expandAll(root,null,{stopAtBoundary:'public-constraint'});
       try{
-        assert.equal(future.representation,'exact');assert.equal(future.outcomes.length,1);assert.equal(future.outcomes[0]!.probability,1);
+        assert.equal(future.outcomes.length,1);assert.deepEqual(future.outcomes[0]!.mass,unitMass());
         const child=future.outcomes[0]!.current;assert.equal(child.advance(0n).kind,'chance');const conditions=child.machine.takeProbabilityPublications();
+        assert.deepEqual(machine.storage.export(machine.root),before,'future construction must leave the actual current untouched');
         const normal=machine.advance(null);assert.equal(normal.kind,'done');if(normal.kind!=='done')throw Error('Expected original construction');
         assert.deepEqual(conditions,[{kind:'probability-constraint',name:'combat-roster',values:[JSON.stringify(normal.result.names)]}]);
         assert.ok(normal.result.counter>0);assert.deepEqual(machine.takeProbabilityPublications(),[],'normal execution must not publish constraints or change visible events');
@@ -490,7 +485,6 @@ for(const shuffle of ['draw','discard'] as const)test(`original ${shuffle} shuff
     const program=new CardProgram(definition),machine=new CardMachine(program,privateCardGraph(program.initial(undefined)));
     const start=machine.advance();assert.equal(start.kind,'call',JSON.stringify(start));
     const root=new ProbabilityCurrent(machine),before=machine.storage.export(machine.root);
-    const guarded=mode==='reaction'||mode==='self-removing'||mode==='scheduled'||shuffle==='discard'&&mode!=='none';
     // Each forward edge executes once; the fork keeps the same current state.
     const normal=root.fork();
     try{
@@ -498,21 +492,91 @@ for(const shuffle of ['draw','discard'] as const)test(`original ${shuffle} shuff
       const done=normal.machine.advance(null);assert.equal(done.kind,'done',JSON.stringify(done));
       if(done.kind==='done'){assert.equal(done.result.counter,1);if(mode==='reaction'||mode==='self-removing'||mode==='scheduled'||mode==='movement'&&shuffle==='discard')assert.deepEqual(done.result.seen,done.result.order);}
     }finally{normal.close();}
-    let frontier:{representation:'exact'|'particles';outcomes:{current:typeof root;probability:number}[]}|undefined;
+    let frontier:{outcomes:{current:typeof root;mass:ReturnType<typeof probabilityMass>}[]}|undefined;
     try{
-      frontier=nextProbability(root,null,{maximum:8,entropy:{check(){},word(){throw Error('Three members must remain exact');}}});
-      assert.equal(frontier.representation,'exact');assert.equal(frontier.outcomes.length,6);
+      frontier=expandAll(root,null);
+      assert.equal(frontier.outcomes.length,6);
+      const orders=new Set<string>();
       for(const row of frontier.outcomes){
         const stop=row.current.inspect();assert.equal(stop.kind,'call');if(stop.kind!=='call'||stop.call.port!=='shuffled')throw Error('Expected original shuffle boundary');
         const observed=shuffleView.parse(stop.call.input);
-        assert.equal(observed.resolved,guarded,`${shuffle}/${mode}`);
-        const future=nextProbability(row.current,null,{maximum:8,entropy:{check(){},word(){throw Error('Three members must remain exact');}}});
+        assert.equal(observed.resolved,true,`${shuffle}/${mode}: each branch already owns its original shuffled order`);
+        assert.deepEqual(row.mass,probabilityMass(1n,6n));
+        orders.add(JSON.stringify(observed.order));
+        const saved=structuredClone(row.current.snapshot());row.current.close();
+        const resumed=new ProbabilityCurrent(new CardMachine(program,privateCardGraph(saved.context,saved.immutable,saved.nullPrototypes,saved.contextValues)));
+        const future=(()=>{try{return expandAll(resumed,null);}finally{resumed.close();}})();
         try{
-          assert.equal(future.outcomes.length,guarded?1:6,`${shuffle}/${mode}`);
-          for(const next of future.outcomes){const done=next.current.inspect();assert.equal(done.kind,'done');if(done.kind!=='done')throw Error('Expected result');assert.equal(done.result.counter,1);if(guarded)assert.deepEqual(done.result.order,observed.order,'retaining a callback requires retaining its original permutation');assert.deepEqual(done.result.seen,observed.seen,'an order resolution must never execute the callback again');assert.equal(done.result.calls,observed.calls);}
+          assert.equal(future.outcomes.length,1,`${shuffle}/${mode}: concealment must not introduce a second shuffle`);
+          for(const next of future.outcomes){const done=next.current.inspect();assert.equal(done.kind,'done');if(done.kind!=='done')throw Error('Expected result');assert.deepEqual(next.mass,probabilityMass(1n));assert.equal(done.result.counter,1);assert.deepEqual(done.result.order,observed.order,'later observations retain the same permutation even without an in-shuffle callback');assert.deepEqual(done.result.seen,observed.seen,'an order resolution must never execute the callback again');assert.equal(done.result.calls,observed.calls);}
         }finally{for(const next of future.outcomes)next.current.close();}
       }
+      assert.equal(orders.size,6,'all distinct original permutations remain represented');
       assert.deepEqual(machine.storage.export(machine.root),before);
     }finally{for(const row of frontier?.outcomes??[])row.current.close();root.close();}
+  }
+});
+
+test('original random insertion preserves its legal positions through normal concealment and probability continuation',()=>{
+  const actor=defineEntity(resources.exports.actor,{side:0}),pile=defineEntity(cardPiles.exports.kind,undefined);
+  const zone=defineEntity(zones.exports.kind,{capacity:null}),handZone=defineEntity(zones.exports.kind,{capacity:10});
+  const view=z.object({order:z.array(z.number()),card:z.number(),counter:z.number()});
+  const inserted=ruleModules.portEffect<z.infer<typeof view>,null>('inserted');
+  const setup=z.object({count:z.number(),hidden:z.boolean()});
+  const effect=defineEffect<z.infer<typeof setup>,z.infer<typeof view>>(b=>{
+    const owner=b.local<number>(),draw=b.local<number>(),hand=b.local<number>(),discard=b.local<number>(),exhaust=b.local<number>();
+    const rng=b.local<number>(),piles=b.local<number>(),card=b.local<number>();
+    const state=()=>b.read(v=>({order:[...v.query(zones.exports.members,v.get(draw))],card:v.get(card),counter:v.query(random.exports.current,v.get(rng)).counter}));
+    return sequence(
+      b.assign(owner,spawnEntity({definition:actor,owner:null,scope:0,setup:{hp:80,maxHp:80,energy:3,block:0,gold:0}})),
+      b.assign(draw,spawnEntity({definition:zone,owner,scope:0})),b.assign(hand,spawnEntity({definition:handZone,owner,scope:0})),
+      b.assign(discard,spawnEntity({definition:zone,owner,scope:0})),b.assign(exhaust,spawnEntity({definition:zone,owner,scope:0})),
+      b.assign(rng,spawnEntity({definition:stream,owner:null,scope:0,setup:130n})),
+      b.assign(piles,spawnEntity({definition:pile,owner,scope:0,setup:{actor:owner,battle:owner,draw,hand,discard,exhaust,shuffleRng:rng,cardRng:rng,actionScope:0}})),
+      call(cardPiles.exports.initializeDeck,{piles,masters:[],bottled:[],drawPerTurn:0}),
+      rules.forEach(b.read(v=>Array.from({length:v.input.count})),()=>call(cardPiles.exports.create,{piles,definition:basicCards.exports.StrikeRed,upgraded:false,specialData:0,destination:0,shuffle:false,mutable:null})),
+      rules.when(b.read(v=>v.input.hidden),call(zones.exports.conceal,{zone:draw,blocks:[b.read(v=>[...v.query(zones.exports.members,v.get(draw))])],unsupported:false})),
+      call(begin,null),b.assign(card,call(cardPiles.exports.create,{piles,definition:basicCards.exports.DefendRed,upgraded:false,specialData:0,destination:0,shuffle:true,mutable:null})),
+      call(inserted,state()),call(cardPiles.exports.resolveDrawOrder,piles),b.return(state()),
+    );
+  });
+  const definition=linkRules({id:'sts/original-insertion-space',schemas:{setup,result:view,ports:{begin:{input:z.null(),output:z.null()},inserted:{input:view,output:z.null()}}},initialize:()=>({}),entry:effect,definitions:[effect,begin,inserted],modules:[cardPiles,basicCards]});
+  const program=new CardProgram(definition);
+  for(const count of [0,1,3])for(const hidden of [false,true]){
+    const machine=new CardMachine(program,privateCardGraph(program.initial({count,hidden})));
+    assert.equal(machine.advance().kind,'call');const root=new ProbabilityCurrent(machine),normal=root.fork();
+    const before=machine.storage.export(machine.root),initialize=CardProgram.prototype.initial;
+    let probabilities:{outcomes:{current:typeof root;mass:ReturnType<typeof probabilityMass>}[]}|undefined;
+    CardProgram.prototype.initial=()=>{throw Error('Original insertion must continue held currents');};
+    try{
+      const actual=normal.machine.advance(null);assert.equal(actual.kind,'call');if(actual.kind!=='call')throw Error('Expected insertion boundary');
+      const observed=view.parse(actual.call.input),slots=Math.max(1,count),orders=hidden&&count===3?6:1;
+      assert.ok(count===0||observed.order.at(-1)!==observed.card);
+      const saved=structuredClone(normal.snapshot());normal.close();
+      const restored=new ProbabilityCurrent(new CardMachine(program,privateCardGraph(saved.context,saved.immutable,saved.nullPrototypes,saved.contextValues)));
+      const future=(()=>{try{return expandAll(restored,null);}finally{restored.close();}})();
+      const expected=new Map<string,ReturnType<typeof probabilityMass>>();
+      try{
+        assert.equal(future.outcomes.length,slots*orders);
+        for(const row of future.outcomes){
+          const done=row.current.inspect();assert.equal(done.kind,'done');if(done.kind!=='done')throw Error('Expected resolved insertion');
+          assert.ok(count===0||done.result.order.indexOf(done.result.card)<count);
+          assert.equal(done.result.counter,observed.counter);assert.deepEqual(row.mass,probabilityMass(1n,BigInt(slots*orders)));
+          expected.set(JSON.stringify(done.result.order),row.mass);
+        }
+        assert.equal(expected.size,slots*orders);assert.ok(expected.has(JSON.stringify(observed.order)));
+      }finally{for(const row of future.outcomes)row.current.close();}
+      probabilities=expandAll(root,null);assert.equal(probabilities.outcomes.length,slots*orders);
+      const generated=new Map<string,ReturnType<typeof probabilityMass>>();
+      for(const row of probabilities.outcomes){
+        const stop=row.current.inspect();assert.equal(stop.kind,'call');if(stop.kind!=='call')throw Error('Expected insertion boundary');
+        const now=view.parse(stop.call.input);generated.set(JSON.stringify(now.order),row.mass);
+        assert.equal(now.counter,observed.counter);
+        const next=expandAll(row.current,null);
+        try{assert.equal(next.outcomes.length,1);assert.deepEqual(next.outcomes[0]!.current.inspect(),{kind:'done',result:now});}
+        finally{for(const child of next.outcomes)child.current.close();}
+      }
+      assert.deepEqual(generated,expected);assert.deepEqual(machine.storage.export(machine.root),before);
+    }finally{CardProgram.prototype.initial=initialize;for(const row of probabilities?.outcomes??[])row.current.close();normal.close();root.close();}
   }
 });

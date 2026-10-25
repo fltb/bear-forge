@@ -1,17 +1,29 @@
-import {probabilityOperationFor,validateProbabilitySpace,validateCoordinate,generateProbability,forkProbabilityStorage,probabilityResidentBytes,forwardProbabilityReceiver,type ForwardProbability,type ForwardProbabilityResult,type ProbabilityOperation,type ProbabilityStop,type ProbabilityCoordinate,type ProbabilityEntropy,type ProbabilityOutcomes} from './probability.ts';
+import {probabilityOperationFor,type ProbabilityOperation,type ProbabilityStop,type ProbabilityCoordinate} from './probability.ts';
 import {temporaryLocalsFor} from './card-execution-hints.ts';
 import {inheritRuleReplyGuards} from './rules-reply-guards.ts';
 import type { PortShape } from '@bear-forge/contracts/core';
 import type { CardDefinition, CardEffect, CardExpression, CardFrame, CardRoot, CardScope, CardStep, CardStop, CardStorage, CardTrace } from './card.types.ts';
 import { traceWriterFor } from './card-trace.ts';
 import type { TraceWriter } from './card-trace.ts';
-import {cardAdmissionFor} from './card-admission.ts';
+import {cardAdmissionFor,inCardValueContext,cardValueEpoch,inheritCardDefinition} from './card-admission.ts';
+import type {ProbabilityYield} from './probability.ts';
 
 type Frame<S> = CardFrame & { scope: CardScope<S> };
 type Instruction<S> = ((execution: Execution<S>, frame: Frame<S>) => void) & {probability?: ProbabilityOperation<S>};
 type Block<S> = { run: readonly Instruction<S>[]; trace: readonly Omit<CardTrace, 'depth'>[] };
 type Executable<S> = { temporaryLocals:ReadonlyMap<number,(state:unknown)=>boolean>; blocks: readonly Block<S>[]; effects: ReadonlyMap<string, number> };
 const executables = new WeakMap<object, unknown>();
+const scheduledChecks=new WeakMap<object,(root:unknown)=>void>();
+const contextIdentityEpochs=new WeakMap<object,number>();
+/** Objects already available when Program is bound may be held by its code.
+ * Never serialize this process-local epoch; snapshots retain relative roles. */
+export function ruleContextIdentityEpoch(program:object):number{const epoch=contextIdentityEpochs.get(program);if(epoch===undefined)throw Error('Unknown Context identity Program');return epoch;}
+/** Private persistence of renewable ORIGINAL execution. It shares the frame
+ * validator, but must never accept a pending probability replacement. */
+export function validateScheduledContext<S,Setup,P extends {[K in keyof P]:PortShape},R>(program:CardProgram<S,Setup,P,R>,root:CardRoot<S>):void{
+  if(!root||!['call','done','yield'].includes(root.stop?.kind))throw Error('Invalid original execution Context');
+  const check=scheduledChecks.get(program);if(!check)throw Error('Unknown original Program');check(root);
+}
 
 /** Transient cursors are materialized only at an observable stop. All author
  * values/aliases remain owned by storage; the cursors contain no rule state. */
@@ -27,15 +39,15 @@ class Execution<S> {
   readonly plan:Executable<S>;
   readonly observe:((event:CardTrace)=>void)|undefined;
   readonly probability: boolean;
+  readonly instructionQuantum:number|undefined;
   coordinate: ProbabilityCoordinate | undefined;
   readonly publications:unknown[];
-  forwardValue:{value:ForwardProbabilityResult}|undefined;
-  forwardPending:{kernel:ForwardProbability<S>;plan:NonNullable<ReturnType<ForwardProbability['plan']>>;scope:CardScope<S>}|undefined;
-  constructor(storage: CardStorage<CardRoot<S>>, plan: Executable<S>, observe: ((event: CardTrace) => void) | undefined, probability = false, coordinate?: ProbabilityCoordinate, forwardValue?:{value:ForwardProbabilityResult},publications:unknown[] = []) {
-    this.storage=storage;this.plan=plan;this.observe=observe;this.probability=probability;this.coordinate=coordinate;this.forwardValue=forwardValue;this.publications=publications;
+  constructor(storage: CardStorage<CardRoot<S>>, plan: Executable<S>, observe: ((event: CardTrace) => void) | undefined, probability = false, coordinate?: ProbabilityCoordinate, publications:unknown[] = [],instructionQuantum?:number) {
+    this.storage=storage;this.plan=plan;this.observe=observe;this.probability=probability;this.coordinate=coordinate;this.publications=publications;
     const root = storage.root;
     this.writeTrace = traceWriterFor(observe);
-    this.budget = root.budget; this.nextCall = root.nextCall;
+    this.instructionQuantum=instructionQuantum;
+    this.budget = instructionQuantum??root.budget; this.nextCall = root.nextCall;
     const scopes = new Map<number, CardScope<S>>();
     for (const saved of root.frames) {
       let scope = scopes.get(saved.call);
@@ -81,25 +93,18 @@ class Execution<S> {
       do {
         frame.scope = { state: this.storage.root.state, input: frame.input, locals: frame.locals };
         const instruction = block.run[frame.index]!;
-        if(!this.probability&&instruction.probability?.forward&&!this.forwardValue&&forwardProbabilityReceiver(this.storage)?.enabled?.()!==false){
-          const kernel=instruction.probability.forward,plan=kernel.plan(frame.scope);
-          if(plan){
-            const space=instruction.probability.space(frame.scope);
-            if(space.kind!=='boundary'||!instruction.probability.resolveForward)throw Error('Forward probability requires a result-bearing boundary');
-            validateProbabilitySpace(space);this.forwardPending={kernel,plan,scope:frame.scope};this.stop={kind:'chance',space};break;
-          }
-        }
         if (this.probability && instruction.probability && this.coordinate === undefined) {
           // Suspend BEFORE executing the operation, charging or tracing it.
           // All previous instructions remain committed in this exact Context.
           const space = instruction.probability.space(frame.scope);
-          validateProbabilitySpace(space);
           this.stop = {kind:'chance',space};
           break;
         }
-        if (this.budget !== Infinity && this.budget-- <= 0) {
-          this.stop = { kind: 'fault', error: { kind: 'fault', code: 'budget_exceeded', message: 'Card step budget exceeded' } }; break;
+        if (this.budget !== Infinity && this.budget <= 0) {
+          this.stop = this.instructionQuantum!==undefined?{kind:'yield'}:
+            { kind: 'fault', error: { kind: 'fault', code: 'budget_exceeded', message: 'Card step budget exceeded' } }; break;
         }
+        if(this.budget!==Infinity)this.budget--;
         if (this.writeTrace) this.writeTrace(block.trace[frame.index]!, depth);
         else if (this.observe) this.observe({ ...block.trace[frame.index]!, depth });
         instruction(this, frame);
@@ -114,7 +119,7 @@ class Execution<S> {
         call: frame.call, target: frame.target, items: frame.items, item: frame.item };
     }
     root.frames = frames; root.nextCall = this.nextCall;
-    if(this.budget!==Infinity)root.budget = this.budget;
+    if(this.instructionQuantum===undefined&&this.budget!==Infinity)root.budget = this.budget;
     root.waiting = this.waiting; root.stop = this.stop;
   }
 }
@@ -125,17 +130,11 @@ function compileInstruction<S>(step: CardStep<S>, children: readonly number[] | 
       const kernel = probabilityOperationFor(step.run);
       const instruction: Instruction<S> = (execution, frame) => {
       const coordinate = execution.coordinate;
-      if (execution.probability && kernel && coordinate === undefined) throw Error('Missing probability selection');
-      const forward=execution.forwardValue&&kernel?.resolveForward,started=forward?performance.now():0;
-      let value:any;
-      try{value=forward?forward(frame.scope,execution.forwardValue!.value):execution.probability&&kernel?(typeof coordinate==='bigint'?kernel.resolve(frame.scope,coordinate):kernel.resolveSample!(frame.scope,coordinate!.value)):step.run(frame.scope);}
-      finally{if(forward)forwardProbabilityReceiver(execution.storage)?.charge?.(performance.now()-started);}
+      const value=execution.probability&&kernel?kernel.resolve(frame.scope,coordinate!):step.run(frame.scope);
       if (execution.probability && kernel) execution.coordinate = undefined;
-      execution.forwardValue=undefined;
       if(kernel?.publication){
-        const started=performance.now();
-        try{const publication=kernel.publication(frame.scope,value);if(publication!==undefined)execution.publications.push(publication);}
-        finally{if(!execution.probability)forwardProbabilityReceiver(execution.storage)?.charge?.(performance.now()-started);}
+        const publication=kernel.publication(frame.scope,value);
+        if(publication!==undefined)execution.publications.push(publication);
       }
       if(execution.probability&&kernel?.constraints)for(const condition of kernel.constraints(frame.scope,value))execution.publications.push({kind:'probability-constraint',...condition});
       // CardExpression's public result is unconstrained and can include a
@@ -196,10 +195,12 @@ export class CardProgram<S, Setup, P extends { [K in keyof P]: PortShape }, R> {
   readonly definition: CardDefinition<S, Setup, P, R>;
   private readonly admitState:((state:unknown)=>void)|undefined;
   constructor(definition: CardDefinition<S, Setup, P, R>) {
+    contextIdentityEpochs.set(this,cardValueEpoch());
     this.admitState=cardAdmissionFor(definition);
     if (definition.project !== undefined && typeof definition.project !== 'function') throw Error('Invalid card projection');
     this.definition = Object.freeze({ ...definition, effects: Object.freeze([...definition.effects]) });
     inheritRuleReplyGuards(definition.effects,this.definition.effects);
+    inheritCardDefinition(definition,this.definition);
     const blocks: (readonly CardStep<S>[])[] = [], names: string[] = [], temporaryLocals=new Map<number,(state:unknown)=>boolean>();
     const active = new Set<readonly CardStep<S>[]>();
     const register = (steps: readonly CardStep<S>[], name: string): number => {
@@ -240,12 +241,16 @@ export class CardProgram<S, Setup, P extends { [K in keyof P]: PortShape }, R> {
       trace: block.map((step, position) => ({ effect: names[index]!, block: index, index: position, kind: step.kind })),
     })) };
     executables.set(this, compiled);
+    scheduledChecks.set(this,root=>this.validateContext(root as CardRoot<S>,true));
   }
   initial(setup: Setup, budget = Number.MAX_SAFE_INTEGER): CardRoot<S> {
-    return { state: this.definition.initialize(setup), frames: [{ block: this.effects.get(this.definition.entry)!, index: 0, input: setup, locals: Object.create(null), call: 0, target: null, items: null, item: 0 }], nextCall: 1, waiting: null, stop: null, budget };
+    return { state: inCardValueContext(()=>this.definition.initialize(setup)), frames: [{ block: this.effects.get(this.definition.entry)!, index: 0, input: setup, locals: Object.create(null), call: 0, target: null, items: null, item: 0 }], nextCall: 1, waiting: null, stop: null, budget };
   }
   validate(root: CardRoot<S>): void {
-    if (!root || !Array.isArray(root.frames) || !Number.isSafeInteger(root.nextCall) || root.nextCall < 1 || !Number.isSafeInteger(root.budget) || root.budget < 0 || !root.stop || !['call', 'done'].includes(root.stop.kind)) throw Error('Invalid card snapshot root');
+    this.validateContext(root,false);
+  }
+  private validateContext(root:CardRoot<S>,scheduled:boolean):void{
+    if (!root || !Array.isArray(root.frames) || !Number.isSafeInteger(root.nextCall) || root.nextCall < 1 || !Number.isSafeInteger(root.budget) || root.budget < 0 || !root.stop || !(scheduled?['call','done','yield']:['call','done']).includes(root.stop.kind)) throw Error('Invalid card snapshot root');
     for (const frame of root.frames) {
       const block = this.blocks[frame.block];
       if (!block || !Number.isInteger(frame.index) || frame.index < 0 || frame.index > block.length || !Number.isSafeInteger(frame.call) || frame.call < 0 || frame.call >= root.nextCall || !frame.locals || typeof frame.locals !== 'object' || Array.isArray(frame.locals) || frame.target !== null && typeof frame.target !== 'string' || frame.items !== null && !Array.isArray(frame.items) || !Number.isSafeInteger(frame.item) || frame.item < 0 || frame.items && frame.item > frame.items.length) throw Error('Invalid card frame');
@@ -255,6 +260,11 @@ export class CardProgram<S, Setup, P extends { [K in keyof P]: PortShape }, R> {
       if (!wait || wait.frame !== root.frames.length - 1 || !root.frames.length || wait.to !== null && typeof wait.to !== 'string' || !wait.call || typeof wait.call.port !== 'string' || !Object.hasOwn(this.definition.schemas.ports, wait.call.port)) throw Error('Invalid card wait');
       const frame = root.frames[wait.frame]!, step = this.blocks[frame.block]![frame.index - 1];
       if (step?.kind !== 'request' || step.to !== wait.to || wait.call !== root.stop.call) throw Error('Invalid request continuation');
+    } else if(root.stop.kind==='yield'){
+      if(root.waiting!==null||!root.frames.length)throw Error('Invalid yielded probability Context');
+      const frame=root.frames.at(-1)!,plan=executables.get(this)! as Executable<S>,instruction=plan.blocks[frame.block]!.run[frame.index];
+      // Original execution may yield before any instruction, including RNG.
+      if(!instruction)throw Error('Yield is not before an unexecuted instruction of this kernel');
     } else if (root.waiting !== null || root.frames.length) throw Error('Invalid card terminal snapshot');
     this.admitState?.(root.state);
   }
@@ -292,134 +302,87 @@ export class CardMachine<S, Setup, P extends { [K in keyof P]: PortShape }, R> {
   constructor(program: CardProgram<S, Setup, P, R>, storage: CardStorage<CardRoot<S>>, trace?: (event: CardTrace) => void) { this.program = program; this.storage = storage; this.trace = trace; }
   get root() { return this.storage.root; }
   advance(reply?: unknown): CardStop<P, R> {
-    if (this.root.stop?.kind === 'chance') throw Error('A probability continuation requires its probability kernel');
+    if (this.root.stop?.kind === 'chance'||this.root.stop?.kind==='yield') throw Error('A probability continuation requires its probability kernel');
     return this.advanceWithKernel(false,reply) as CardStop<P,R>;
+  }
+  /** Host scheduling of the REAL execution. This uses original operations,
+   * including their original RNG, and never enters the probability kernel.
+   * The host retains this current between slices and exposes only normal IO. */
+  advanceScheduled(reply?:unknown,instructions=4096,committed?:()=>void):CardStop<P,R>|ProbabilityYield{
+    if(!Number.isSafeInteger(instructions)||instructions<1)throw Error('Invalid instruction slice');
+    if(this.root.stop?.kind==='chance')throw Error('A probability continuation requires its probability kernel');
+    if(this.root.stop?.kind==='yield'&&reply!==undefined)throw Error('A scheduling continuation takes no reply');
+    return this.advanceWithKernel(false,reply,committed,instructions) as CardStop<P,R>|ProbabilityYield;
   }
   /** The same interpreter, with suspension only at registered random/order
    * operations. This private search boundary is not a public Instance IO port. */
-  advanceProbability(reply?: unknown): CardStop<P,R> | ProbabilityStop {
-    return this.advanceWithKernel(true,reply);
+  advanceProbability(reply?: unknown,committed?:()=>void): CardStop<P,R> | ProbabilityStop {
+    return this.advanceWithKernel(true,reply,committed) as CardStop<P,R>|ProbabilityStop;
   }
-  /** Invoke only the pending operation's static sampler. This does not advance
-   * any instruction or change the Context. Generated values are committed once
-   * by the original atom after a child accepts its sample coordinate. */
-  sampleProbability(source: ProbabilityEntropy): unknown {
+  /** The original interpreter with a renewable instruction slice. A slice
+   * never changes rule state, the original budget, probability or terminal value. */
+  advanceExactProbability(reply?:unknown,committed?:()=>void,instructions=4096):CardStop<P,R>|ProbabilityStop|ProbabilityYield{
+    return this.advanceWithKernel(true,reply,committed,instructions);
+  }
+  /** Read the pending marker's original input without consuming its edge.
+   * The input is retained in the current frame and restored with that frame. */
+  probabilityBoundaryValue():unknown {
     const root=this.root;
-    if(root.stop?.kind!=='chance'||root.stop.space.kind!=='sampled')throw Error('No sampled probability operation');
     const frame=root.frames.at(-1)!,plan=executables.get(this.program)! as Executable<S>;
-    const kernel=plan.blocks[frame.block]!.run[frame.index]!.probability;
-    if(!kernel?.sample||!kernel.resolveSample)throw Error('Missing probability sampler');
-    source.check();
-    return kernel.sample({state:root.state,input:frame.input,locals:frame.locals},source);
+    const kernel=plan.blocks[frame.block]!.run[frame.index]!.probability!;
+    // Storage may share private publication leaves across reads. This method
+    // hands the projection to search callers, which must not mutate that cache.
+    return structuredClone(this.storage.export(kernel.boundaryValue!({state:root.state,input:frame.input,locals:frame.locals})));
   }
-  partitionProbability(hint:unknown,maximum:number,source:ProbabilityEntropy):ProbabilityOutcomes|undefined {
-    const root=this.root;if(root.stop?.kind!=='chance')throw Error('No current probability operation');
-    if(!Number.isSafeInteger(maximum)||maximum<1||maximum>64)throw Error('Invalid probability partition capacity');
-    const frame=root.frames.at(-1)!,plan=executables.get(this.program)! as Executable<S>;
-    const kernel=plan.blocks[frame.block]!.run[frame.index]!.probability;
-    source.check();const result=kernel?.partition?.({state:root.state,input:frame.input,locals:frame.locals},hint,maximum,source);source.check();
-    if(result){
-      if(!['exact','particles'].includes(result.representation)||!result.outcomes.length||result.outcomes.length>maximum||result.outcomes.some(row=>!Number.isFinite(row.probability)||row.probability<=0)||Math.abs(result.outcomes.reduce((sum,row)=>sum+row.probability,0)-1)>1e-12)throw Error('Invalid probability partition mass');
-      for(const row of result.outcomes)validateCoordinate(root.stop.space,row.coordinate);
-    }
-    return result;
+  /** No original operation is executed. Root returns are observable, and a
+   * stored caller result is conservatively observable even if later unused. */
+  probabilityCoordinatesEquivalent():boolean{
+    const root=this.root;
+    if(root.stop?.kind!=='chance'||root.frames.length<2)return false;
+    const frame=root.frames.at(-1)!;
+    if(frame.target!==null)return false;
+    const plan=executables.get(this.program)! as Executable<S>;
+    return plan.blocks[frame.block]!.run[frame.index]?.probability?.discardedReturnEquivalent===true;
   }
-  private advanceWithKernel(probability: boolean, reply?: unknown): CardStop<P,R> | ProbabilityStop {
+  private advanceWithKernel(probability: boolean, reply?: unknown,committed?:()=>void,instructions?:number): CardStop<P,R> | ProbabilityStop | ProbabilityYield {
     const root = this.root;
     let coordinate: ProbabilityCoordinate | undefined;
-    if (root.stop?.kind === 'chance') {validateCoordinate(root.stop.space,reply); coordinate=reply;}
+    if (root.stop?.kind === 'chance') {
+      if(root.stop.space.kind==='unavailable')throw Error('Unavailable probability space has no valid coordinate: '+root.stop.space.reason);
+      coordinate=reply as ProbabilityCoordinate;
+    }
     if (root.stop?.kind === 'done' || root.stop?.kind === 'fault') return this.current();
     const publications:unknown[]=[];this.publications=[];
-    let execution = new Execution(this.storage, executables.get(this.program)! as Executable<S>, this.trace, probability, coordinate,undefined,publications);
+    const execution = new Execution(this.storage, executables.get(this.program)! as Executable<S>, this.trace, probability, coordinate,publications,instructions);
     try {
       if (root.waiting) {
         const wait = root.waiting, frame = execution.frames[wait.frame]!;
         if (wait.to !== null) frame.locals[wait.to] = this.storage.own(this.storage.export(reply));
       }
-      for(;;){
-        execution.run();
-        if(!execution.forwardPending)break;
-        // Publish the still-current, unexecuted marker before making COW
-        // branches. Rebind cursors afterwards so temporary locals never alias
-        // a graph page that was published and forked midway through a run.
-        execution.publish();this.storage.boundary?.();
-        const value=this.captureForward(execution.forwardPending);
-        execution=new Execution(this.storage,executables.get(this.program)! as Executable<S>,this.trace,false,undefined,{value},publications);
-      }
+      inCardValueContext(()=>execution.run());
     } catch (error) {
       execution.waiting = null;
       execution.stop = { kind: 'fault', error: { kind: 'fault', code: 'program_failed', message: error instanceof Error ? error.message : String(error) } };
     }
     execution.publish();
-    if(publications.length){
-      const started=performance.now();
-      try{this.publications=this.storage.export(publications);}
-      finally{if(!probability)forwardProbabilityReceiver(this.storage)?.charge?.(performance.now()-started);}
-    }
+    // Search owns a resumable edge. Record consumption at the actual commit,
+    // before publication export or boundary collection can throw.
+    committed?.();
+    if(publications.length)this.publications=this.storage.export(publications);
     this.storage.boundary?.();
-    try { return root.stop?.kind === 'chance' ? this.storage.export(root.stop) as ProbabilityStop : this.current(); }
+    try { return root.stop?.kind === 'chance'||root.stop?.kind==='yield' ? this.storage.export(root.stop) as ProbabilityStop|ProbabilityYield : this.current(); }
     catch (error) {
+      // The original continuation has already committed. Search must retain
+      // that exact boundary if exporting/projecting it fails; replacing it
+      // with a fault would destroy the successor and its remaining space.
+      if(probability||instructions!==undefined)throw error;
       root.waiting = null;
       root.stop = { kind: 'fault', error: { kind: 'fault', code: 'program_failed', message: error instanceof Error ? error.message : String(error) } };
       return this.current();
     }
   }
-  private captureForward(pending:NonNullable<Execution<S>['forwardPending']>):ForwardProbabilityResult {
-    const {kernel,plan,scope}=pending,started=performance.now();
-    const basis=this.storage.export(kernel.project(scope));
-    if(!Number.isSafeInteger(plan.maximum)||plan.maximum<1||plan.maximum>8||!Number.isFinite(plan.milliseconds)||plan.milliseconds<0||plan.milliseconds>2000||!plan.until)throw Error('Invalid forward probability budget');
-    const owned=new Set<CardMachine<S,Setup,P,R>>(),queue:{machine:CardMachine<S,Setup,P,R>;probability:number}[]=[],leaves:typeof queue=[],outcomes:ForwardProbabilityResult['outcomes']=[];
-    let random={...plan.random},nodes=0,advances=0,words=0,reason:string|null=null,representation:ForwardProbabilityResult['representation']='exact';
-    class Limited extends Error {}
-    const receiver=forwardProbabilityReceiver(this.storage);
-    const check=(additionalNodes=0,additionalAdvances=0)=>{
-      const milliseconds=performance.now()-started;
-      if(milliseconds>=plan.milliseconds)reason='forward-wall-budget';
-      else if(probabilityResidentBytes(this.storage)>=1024**3)reason='forward-memory-budget';
-      else reason=receiver?.limit?.({milliseconds,nodes:nodes+additionalNodes,advances:advances+additionalAdvances,words})??null;
-      if(reason)throw new Limited();
-    };
-    const entropy={check,word:()=>{check();const next=kernel.word(random);random=next.random;words++;return next.value;}};
-    const execute=<T>(phase:'fork'|'advance'|'cleanup',operation:()=>T):T=>{
-      if(phase!=='cleanup')check(Number(phase==='fork'),Number(phase==='advance'));
-      if(phase==='fork'){if(nodes>=10000){reason='forward-node-budget';throw new Limited();}nodes++;}
-      if(phase==='advance')advances++;
-      return operation();
-    };
-    const fork=(parent:CardMachine<S,Setup,P,R>)=>{
-      check(1);if(nodes>=10000){reason='forward-node-budget';throw new Limited();}
-      const storage=forkProbabilityStorage(parent.storage);if(!storage){reason='forward-storage-unavailable';throw new Limited();}
-      const child=new CardMachine(parent.program,storage);owned.add(child);nodes++;return child;
-    };
-    const advance=(machine:CardMachine<S,Setup,P,R>,coordinate:ProbabilityCoordinate)=>{check(0,1);advances++;machine.advanceProbability(coordinate);};
-    try{
-      const first=fork(this);advance(first,0n);queue.push({machine:first,probability:1});
-      while(queue.length){
-        check();const node=queue.shift()!,stop=node.machine.root.stop as CardStop<P,R>|ProbabilityStop;
-        if(stop.kind==='fault')throw Error('Original forward probability execution failed: '+stop.error.message);
-        if(stop.kind!=='chance'){reason='forward-scope-exited';throw new Limited();}
-        if(stop.space.kind==='boundary'&&stop.space.name===plan.until){
-          const value=node.machine.storage.export(kernel.project({state:node.machine.root.state,input:scope.input,locals:scope.locals}));
-          outcomes.push({probability:node.probability,value});leaves.push(node);continue;
-        }
-        const choices=generateProbability(stop.space,plan.maximum-queue.length-outcomes.length,entropy,source=>execute('advance',()=>node.machine.sampleProbability(source)));
-        if(choices.representation==='particles')representation='particles';
-        for(const choice of choices.outcomes){const child=fork(node.machine);advance(child,choice.coordinate);queue.push({machine:child,probability:node.probability*choice.probability});}
-        node.machine.storage.close?.();owned.delete(node.machine);
-      }
-      check();
-      // The receiver runs while these are live successors of this very first
-      // execution. Its continuation shares this generation's entropy/budget;
-      // source leaves remain borrowed and are closed below on every outcome.
-      receiver?.receive({representation,maximum:plan.maximum,outcomes:leaves.map(node=>({storage:node.machine.storage,probability:node.probability})),entropy,execute});
-    }catch(error){if(!(error instanceof Limited))throw error;outcomes.length=0;}
-    finally{for(const child of owned)child.storage.close?.();}
-    const result={representation,basis,outcomes,random,reason,cost:{milliseconds:performance.now()-started,nodes,advances,words}};
-    receiver?.complete?.(result);
-    return result;
-  }
   current(): CardStop<P, R> {
-    if (this.root.stop?.kind === 'chance') throw Error('A probability continuation has no public IO stop');
+    if (this.root.stop?.kind === 'chance'||this.root.stop?.kind==='yield') throw Error('A probability continuation has no public IO stop');
     const stop = this.storage.export(this.root.stop);
     if (!this.program.definition.project || stop.kind === 'fault') return stop;
     const projected = this.program.definition.project(stop);

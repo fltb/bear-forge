@@ -1,5 +1,5 @@
-import { writeFile, readFile } from 'node:fs/promises';
-import { createCardLoader, replayCard, readCardTrace } from '@bear-forge/runtime-card';
+import { writeFile } from 'node:fs/promises';
+import { createCardLoader, readCardTrace } from '@bear-forge/runtime-card';
 import { createGameBinder } from '@bear-forge/game-host';
 import { cardDefinition as forge, game as forgeGame, baseDeck } from '@bear-forge/forge-duel';
 import { cardDefinition as ddz, game as ddzGame } from '@bear-forge/doudizhu';
@@ -29,24 +29,13 @@ export async function runCardGame(options: { game: CardGameName; controlled: boo
     }, async onEvent() { return { kind: 'reply', value: null }; } }));
     let steps = 0, state = unwrap(await game.inspect());
     while (!['ended', 'fault'].includes(state.kind)) { if (++steps > 2000) throw Error('Card example exceeded decision limit'); state = unwrap(await game.run()).state; }
-    let count = 0, replayVerified = false;
+    let count = 0;
     if (options.records) {
       const records = unwrap(await loaded.capture.read(instance.id, { after: null, limit: 10000 })).records;
       const coreTrace = unwrap(readCardTrace(loaded, instance.id));
-      unwrap(await replayCard(definition, records, { controlled: options.controlled, coreTrace, ...budget }));
       await writeFile(options.records, JSON.stringify({ rule: definition.id, records, coreTrace }, null, 2));
-      count = records.length; replayVerified = true;
+      count = records.length;
     }
-    return { backend: 'card', controlled: options.controlled, game: options.game, steps, state, records: count, replayVerified };
+    return { backend: 'card', controlled: options.controlled, game: options.game, steps, state, records: count };
   } finally { await game.close(); await loaded.capture?.release(instance.id); }
-}
-
-export async function replayCardGame(options: { game: CardGameName; records: string; controlled: boolean }) {
-  if (options.game === 'sts') throw Error('STS replay is disabled');
-  const definition: any = games[options.game].definition;
-  const data = JSON.parse(await readFile(options.records, 'utf8'));
-  if (data.rule !== definition.id || !Array.isArray(data.records)) throw Error('Record rule mismatch');
-  const result = await replayCard(definition, data.records, { controlled: options.controlled, ...(Array.isArray(data.coreTrace) ? { coreTrace: data.coreTrace } : {}) });
-  if (!result.ok) throw Error(result.error.message);
-  return { game: options.game, replayVerified: true, records: data.records.length, coreSteps: data.coreTrace?.length ?? null };
 }

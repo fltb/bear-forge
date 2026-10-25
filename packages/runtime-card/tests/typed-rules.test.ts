@@ -5,12 +5,12 @@ import { promisify } from 'node:util';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createCardLoader, fileSnapshotStore, replayCard } from '../src/index.ts';
+import { createCardLoader, fileSnapshotStore } from '../src/index.ts';
 import { definition, initializations } from './fixtures/typed-rules.ts';
 const unwrap=<T>(result:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!result.ok)throw Error(JSON.stringify(result.error));return result.value;};
 const exec=promisify(execFile);
 
-test('typed rules run through real native/controlled Instance and replay with identical requests and results',async()=>{
+test('typed rules run through real native/controlled Instance with original requests, results and single initialization',async()=>{
   const startCount=initializations;
   for(const controlled of [false,true]){
     const loaded=unwrap(await createCardLoader({controlled,recordCore:true}).load(definition));
@@ -23,11 +23,12 @@ test('typed rules run through real native/controlled Instance and replay with id
     unwrap(await instance.bind({choose:async()=>({kind:'reply',value:11})}));unwrap(await instance.run());
     const done=unwrap(await instance.inspect());assert.equal(done.kind,'done');if(done.kind!=='done')throw Error('Expected done');assert.equal(done.result,14);
     const records=unwrap(await loaded.capture!.read(instance.id,{after:null,limit:100})).records;
-    assert.equal((await replayCard(definition,records,{controlled})).ok,true);
+    assert.deepEqual(records.filter(row=>row.kind==='returned').map(row=>row.reply.output),[3,11]);
+  assert.equal(records.at(-1)?.kind,'completed');
     await instance.close();await loaded.capture!.release(instance.id);
   }
-  // Two actual starts plus two explicit replay starts, never a start per resume.
-  assert.equal(initializations-startCount,4);
+  // One actual start per execution mode, never a restart from captured inputs.
+  assert.equal(initializations-startCount,2);
 });
 
 test('typed caller locals, module data and outbox fork independently after an actual commit',async()=>{

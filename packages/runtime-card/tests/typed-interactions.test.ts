@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { mkdtemp,rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createCardLoader,fileSnapshotStore,replayCard } from '../src/index.ts';
+import { createCardLoader,fileSnapshotStore } from '../src/index.ts';
 import { definition,initializations,componentInitializations } from './fixtures/typed-interactions.ts';
 const unwrap=<T>(x:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!x.ok)throw Error(JSON.stringify(x.error));return x.value;};
 const exec=promisify(execFile);
@@ -18,7 +18,8 @@ for(const controlled of [false,true])test(`replacement and immediate dispatch us
   unwrap(await instance.bind({choose:async()=>({kind:'reply',value:5})}));unwrap(await instance.run());
   stop=unwrap(await instance.inspect());assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('done missing');assert.equal(stop.result,12);
   const records=unwrap(await loaded.capture!.read(instance.id,{after:null,limit:100})).records;
-  assert.equal((await replayCard(definition,records,{controlled})).ok,true);
+  assert.deepEqual(records.filter(row=>row.kind==='returned').map(row=>row.reply.output),[7,5]);
+  assert.equal(records.at(-1)?.kind,'completed');
   await instance.close();await loaded.capture!.release(instance.id);
 });
 

@@ -8,4 +8,4 @@ export type {InteractiveCommand,InteractiveRecord,InteractiveStatus,InteractiveO
 export type {GameEvent,StsEvent} from './game.schemas.ts';
 export {createSearchPolicy} from './search/policy.ts';
 export type {StsSearchOptions} from './search/policy.ts';
-export {createSearchExperiment, SearchRegistrationSchema} from './search/experiment.ts';
+export {createSearchExperiment, searchRegistration} from './search/experiment.ts';

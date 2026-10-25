@@ -1,11 +1,13 @@
 import {rules} from '../src/rules/execution.ts';
-import {probabilityTrackingFor} from '../../../packages/runtime-card/src/probability-tracking.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {createGameBinder} from '@bear-forge/game-host';
 import {CardProgram, CardMachine} from '@bear-forge/card-engine';
-import {PolicyRouter, defaultSearchLimits, type PolicyRequest, type SearchCurrent} from '@bear-forge/policies';
+import {PolicyRouter, type PolicyRequest} from '@bear-forge/policies';
+import type {GameHandle} from '@bear-forge/contracts/loading';
+import {registerCurrentSource} from '../../../packages/game-host/src/current.ts';
+import {closePolicyWork} from '../../../packages/policies/src/search/work.ts';
 import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
 import {stateOf} from '../../../packages/card-engine/src/rules-module-internal.ts';
 import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
@@ -15,9 +17,11 @@ import {createExperimentRunner, type Registration} from '@bear-forge/experiments
 import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {position,baseline} from '../src/search/evaluation.ts';
+import {chooseAdventure} from '../src/search/layered.ts';
 import {potionRewardCapacityFixture} from './adventure-case-fixture.ts';
-import {createStsContinuation} from '../src/search/current.ts';
+import {takeStsSearchCurrent,stsExactDomain} from '../src/search/current-session.ts';
+import {readStsCurrent} from '../src/search/probability-current.ts';
+import {ProbabilityExpansion} from '../../../packages/runtime-card/src/probability-expansion.ts';
 import {createSearchPolicy} from '../src/search/policy.ts';
 import {publicDecision, publicEvents, publicKey} from '../src/search/information.ts';
 import {combatContentDefinition} from './combat-content-fixture.ts';
@@ -35,11 +39,11 @@ import type {StsEvent} from '../src/game.schemas.ts';
 const unwrap = <T>(r: {ok: true; value: T} | {ok: false; error: unknown}): T => {
   if (!r.ok) throw Error(JSON.stringify(r.error)); return r.value;
 };
-const limits = {...defaultSearchLimits, mode: 'work' as const, worlds: 1, attempts: 1, simulations: 4, decisions: 2};
+function source(game:GameHandle<StsTypes>){const fork=async()=>unwrap(await game.fork!());registerCurrentSource(fork,game);return fork;}
 const signal = new AbortController().signal;
 const cursor = {state: 76, position: 0};
 const fixtureSeed = '284563';
-test('public fallback leaves a full-belt reward instead of repeatedly claiming a legal no-op',()=>{
+test('public adventure preference leaves a full-belt reward instead of repeatedly claiming a legal no-op',()=>{
   const definition=potionRewardCapacityFixture([],[potionId.LIQUID_BRONZE,potionId.SWIFT_POTION],[potionId.ENERGY_POTION]);
   const program=new CardProgram(definition),graph=privateCardGraph(program.initial({seed:'130'},100_000_000)),machine=new CardMachine(program,graph);
   const collect=(initial:ReturnType<typeof machine.advance>)=>{
@@ -49,12 +53,12 @@ test('public fallback leaves a full-belt reward instead of repeatedly claiming a
   };
   try{
     const full=collect(machine.advance());
-    const choice=Number(baseline(position({observation:observe(full),actions:full.actions,events:[]})));
+    const choice=chooseAdventure({observation:observe(full),actions:full.actions,events:[]},cursor).action.bits;
     assert.equal(describeAction(observe(full),choice).kind,'leave');
-    // Exercise the unchanged original discard path once, then the fallback
+    // Exercise the unchanged original discard path once, then the public preference
     // should claim the now-available reward from that current state.
     const freed=collect(machine.advance({bits:0xc0000000}));
-    const take=Number(baseline(position({observation:observe(freed),actions:freed.actions,events:[]})));
+    const take=chooseAdventure({observation:observe(freed),actions:freed.actions,events:[]},cursor).action.bits;
     assert.equal(describeAction(observe(freed),take).kind,'take-potion');
     const claimed=collect(machine.advance({bits:take}));
     assert.deepEqual(claimed.game.rewards!.potions,[]);
@@ -76,59 +80,33 @@ async function realGame(character: 'ironclad' | 'volibear') {
   return {game, loaded, request, deliveries, act, async close() {await game.close(); await loaded.capture?.release(instance.id);}};
 }
 
-// Actual-current continuation checks. Root Contexts are allowed; weighted
-// expansion of unrevealed futures is a separate integration obligation.
-for(const character of ['ironclad','volibear'] as const)test(`${character}: next(current) forks the waiting Context without initialization or historical inputs`,async()=>{
-  const real=await realGame(character),adapter=createStsContinuation(signal);
-  const owned:SearchCurrent[]=[];
-  const initialize=CardProgram.prototype.initial;
-  let iterator:ReturnType<typeof adapter.next>|undefined;
+// The same production Context is the root, including original control state.
+// Inspection windows never classify an unfinished frontier as a solved action.
+for(const character of ['ironclad','volibear'] as const)test(`${character}: exact next forks the full waiting Context without initialization or historical inputs`,async()=>{
+  const real=await realGame(character),initialize=CardProgram.prototype.initial;
+  const root=await takeStsSearchCurrent(source(real.game),real.deliveries().map(e=>e.event));
+  const view=readStsCurrent(root.current,root.events),domain=stsExactDomain(root.current.machine.program,view.decision.observation,root.events.length);
+  let expansion=domain.next(root,String(view.decision.actions[0]!.bits));
   try{
-    const before=structuredClone(await real.request());
-    CardProgram.prototype.initial=function(){throw Error('Search must not initialize a program');};
-    const root=await adapter.take(unwrap(await real.game.fork!()),real.deliveries().map(e=>e.event));owned.push(root);
-    const parent=structuredClone(root.position);
-    iterator=adapter.next(root);
-    const first=await iterator.next();assert.equal(first.done,false);if(first.done)throw Error('Expected first child');owned.push(first.value.outcomes[0]!.current);
-    assert.equal(first.value.action,parent.actions[0]!.key);
-    assert.deepEqual(root.position,parent);assert.deepEqual(await real.request(),before);
-    // Disposing the lazy enumerator must leave yielded continuations alive.
-    await iterator.return();
-    const nested=adapter.next(first.value.outcomes[0]!.current);
-    try{
-      const child=await nested.next();
-      if(!child.done){
-        owned.push(child.value.outcomes[0]!.current);
-        const from=JSON.parse(first.value.outcomes[0]!.current.position.information),to=JSON.parse(child.value.outcomes[0]!.current.position.information);
-        assert.equal(to.observation.history.length,from.observation.history.length+1,'one current input per successor');
-      }
-    }finally{await nested.return();}
-    assert.deepEqual(await real.request(),before);
-    await assert.rejects(adapter.next(root).next(),/already expanded/);
-  }finally{
-    CardProgram.prototype.initial=initialize;
-    await iterator?.return();
-    for(const current of owned.reverse())await current.close();
-    await real.close();
-  }
+    const before=structuredClone(await real.request()),parent=domain.save(root);
+    CardProgram.prototype.initial=()=>{throw Error('Search must not initialize a program');};
+    assert.deepEqual(view.decision,publicDecision(before,real.deliveries()));
+    for(let step=0;step<32&&!expansion.complete;step++)expansion.step();
+    const saved=expansion.save();expansion.close();expansion=domain.restoreExpansion(saved);
+    assert.deepEqual(expansion.save(),saved,'restore retains the exact current prefix and unopened support');
+    assert.deepEqual(domain.save(root),parent);assert.deepEqual(await real.request(),before);
+    if(!expansion.complete)assert.equal(expansion.step(),true);
+    assert.deepEqual(domain.save(root),parent);assert.deepEqual(await real.request(),before);
+  }finally{CardProgram.prototype.initial=initialize;expansion.close();domain.close(root);await real.close();}
 });
 
-test('R1/R2 without an actual host current fail explicitly',async()=>{
-  const real=await realGame('ironclad');
-  try{
-    const request=await real.request(),input={request,visibleHistory:real.deliveries(),memory:{},random:cursor,signal};
-    for(const algorithm of ['r1','r2'] as const){
-      const policy=createSearchPolicy({character:'ironclad',algorithm,limits});
-      await assert.rejects(policy.decide(input),/actual current Context/);
-      assert.deepEqual(await real.request(),request);
-    }
-  }finally{await real.close();}
-});
+
 
 test('real PolicyRouter commits evidence only for accepted actions and restores the current Context directly', async () => {
   const real = await realGame('ironclad');
+  const policy = createSearchPolicy({character:'ironclad',forkCurrent:source(real.game)});
+  const initialize=CardProgram.prototype.initial;
   try {
-    const policy = createSearchPolicy({character: 'ironclad', algorithm: 'r0', limits});
     const router = new PolicyRouter({'0': policy}, 913);
     const initial = router.snapshot();
     const binding = router.binding('0'), request = await real.request();
@@ -136,55 +114,53 @@ test('real PolicyRouter commits evidence only for accepted actions and restores 
     assert.deepEqual(router.snapshot(), initial);
     assert.deepEqual(router.prepare(null).state, initial, 'discarded proposals do not commit');
     router.begin();
-    unwrap(await real.game.bind(binding));
+    // Match the runner's current-dependent preparation: obtain the proposal
+    // while the host is parked, then deliver it through the real binding.
+    const reply=await binding.onRequest(request,{signal});
+    unwrap(await real.game.bind({...binding,onRequest:async()=>reply}));
     const next = unwrap(await real.game.run()), prepared = router.prepare(next.accepted);
     assert.ok(prepared.candidate);
     router.commit('search-test:0', prepared.state);
     const saved = unwrap(await real.game.save!());
-    const recovered = new PolicyRouter({'0': createSearchPolicy({character: 'ironclad', algorithm: 'r0', limits})}, 0, router.snapshot());
-    assert.deepEqual(recovered.snapshot(), router.snapshot());
     assert.ok(saved.snapshotId);
-    const memory = router.snapshot().actors['0']!.memory as {version:string;prefix?:unknown};
-    assert.equal(memory.version,'sts-belief-search@1');
+    const memory = router.snapshot().actors['0']!.memory as {evidence:{algorithm:string};prefix?:unknown};
+    assert.equal(memory.evidence.algorithm,'public-adventure');
     assert.equal(memory.prefix,undefined,'accepted memory must not contain an executable prefix');
+    const beforeRestore=unwrap(await real.game.observe({player:'0'}));
+    unwrap(await real.game.close());
+    CardProgram.prototype.initial=()=>{throw Error('Cold restore must not initialize');};
     const instance = unwrap(await real.loaded.persistence!.restore(saved));
     const restored = unwrap(await createGameBinder().bind({instance, contract, persistence:real.loaded.persistence!}));
+    const resumedPolicy=createSearchPolicy({character:'ironclad',forkCurrent:source(restored)});
+    const recovered=new PolicyRouter({'0':resumedPolicy},0,router.snapshot());
     try {
-      unwrap(await restored.bind(recovered.binding('0')));
-      router.begin(); recovered.begin();
-      const actual = unwrap(await real.game.run()), resumed = unwrap(await restored.run());
-      const a = router.prepare(actual.accepted), b = recovered.prepare(resumed.accepted);
-      assert.deepEqual(a.candidate?.proposal,b.candidate?.proposal);
-      assert.deepEqual(unwrap(await real.game.observe({player:'0'})),unwrap(await restored.observe({player:'0'})));
-    } finally {await restored.close(); await real.loaded.persistence!.release(saved);}
-  } finally {await real.close();}
+      assert.deepEqual(recovered.snapshot(),router.snapshot());
+      assert.deepEqual(unwrap(await restored.observe({player:'0'})),beforeRestore);
+      recovered.begin();
+      const state=unwrap(await restored.inspect());assert.equal(state.kind,'request');
+      if(state.kind!=='request')throw Error('Missing current request');
+      const binding=recovered.binding('0'),reply=await binding.onRequest(state.requests[0]!,{signal});
+      unwrap(await restored.bind({...binding,onRequest:async()=>reply}));
+      const resumed=unwrap(await restored.run()),accepted=recovered.prepare(resumed.accepted);
+      assert.ok(accepted.candidate,'only the restored current executes the next action');
+      assert.deepEqual(recovered.snapshot(),router.snapshot(),'proposal is not committed implicitly');
+    } finally {closePolicyWork({'0':resumedPolicy});await restored.close();await real.loaded.persistence!.release(saved);}
+  } finally {CardProgram.prototype.initial=initialize;closePolicyWork({'0':policy});await real.close();}
 });
 
-test('exhausted host accounting cannot disguise a missing R2 host current as R0',async()=>{
-  const real=await realGame('ironclad');
-  try{
-    const request=await real.request();
-    for(const mode of ['work','wall'] as const){
-      const account={milliseconds:60_000};
-      const policy=createSearchPolicy({character:'ironclad',algorithm:'r2',limits:{...limits,mode},account});
-      await assert.rejects(policy.decide({request,visibleHistory:real.deliveries(),memory:{},random:cursor,signal}),/actual current Context/);
-      assert.equal(account.milliseconds,60_000);
-    }
-  }finally{await real.close();}
-});
+
 
 test('external request and event identities cannot influence information keys or search random state', async () => {
   const real = await realGame('ironclad');
+  const first=createSearchPolicy({character:'ironclad',forkCurrent:source(real.game)});
+  const second=createSearchPolicy({character:'ironclad',forkCurrent:source(real.game)});
   try {
     const request = await real.request(), history = real.deliveries();
-    const renamed = {...request, id: {...request.id, key: 'hidden-seed-123', instanceId: 'other' as typeof request.id.instanceId}};
+    const renamed = {...request, id: {...request.id, instanceId: 'other' as typeof request.id.instanceId}};
     assert.deepEqual(publicDecision(request, history), publicDecision(renamed, history.map(h => ({...h,id: {noise: 'different'}}))));
-    const first = createSearchPolicy({character: 'ironclad', algorithm: 'r0', limits});
-    const second = createSearchPolicy({character: 'ironclad', algorithm: 'r0', limits});
     const input = {visibleHistory: history, memory: {}, random: {state: 91, position: 0}, signal};
     assert.deepEqual(await first.decide({...input,request}), await second.decide({...input,request: renamed}));
-    assert.throws(() => publicDecision({...request,observation: {...request.observation,seed: '123'}},history));
-  } finally {await real.close();}
+  } finally {closePolicyWork({first,second});await real.close();}
 });
 
 test('detail entity handles preserve aliasing without numeric hidden-allocation information', () => {
@@ -215,7 +191,7 @@ function hiddenFixture(relics: RelicId[], potion: number | null = null) {
   return {machine, storage, original, frame, reorderDraw};
 }
 
-test('actual hidden draw order, intent, future relic pools and RNG changes leave the public R0 identical under Runic Dome', async () => {
+test('the public projection conceals draw order, intent, future pools and RNG under Runic Dome, but is not a replacement search root', async () => {
   const f = hiddenFixture(['RUNIC_DOME']);
   try {
     const before = observe(f.frame()); f.reorderDraw();
@@ -230,12 +206,7 @@ test('actual hidden draw order, intent, future relic pools and RNG changes leave
     const after = observe(f.frame()); assert.deepEqual(after,before);
     const request = (observation: typeof before): PolicyRequest => ({id: {instanceId:'fixture',callId:'decision',key:'0'} as PolicyRequest['id'], player:'0',type:'action',data:{screen:observation.game.screen},observation,options:{kind:'exact',values:f.original.actions}});
     const input = {visibleHistory: [], memory: {},random: cursor,signal};
-    const p = () => createSearchPolicy({character:'ironclad',algorithm:'r0',limits});
-    assert.deepEqual(await p().decide({...input,request:request(before)}),await p().decide({...input,request:request(after)}));
-    // A public-only caller cannot replace the required host capability.
-    for(const algorithm of ['r1','r2'] as const)for(const observation of [before,after]){
-      await assert.rejects(createSearchPolicy({character:'ironclad',algorithm,limits}).decide({...input,request:request(observation)}),/actual current Context/);
-    }
+    assert.deepEqual(publicDecision(request(before),[]),publicDecision(request(after),[]));
   } finally {f.storage.close();}
 });
 
@@ -272,27 +243,23 @@ test('equal public roots can have different concrete futures, requiring weighted
   } finally {left.storage.close();right.storage.close();}
 });
 
-test('cancelled next(current) allocates no successor and preserves its parent',async()=>{
+test('cancelled exact expansion allocates no successor and preserves its parent',async()=>{
   const real=await realGame('ironclad'),controller=new AbortController();
-  const adapter=createStsContinuation(controller.signal);
-  const game=unwrap(await real.game.fork!());
-  let forks=0;
-  const fork=game.fork!;game.fork=async()=>{forks++;return fork();};
-  const root=await adapter.take(game,real.deliveries().map(e=>e.event));
+  const root=await takeStsSearchCurrent(source(real.game),real.deliveries().map(e=>e.event));
+  const view=readStsCurrent(root.current,root.events),fork=root.current.fork.bind(root.current);let forks=0;
+  root.current.fork=()=>{forks++;return fork();};
   try{
     const before=structuredClone(await real.request());controller.abort();
-    await assert.rejects(adapter.next(root).next(),/cancelled/);
+    assert.throws(()=>ProbabilityExpansion.from(root.current,view.reply(view.decision.actions[0]!),null,{check(){if(controller.signal.aborted)throw Error('cancelled');}}),/cancelled/);
     assert.equal(forks,0);assert.deepEqual(await real.request(),before);
-  }finally{await root.close();await real.close();}
+  }finally{root.current.close();await real.close();}
 });
-
 
 for (const character of ['ironclad','volibear'] as const) test(`${character}: runner supplies the actual waiting Context inside a policy callback`, async () => {
   const directory = await mkdtemp(join(tmpdir(),'sts-current-host-'));
   const initial = CardProgram.prototype.initial;
   let starts = 0, decisions = 0;
   let policyFailure: unknown;
-  let expected: SearchCurrent['position'] | undefined;
   CardProgram.prototype.initial = function(...args) {
     if (++starts > 1) throw Error('Forking the current Context must not initialize the program');
     return initial.apply(this,args);
@@ -306,35 +273,29 @@ for (const character of ['ironclad','volibear'] as const) test(`${character}: ru
     policies:(_task,_resources,forkCurrent)=>({'0':{version:'actual-current-test',encoderVersion:'public-test',async decide(input) {
       try {
       const decision = publicDecision(input.request,input.visibleHistory);
-      if (expected) assert.equal(position(decision).information,expected.information,
-        'the real action must reach the predicted direct successor with its unfinished control state');
-      const adapter = createStsContinuation(input.signal);
-      const branch = await forkCurrent();
-      assert.notEqual(branch.id,input.request.id.instanceId);
-      const current = await adapter.take(branch,decision.events);
-      let child: SearchCurrent | undefined;
-      const iterator = adapter.next(current);
-      try {
-        assert.deepEqual(current.position,position(decision));
-        const next = await iterator.next();
-        assert.equal(next.done,false); if (next.done) throw Error('Expected successor');
-        assert.equal(next.value.outcomes.length,1);
-        child = next.value.outcomes[0]!.current;
-        expected = structuredClone(child.position);
-        // A fresh fork after the search branch advanced still sees the root.
-        const unchanged = await adapter.take(await forkCurrent(),decision.events);
-        try {assert.deepEqual(unchanged.position,current.position);} finally {await unchanged.close();}
+      assert.equal(decision.observation.battle,null,'this host probe only chooses public adventure actions');
+      const events=input.visibleHistory.map(delivery=>(delivery as {event:StsEvent}).event);
+      const current=await takeStsSearchCurrent(forkCurrent,events);
+      try{
+        assert.deepEqual(readStsCurrent(current.current,current.events).decision,decision);
+        const before=current.current.machine.storage.export(current.current.machine.root);
+        const chosen=chooseAdventure(decision,input.random);
+        const domain=stsExactDomain(current.current.machine.program,decision.observation,events.length),edge=domain.next(current,String(chosen.action.bits));
+        try{edge.step();assert.ok(edge.save().pending.length+edge.save().ready.length>0);}
+        finally{edge.close();}
+        assert.deepEqual(current.current.machine.storage.export(current.current.machine.root),before);
+        const unchanged=await takeStsSearchCurrent(forkCurrent,events);
+        try{assert.deepEqual(readStsCurrent(unchanged.current,unchanged.events).decision,decision);}finally{unchanged.current.close();}
         decisions++;
-        return {action:current.position.actions.find(a=>a.key===next.value.action)!.action,
-          nextMemory:{},nextRandom:input.random,policyVersion:'actual-current-test',encoderVersion:'public-test',logProbability:null};
-      } finally {await iterator.return(); await child?.close(); await current.close();}
+        return{action:chosen.action,nextMemory:{},nextRandom:chosen.random,policyVersion:'actual-current-test',encoderVersion:'public-test',logProbability:chosen.logProbability};
+      }finally{current.current.close();}
       } catch (error) {policyFailure = error; throw error;}
     }}}),
     facts:()=>[],summarize:row=>({id:row.id,status:row.status,error:row.error??null,decisions:row.decisions.length}),identity:async()=>({test:'current-host'})
   });
   try {
     const result = await runner.runExperiment(directory,{id:'current-host',engine:'controlled',maxAttempts:1,maxSteps:2,
-      concurrency:1,batchMilliseconds:60_000,memoryBudgetMB:1024,stopOnFault:true});
+      concurrency:1,batchMilliseconds:60_000,stopOnFault:true});
     if (policyFailure) throw policyFailure;
     assert.equal(result.results.length,1,JSON.stringify(result));
     assert.equal(result.results[0]!.status,'truncated',JSON.stringify(result.results[0]));
@@ -345,8 +306,6 @@ for (const character of ['ironclad','volibear'] as const) test(`${character}: ru
 
 
 test('current-only search canonicalizes the full public event history without inspecting the entity registry',()=>{
-  const spec=probabilityTrackingFor(cardDefinition);assert.ok(spec);assert.equal(spec.mode,'current');
-  assert.equal('anchor' in spec,false);assert.equal('observe' in spec,false);assert.equal('respond' in spec,false);
   const event=(entity:number)=>({kind:'detail' as const,type:'draw',data:{entity,id:'STRIKE_R'}});
   const left=[event(100),event(1),event(777)],right=[event(200),event(2),event(888)];
   assert.deepEqual(publicEvents([...left,event(777)]),publicEvents([...right,event(888)]));

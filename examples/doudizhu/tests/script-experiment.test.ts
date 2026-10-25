@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { RegistrationSchema, createTasks, runTask, runExperiment } from '../src/experiment/execution.ts';
 import type { Task } from '../src/experiment/execution.ts';
 import { createScript, PolicyRouter } from '@bear-forge/policies';
-import { createCardLoader, replayCard } from '@bear-forge/runtime-card';
+import { createCardLoader } from '@bear-forge/runtime-card';
 import { createGameBinder } from '@bear-forge/game-host';
 import { game } from '../src/module.ts';
 import { execFile } from 'node:child_process';
@@ -86,12 +86,15 @@ test('a killed script experiment resumes its saved random stream without duplica
       fileURLToPath(new URL('./experiment-crash-child.ts', import.meta.url)), directory]),
     (error: any) => error.signal === 'SIGKILL');
     const saved: any = await new ExperimentFiles(directory, (row: any) => row).read('checkpoint-recovery-0');
+    const prior:any=await new ExperimentFiles(directory,(row:any)=>row).read('attempt-recovery-0');
     assert.equal(saved.step, 10, 'the process must die after a durable checkpoint');
+    assert.equal(prior.attempt,1);
     const recovered = await runExperiment(directory);
     assert.equal(recovered.results.length, 1);
     const row: any = await recovered.files.read('task-recovery-0');
     assert.equal(row.status, 'ended', row.error);
-    assert.equal(row.attempt, 2);
+    assert.equal(row.attempt,prior.attempt,'direct continuation belongs to the same attempt');
+    assert.deepEqual(row.decisions.slice(0,saved.decisions.length),saved.decisions);
     const config = RegistrationSchema.parse({ id: 'recovery', seats: ['random', 'random', 'random'], seed: 7 });
     const baseline = await runTask(createTasks(config)[0]!, config);
     assert.deepEqual(row.result, baseline.result);
@@ -101,7 +104,7 @@ test('a killed script experiment resumes its saved random stream without duplica
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('controlled records from the three real script players replay to the same terminal result', async () => {
+test('controlled records from the three real script players retain one original terminal execution', async () => {
   const unwrap = (result: any): any => { assert.equal(result.ok, true, JSON.stringify(result)); return result.value; };
   const loaded = unwrap(await createCardLoader({ controlled: true, recordCore: true }).load(game.definition));
   const instance = unwrap(await loaded.core.start({ seed: 7, game: {
@@ -116,7 +119,7 @@ test('controlled records from the three real script players replay to the same t
       router.begin();
       const next = unwrap(await host.run());
       const staged = router.prepare(next.accepted);
-      router.commit('replay:' + step, staged.state);
+      router.commit('actual:' + step, staged.state);
       assert.notEqual(next.state.kind, 'fault');
       if (next.state.kind === 'ended') { ended = true; break; }
     }
@@ -127,7 +130,8 @@ test('controlled records from the three real script players replay to the same t
       const page = unwrap(await loaded.capture.read(instance.id, { after, limit: 1000 }));
       records.push(...page.records); after = page.next;
     } while (after !== null);
-    unwrap(await replayCard(game.definition, records, { controlled: true }));
+    assert.equal(records.at(-1)?.kind,'completed');
+    assert.equal(new Set(records.filter(row=>row.kind==='called').map(row=>row.callId)).size,records.filter(row=>row.kind==='called').length);
   } finally {
     unwrap(await host.close());
     unwrap(await loaded.capture.release(instance.id));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createCardLoader,replayCard} from '../src/index.ts';
+import {createCardLoader} from '../src/index.ts';
 import {definition} from './fixtures/typed-private.ts';
 const unwrap=<T>(r:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};
 for(const controlled of [false,true])test(`third-layer private counters survive two source-scoped waits; controlled=${controlled}`,async()=>{
@@ -10,7 +10,8 @@ for(const controlled of [false,true])test(`third-layer private counters survive 
     unwrap(await instance.bind({choose:async()=>({kind:'reply',value:source})}));unwrap(await instance.run());
   }
   const done=unwrap(await instance.inspect());assert.equal(done.kind,'done');if(done.kind!=='done')throw Error('done missing');assert.equal(done.result,102);
-  const records=unwrap(await loaded.capture!.read(instance.id,{after:null,limit:100})).records;assert.equal((await replayCard(definition,records,{controlled})).ok,true);
+  const records=unwrap(await loaded.capture!.read(instance.id,{after:null,limit:100})).records;assert.deepEqual(records.filter(row=>row.kind==='returned').map(row=>row.reply.output),[1,2]);
+  assert.equal(records.at(-1)?.kind,'completed');
   await instance.close();await loaded.capture!.release(instance.id);
 });
 test('source capability stacks and private counters restore and fork while a hook is paused',async()=>{

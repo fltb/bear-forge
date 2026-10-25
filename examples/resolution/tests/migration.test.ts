@@ -7,11 +7,8 @@ import type { Action } from '../src/resolution.schemas.ts';
 
 for (const variant of ['normal', 'empty-first', 'counter', 'return-wolf', 'double-prevent', 'fail-discard'] as Setup['variant'][]) {
   test(`shared kernel preserves old resolution trace: ${variant}`, async () => {
-    const tape: Array<{ call: any; output: Action }> = [];
-    let expected: unknown;
-    let oldError: unknown;
-    try {
-      expected = await reference.run({ variant }, { async call(call) {
+    const transcript: Array<{ call: any; output: Action }> = [];
+    const answer=(call:{input:{kind:string;options:Action[]}}):Action=>{
         const { kind, options } = call.input;
         let wanted: Action;
         if (kind.includes('response')) wanted = {
@@ -24,21 +21,23 @@ for (const variant of ['normal', 'empty-first', 'counter', 'return-wolf', 'doubl
         else wanted = { kind: 'beneficiary', value: '0' };
         const output = options.find(a => a.kind === wanted.kind && a.value === wanted.value) ?? options[0]!;
         assert.ok(output);
-        tape.push(structuredClone({ call, output }));
         return output;
-      } });
-    } catch (error) { oldError = error; }
+    };
+    let expected:unknown,oldError:unknown;
+    try{expected=await reference.run({variant},{async call(call){
+      const output=answer(call);transcript.push(structuredClone({call,output}));return output;
+    }});}catch(error){oldError=error;}
     let cursor = 0;
     const execute = () => program.run({ variant }, { async call(call) {
-      const recorded = tape[cursor++];
+      const recorded = transcript[cursor++];
       assert.ok(recorded, 'extra request');
       assert.deepEqual(call, recorded.call, `call ${cursor}`);
-      return structuredClone(recorded.output);
+      const output=answer(call);assert.deepEqual(output,recorded.output,'independently chosen current reply');return output;
     } });
     if (oldError) {
       assert.equal(variant, 'fail-discard');
       await assert.rejects(execute, error => error instanceof Error && oldError instanceof Error && error.message === oldError.message);
     } else assert.deepEqual(await execute(), expected);
-    assert.equal(cursor, tape.length);
+    assert.equal(cursor, transcript.length);
   });
 }

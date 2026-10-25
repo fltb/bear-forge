@@ -1,100 +1,86 @@
+import {SearchSession} from '../../../packages/policies/src/search/session.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SearchRegistrationSchema,searchTasks,createSearchExperiment} from '../src/search/experiment.ts';
+import {CardMachine,CardProgram} from '@bear-forge/card-engine';
+import {searchRegistration,searchTasks,createSearchExperiment,summarizeSearch} from '../src/search/experiment.ts';
+import {createSearchPolicy} from '../src/search/policy.ts';
 import {ExperimentFiles} from '@bear-forge/experiments';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-const input={id:'bounded-search',phase:'pilot',characters:['ironclad','volibear'],algorithms:['r0','r1','r2'],modes:['work','wall'],gameSeeds:[1234567],searchSeeds:[6789],batchMilliseconds:100};
-test('search tasks pair game seeds independently of policy random seeds and preserve both cost modes',()=>{
-  const tasks=searchTasks(SearchRegistrationSchema.parse(input));
-  assert.equal(tasks.length,12);
-  assert.ok(tasks.every(t=>t.seed===6789&&t.gameSeed===1234567));
-  assert.deepEqual(tasks.slice(0,3).map(t=>t.algorithm),['r0','r1','r2']);
-  assert.ok(tasks.some(t=>t.mode==='wall')&&tasks.some(t=>t.mode==='work'));
+const input={id:'exact-search',phase:'pilot',characters:['ironclad','volibear'],gameSeeds:[1234567],policySeeds:[6789],batchMilliseconds:60_000};
+
+test('summary counts newly performed search work across adopted roots without counting forced actions as searches',()=>{
+ const task=searchTasks(searchRegistration(input))[0]!;
+ const common={algorithm:'exact-current-combat',method:'retained-information-sets',status:'proven-action',pendingEdges:0};
+ const evidence=[{...common,steps:'100',decisionSteps:'100'},
+  {algorithm:'exact-current-combat',method:'forced-action',status:'selected',searchComplete:false},
+  {...common,steps:'127',decisionSteps:'27'},
+  {...common,steps:'127',decisionSteps:'0'}];
+ const summary=summarizeSearch({id:task.id,input:task,attempt:1,status:'ended',result:null,packets:[],facts:[],policy:{},
+  decisions:evidence.map(value=>({proposal:{nextMemory:{evidence:value}}})),cost:{milliseconds:1,steps:4}});
+ assert.equal(summary.decisions,4);assert.equal(summary.searched,3);assert.equal(summary.provenDecisions,3);assert.equal(summary.searchSteps,'127');
+ for(const method of ['conservative-local-utility','public-prior-local-utility']){
+ const local=summarizeSearch({id:task.id,input:task,attempt:1,status:'ended',result:null,packets:[],facts:[],policy:{},
+  decisions:[{proposal:{nextMemory:{evidence:{algorithm:'local-current-combat',method,status:'estimated-action',searchComplete:false,steps:'5',pendingEdges:20}}}}],cost:{milliseconds:1,steps:1}});
+ assert.equal(local.searched,1);assert.equal(local.estimatedDecisions,1);assert.equal(local.provenDecisions,0);assert.equal(local.exhaustedFrontiers,0);assert.equal(local.searchSteps,'5');
+ }
 });
-test('registration rejects expanded budgets, duplicate seeds, and known confirmation contamination',()=>{
-  for(const patch of [{concurrency:2},{worlds:9},{attempts:65},{milliseconds:2001},{maxAttempts:2},{stopOnFault:false},
-    {gameSeeds:[130]},{gameSeeds:[1,1]},{gameSeeds:[1234567],excludedGameSeeds:[1234567]},
-    {phase:'development',batchMilliseconds:600001},{phase:'development',gameSeeds:Array.from({length:9},(_,i)=>i)}]){
-    assert.equal(SearchRegistrationSchema.safeParse({...input,...patch}).success,false,JSON.stringify(patch));
+
+test('continuous defaults spend milliseconds on a decision and do not schedule checkpoints',()=>{
+ const config=searchRegistration(input);assert.equal(config.schedulingMilliseconds,100);assert.equal(config.checkpointEvery,0);
+ assert.equal(config.maxSteps,Number.MAX_SAFE_INTEGER);assert.equal(config.taskMilliseconds,Number.MAX_SAFE_INTEGER);
+});
+
+test('tasks pair actual games with adventure preference cursors, not sampled future worlds',()=>{
+  const tasks=searchTasks(searchRegistration({...input,policySeeds:[6789,7890]}));
+  assert.equal(tasks.length,4);assert.ok(tasks.every(t=>t.gameSeed===1234567));
+  assert.deepEqual(tasks.map(t=>t.seed),[6789,7890,6789,7890]);
+  assert.ok(tasks.every(t=>!('algorithm' in t)&&!('limits' in t)&&!('mode' in t)));
+});
+
+test('development counts and scheduling resources do not impose search-space or total-run limits',()=>{
+  for(const phase of ['development','confirmation']){
+    const parsed=searchRegistration({...input,phase,gameSeeds:Array.from({length:40},(_,i)=>1000+i),policySeeds:[1,2,3],
+      schedulingMilliseconds:2500,maxSteps:5000,taskMilliseconds:2_000_000,batchMilliseconds:2_000_000,memoryBudgetMB:2048,concurrency:2});
+    assert.equal(parsed.gameSeeds.length,40);assert.equal(parsed.policySeeds.length,3);assert.equal(parsed.maxSteps,5000);
   }
 });
 
-test('search host costs are checkpointed separately from deterministic accepted policy memory',async()=>{
-  const directory=await mkdtemp(join(tmpdir(),'sts-search-costs-'));
-  const files=new ExperimentFiles(directory,row=>row);
-  let checkpoint:any;
-  try {
-    const config=SearchRegistrationSchema.parse({...input,phase:'development',characters:['ironclad'],
-      algorithms:['r0'],modes:['work'],maxSteps:2,checkpointEvery:1,batchMilliseconds:60_000});
-    const result=await createSearchExperiment().runExperiment(directory,config,undefined,{
-      point:async(stage,id)=>{if(stage==='before-commit')checkpoint=await files.read('checkpoint-'+id);},
-    });
-    assert.equal(result.results.length,1);assert.ok(checkpoint);
-    const finalResources=result.results[0]!.policyResources!;
-    assert.deepEqual(finalResources['0']!.costs,checkpoint.policyResources['0'].costs);
-    assert.ok(finalResources['0']!.milliseconds>=checkpoint.policyResources['0'].milliseconds,'the checkpoint write tail remains charged in the live account');
-    assert.ok(checkpoint.policyResources['0'].milliseconds>0);
-    assert.equal(checkpoint.policyResources['0'].costs.length,checkpoint.decisions.length);
-    assert.ok(checkpoint.policyResources['0'].costs.every((cost:any)=>cost.phases.projection.calls===1));
-    assert.equal(checkpoint.policy.actors['0'].memory.searchMilliseconds,undefined);
-  }finally{await rm(directory,{recursive:true,force:true});}
-});
-
-test('a durable task resumes within maxAttempts=1 and conservatively charges unknown interrupted work',async()=>{
-  const directory=await mkdtemp(join(tmpdir(),'sts-search-recovery-'));
-  try {
-    for(const interrupted of [false,true]){
-      const output=join(directory,String(interrupted)),files=new ExperimentFiles(output,row=>row);
-      const config=SearchRegistrationSchema.parse({...input,phase:'development',characters:['ironclad'],
-        algorithms:['r0'],modes:['work'],maxSteps:3,checkpointEvery:1,taskMilliseconds:10_000,batchMilliseconds:60_000});
-      const id=searchTasks(config)[0]!.id,runner=createSearchExperiment();
-      let advances=0;
-      await assert.rejects(runner.runExperiment(output,config,undefined,{point:stage=>{
-        if(stage==='before-advance'&&++advances===2&&interrupted)throw Error('fixture-stop-after-durable-boundary');
-        if(stage==='before-commit')throw Error('fixture-no-terminal-commit');
-      }}),/fixture-no-terminal-commit/);
-      const checkpoint:any=await files.read('checkpoint-'+id);
-      const previous:any=await files.read('attempt-'+id);
-      if(interrupted){
-        // A hard exit at the next before-advance boundary leaves exactly these
-        // durable inputs: checkpoint plus an unfinished attempt, no final row.
-        const unfinished={attempt:1,started:previous.started,status:'started'};
-        await files.write('attempt-'+id,unfinished);await files.write('attempt-history-'+id+'-1',unfinished);
-      }
-      const result=await runner.runExperiment(output);
-      assert.equal(result.results.length,1,JSON.stringify({interrupted,previous,result}));assert.equal(result.results[0]!.status,'truncated');
-      const row:any=await files.read('task-'+id);
-      assert.equal(row.attempt,1);assert.equal(row.attempts.length,1);
-      assert.deepEqual(row.decisions,checkpoint.decisions);
-      assert.deepEqual(row.policy,checkpoint.policy);
-      assert.equal(row.cost.steps,checkpoint.step,'recovery must not charge an advance that never ran');
-      if(interrupted){
-        assert.match(row.error,/wall budget/);assert.equal(row.cost.reservedMilliseconds,10_000);
-        assert.ok(row.policyResources['0'].reservedMilliseconds>0);
-      }else assert.ok(row.cost.milliseconds>=previous.cost.milliseconds);
-      const repeated=await runner.runExperiment(output);assert.deepEqual(repeated.results,result.results);
-    }
-  }finally{await rm(directory,{recursive:true,force:true});}
-});
-
-
-test('production R1/R2 run through the registered host with nonzero search and durable accepted evidence',async()=>{
-  const directory=await mkdtemp(join(tmpdir(),'sts-search-production-'));
+test('production saves unfinished combat work and cold-resumes it without accepting a fallback or replaying setup',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'sts-exact-search-recovery-'));
+  const files=new ExperimentFiles(directory,row=>row),write=ExperimentFiles.prototype.write,initial=CardProgram.prototype.initial;
+  const advance=CardMachine.prototype.advance,scheduled=CardMachine.prototype.advanceScheduled,stepLocal=SearchSession.prototype.stepLocal;
+  SearchSession.prototype.stepLocal=function(){const result=stepLocal.call(this);controller.abort();return result;};
+  let starts=0,realSlices=0,controller=new AbortController(),checkpoint:any;
+  const config=searchRegistration({...input,phase:'development',characters:['ironclad'],gameSeeds:[130],
+    schedulingMilliseconds:1,maxSteps:32,checkpointEvery:0,taskMilliseconds:120_000,batchMilliseconds:120_000});
+  const id=searchTasks(config)[0]!.id,runner=createSearchExperiment();
+  CardProgram.prototype.initial=function(...args:Parameters<typeof initial>){starts++;return initial.apply(this,args);};
+  CardMachine.prototype.advance=function(){throw Error('Search experiments cannot use a cumulative fault budget');};
+  CardMachine.prototype.advanceScheduled=function(...args:Parameters<typeof scheduled>){realSlices++;return scheduled.apply(this,args);};
+  ExperimentFiles.prototype.write=async function(key,value){
+    await write.call(this,key,value);
+    const saved=value as any;
+    if(key==='checkpoint-'+id&&saved.policyWork?.['0']?.entries.length){checkpoint=saved;}
+  };
   try{
-    const config=SearchRegistrationSchema.parse({...input,phase:'development',gameSeeds:[130],modes:['work'],algorithms:['r1','r2'],maxSteps:3,decisions:2,simulations:32,worlds:2,checkpointEvery:1,batchMilliseconds:60_000});
-    const runner=createSearchExperiment(),result=await runner.runExperiment(directory,config);
-    assert.equal(result.results.length,4,JSON.stringify(result));
-    const files=new ExperimentFiles(directory,row=>row);
-    for(const summary of result.results){
-      assert.equal(summary.status,'truncated',JSON.stringify(summary));assert.equal(summary.decisions,3);
-      assert.ok(summary.searched>0);assert.ok(summary.simulations>0);assert.equal(summary.fallbacks,summary.decisions-summary.searched);
-      const row:any=await files.read('task-'+summary.id);
-      assert.ok(row.decisions.every((d:any)=>d.proposal.nextMemory.evidence.completed>0));
-      assert.ok(row.decisions.every((d:any)=>d.proposal.nextMemory.evidence.method==='actual-current'));
-      assert.equal(row.policy.actors['0'].random.position,row.decisions.at(-1).proposal.nextRandom.position);
-    }
-    assert.deepEqual((await runner.runExperiment(directory)).results,result.results,'committed search tasks resume without repeating actions');
-  }finally{await rm(directory,{recursive:true,force:true});}
+    const first=await runner.runExperiment(directory,config,undefined,{signal:controller.signal});
+    assert.deepEqual(first.results,[]);assert.equal(first.stopReason,'search-incomplete:cancelled');assert.ok(checkpoint);
+    const before:any=await files.read('checkpoint-'+id),search=before.policyWork['0'].entries[0].search;
+    assert.ok(search.steps>0n);assert.ok(search.queue.length>0);assert.equal(await files.read('task-'+id),null);
+    assert.ok(before.policyResources['0'].costs.length>before.decisions.length,'suspended work is charged without an accepted proposal');
+    assert.equal(before.policy.actors['0'].memory.searchMilliseconds,undefined);
+    assert.ok(before.decisions.every((d:any)=>d.proposal.nextMemory.evidence.algorithm==='public-adventure'||d.proposal.nextMemory.evidence.status==='proven-action'||d.proposal.nextMemory.evidence.method==='forced-action'));
+    assert.equal(starts,1);assert.ok(realSlices>0);const beforeSlices=realSlices;
+    controller=new AbortController();const resumed=await runner.runExperiment(directory,undefined,undefined,{signal:controller.signal});
+    assert.deepEqual(resumed.results,[]);assert.equal(resumed.stopReason,'search-incomplete:cancelled');
+    const after:any=await files.read('checkpoint-'+id),attempt:any=await files.read('attempt-'+id);
+    assert.equal(after.policyWork['0'].entries.length,before.policyWork['0'].entries.length);
+    assert.ok(after.policyWork['0'].entries[0].search.steps>search.steps,'restoration cost cannot starve expansion');
+    assert.deepEqual(after.decisions,before.decisions);assert.deepEqual(after.policy,before.policy);
+    assert.ok(after.policyResources['0'].milliseconds>=before.policyResources['0'].milliseconds);
+    assert.equal(attempt.attempt,1);assert.equal(attempt.status,'incomplete');assert.equal(starts,1);
+    assert.equal(realSlices,beforeSlices,'resuming unfinished search must not advance the actual game again');
+  }finally{SearchSession.prototype.stepLocal=stepLocal;ExperimentFiles.prototype.write=write;CardProgram.prototype.initial=initial;CardMachine.prototype.advance=advance;CardMachine.prototype.advanceScheduled=scheduled;await rm(directory,{recursive:true,force:true});}
 });

@@ -1,5 +1,5 @@
 import type { TaskResult } from './experiment.types.ts';
-import { mkdir, open, rename, readFile, readdir, unlink, link } from 'node:fs/promises';
+import { mkdir, open, rename, readFile, readdir, unlink, link, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { serialize, deserialize } from 'node:v8';
 import { randomUUID } from 'node:crypto';
@@ -33,20 +33,16 @@ export class ExperimentFiles<R extends { id: string } = TaskResult, S extends { 
     await mkdir(this.directory, {
       recursive: true
     });
-    const temporary = target + '.' + randomUUID() + '.tmp',
-      file = await open(temporary, 'wx');
+    const temporary = target + '.' + randomUUID() + '.tmp';
+    let renamed=false;
     try {
-      await file.writeFile(bytes);
-      await file.sync();
+      const file=await open(temporary,'wx');
+      try{await file.writeFile(bytes);await file.sync();}finally{await file.close();}
+      await rename(temporary,target);renamed=true;
+      const directory=await open(this.directory,'r');
+      try{await directory.sync();}finally{await directory.close();}
     } finally {
-      await file.close();
-    }
-    await rename(temporary, target);
-    const directory = await open(this.directory, 'r');
-    try {
-      await directory.sync();
-    } finally {
-      await directory.close();
+      if(!renamed)await rm(temporary,{force:true});
     }
   }
   async receipt(taskId: string, logicalStep: number) {
@@ -116,11 +112,12 @@ export class ExperimentFiles<R extends { id: string } = TaskResult, S extends { 
   }
   async commit(taskId: string, value: R) {
     const key = 'task-' + taskId;
-    const existing = await this.read(key);
-    if (existing) return existing;
-    await this.write(key, value);
-    await this.write('summary-' + taskId, this.summarize(value));
-    return value;
+    const existing = await this.read<R>(key),committed=existing??value;
+    if(!existing)await this.write(key,value);
+    // A previous attempt can have published the immutable result before its
+    // summary write failed. Retry from that result, never rerun the task.
+    await this.write('summary-' + taskId, this.summarize(committed));
+    return committed;
   }
   /** Publish the same immutable commit into an evaluation index on the same filesystem. */
   async linkCommit(taskId: string, source: ExperimentFiles<R, S>) {

@@ -11,7 +11,6 @@ const bucket=z.record(key,z.array(id));
 const deque=z.object({first:reference,last:reference,size:id,links:z.record(key,z.object({previous:reference,next:reference}).strict())}).strict();
 const registration=z.object({id:positive,definition:id,source:id,owner:id,environment:z.unknown(),lifetime:id,sequence:positive}).strict();
 const schema=z.object({
-  probabilityAccount:z.object({random:z.object({state:z.number().int().min(0).max(0xffffffff),position:z.number().int().nonnegative()}).strict(),milliseconds:z.number().finite().nonnegative(),nodes:id,advances:id,words:id,captures:id}).strict().optional(),
   indexes:z.object({registrationsByTarget:bucket,registrationsByTargetArrival:bucket,registrationsBySource:bucket,registrationsByScope:bucket,entitiesByComponent:bucket,entitiesByScope:bucket,childrenByScope:bucket,tasksBySource:bucket,tasksByScope:bucket,tasksByEvent:bucket}).strict(),
   entities:z.record(key,z.object({components:z.record(key,z.unknown()),definition:reference,scope:id,owner:reference,phase:z.enum(['initializing','active','removing'])}).strict()),
   scopes:z.record(key,z.object({kind:reference,parent:reference,phase:z.enum(['initializing','active','ending','closed'])}).strict()),

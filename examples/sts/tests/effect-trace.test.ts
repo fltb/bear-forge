@@ -287,3 +287,35 @@ for(const controlled of [true])test(`effect origins survive loader suspension${c
     for(const result of results.slice(1))assert.deepEqual(results[0],result);
   }finally{for(const instance of instances){await instance.close();if(loaded.capture)await loaded.capture?.release(instance.id);}if(snapshot)await loaded.persistence!.release(snapshot);}
 });
+
+test('an emitting sorting kernel shares original event dispatch and origin envelopes',async()=>{
+  const {withProbability}=await import('../src/rules/execution.ts');
+  const fixture=rules.defineRules({requires:[],build(m){
+    const log=m.own(rules.defineComponent({schema:z.array(z.object({value:z.number(),cause:typedValue<Cause>()})),initial:()=>[]}));
+    const event=m.own(rules.defineEvent({payload:z.number(),dispatch:'immediate'}));
+    const record=m.atom({input:z.object({value:z.number(),cause:typedValue<Cause>()}),output:z.undefined(),reads:[log],writes:[log],emits:[],run(r,i){return{writes:[{entity:0,component:log,value:[...r.component(0,log),i]}],events:[],result:undefined};}});
+    const reaction=rules.on(event.public,{effect:rules.defineEffect<rules.ReactionContext<number>,void>(b=>rules.call(record,{value:b.read(v=>v.input.event),cause:rules.query(effectTrace.exports.current,undefined)}))});
+    const publish=withProbability(m.atom({input:z.number(),output:z.number(),reads:[],writes:[],emits:[event],run:(_r,i)=>({writes:[],events:[{event,payload:i}],result:i})}),{
+      space:()=>({kind:'uniform',size:2n}),run:(_r,i,c)=>({writes:[],events:[{event,payload:i+Number(c)}],result:i+Number(c)}),
+    });
+    const history=rules.defineQuery({input:z.undefined(),output:z.unknown(),reads:[log],base:r=>r.component(0,log)});
+    return{exports:{publish,history,reaction}};
+  }});
+  const body=rules.defineEffect<void,unknown>(b=>rules.sequence(
+    rules.install({ability:fixture.exports.reaction,source:0,owner:0,environment:{},lifetime:0}),
+    rules.call(fixture.exports.publish,5),b.return(rules.query(fixture.exports.history,undefined)),
+  ));
+  const entry=fromSource(body,()=>({source:0,owner:0,registration:null,kind:OriginKind.Card,action:77}));
+  const definition=linkRules({id:'sts/probability-event-origin',schemas:{setup:z.undefined(),result:z.unknown(),ports:{}},initialize:()=>({}),entry,definitions:[entry,body],modules:[fixture],initialEntities:[0]});
+  const program=new CardProgram(definition);
+  for(const probability of [false,true]){
+    const machine=new CardMachine(program,privateCardGraph(program.initial(undefined)));
+    try{
+      let stop=probability?machine.advanceProbability():machine.advance();
+      if(probability){assert.deepEqual(stop,{kind:'chance',space:{kind:'uniform',size:2n}});stop=machine.advanceProbability(1n);}
+      assert.equal(stop.kind,'done');if(stop.kind!=='done')throw Error('Expected event completion');
+      const history=stop.result as {value:number;cause:Cause}[];assert.equal(history.length,1);assert.equal(history[0]!.value,probability?6:5);
+      assert.equal(history[0]!.cause[0]!.action,77);assert.equal(history[0]!.cause[0]!.kind,OriginKind.Card);
+    }finally{machine.storage.close?.();}
+  }
+});

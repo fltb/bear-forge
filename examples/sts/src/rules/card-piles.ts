@@ -13,7 +13,6 @@ import {entityId} from './resources.schemas.ts';
 import {cardPilesSetupSchema,cardPilesStateSchema,pileCardSchema,cardDiscardSchema,pileBindingsSchema,pileCountersSchema,pileMembershipSchema} from './card-piles.schemas.ts';
 import type {CardPilesSetup,CardPilesState,PileCard,CardDiscard} from './card-piles.types.ts';
 import type {CardConfig,CardSetup,CardMutable} from './card-instances.types.ts';
-import {appendExchangeable,type OrderKnowledge} from './order-space.ts';
 const {defineRules,defineComponent,defineEvent,defineQuery,defineEffect,sequence,when,whileDo,call,query,forEach,enqueue}=rules;
 
 /** Ordered card movement and draw continuations. Named card, power and relic behavior is content. */
@@ -100,12 +99,12 @@ export const cardPiles=defineRules({requires:[zones,random,resources,cardInstanc
     const zone=v.query(bindings.current,v.input).draw;
     return{zone,keys:v.query(zones.exports.members,zone).map(entity=>({entity,key:v.query(cardInstances.exports.combatView,entity).uniqueId}))};
   })));
-  const shuffleDiscard=defineEffect<number,void>(b=>{const p=b.local<CardPilesState>(),order=b.local<readonly number[]>(),prior=b.local<OrderKnowledge>();return sequence(
+  const shuffleDiscard=defineEffect<number,void>(b=>{const p=b.local<CardPilesState>(),order=b.local<readonly number[]>();return sequence(
     call(resolveDrawOrder,b.input),
-    b.assign(p,query(current,b.input)),b.assign(prior,query(zones.exports.orderKnowledge,b.read(v=>v.get(p).draw))),b.assign(order,random.exports.shuffle({stream:b.read(v=>v.get(p).shuffleRng),items:query(zones.exports.members,b.read(v=>v.get(p).discard))})),
+    b.assign(p,query(current,b.input)),b.assign(order,random.exports.shuffle({stream:b.read(v=>v.get(p).shuffleRng),items:query(zones.exports.members,b.read(v=>v.get(p).discard))})),
     call(zones.exports.reorder,{zone:b.read(v=>v.get(p).discard),order:b.read(v=>[...v.get(order)])}),
     forEach(order,card=>call(requireMove,{entity:card,from:b.read(v=>v.get(p).discard),to:b.read(v=>v.get(p).draw),index:b.read(v=>v.query(zones.exports.members,v.get(p).draw).length)})),
-    call(zones.exports.conceal,b.read(v=>({zone:v.get(p).draw,...appendExchangeable(v.get(prior),v.get(order),v.query(zones.exports.members,v.get(p).draw).filter(id=>!v.get(order).includes(id)))}))),call(finishShuffle,b.input),
+    call(zones.exports.conceal,b.read(v=>({zone:v.get(p).draw,blocks:[v.query(zones.exports.members,v.get(p).draw)],unsupported:false}))),call(finishShuffle,b.input),
   );});
   const fulfillShuffle=defineEffect<{piles:number;epoch:number},void>(b=>when(b.read(v=>v.query(shuffleEpoch,v.input.piles)===v.input.epoch),call(shuffleDiscard,b.read(v=>v.input.piles))));
   const shuffleDraw=defineEffect<number,void>(b=>{const p=b.local<CardPilesState>(),order=b.local<readonly number[]>();return sequence(

@@ -1,3 +1,4 @@
+import {withProbability as coreProbability,type AtomProbability} from '../../../../packages/card-engine/src/rules-probability.ts';
 import {effectPolicy,type EffectKind} from './effect-policy.ts';
 import {z} from 'zod';
 import {rules as core} from '@bear-forge/card-engine';
@@ -7,6 +8,14 @@ import {effectTrace,causeSchema,inCause,fromSource,OriginKind,type Cause} from '
 
 // Immutable declaration metadata, never per-instance execution state.
 const tracedEvents=new WeakSet<object>();
+// Emitting atoms have an origin envelope. Register sorting kernels on their
+// actual commit atom, preserving the same envelope and event dispatch path.
+const probabilityAdapters=new WeakMap<object,(kernel:AtomProbability<any,any>)=>void>();
+export function withProbability<I,O>(effect:core.Effect<I,O>,kernel:AtomProbability<I,O>):core.Effect<I,O>{
+  const adapt=probabilityAdapters.get(effect);
+  if(adapt){adapt(kernel);return effect;}
+  return coreProbability(effect,kernel);
+}
 type Installed<E>={value:E;cause:Cause};
 const environment=<E>(value:core.Borrowed<Installed<E>>)=>value.value;
 type Envelope<T>={value:T;cause:Cause};
@@ -113,10 +122,19 @@ function defineRules<E>(spec:Parameters<typeof core.defineRules<E>>[0]):core.Rul
     type Ref=core.Component<any>|ruleModules.Owned<core.Component<any>>;
     function atom<I,O,const R extends readonly Ref[],const W extends readonly ruleModules.Owned<core.Component<any>>[],const E extends readonly ruleModules.Owned<core.RuleEvent<any>>[]>(config:ruleModules.AtomSpec<I,O,R,W,E>):core.Effect<I,O>{
       if(config.emits.length===0)return m.atom(config);
+      const events=(rows:readonly ruleModules.EventProposal<any>[],cause:core.Borrowed<Cause>)=>rows.map(e=>({event:e.event,payload:tracedEvents.has(e.event.public)?{value:e.payload,cause}:e.payload}));
       const commit=m.atom({input:z.object({value:wireSchema(config.input),cause:causeSchema}),output:config.output,reads:config.reads,writes:config.writes,emits:config.emits as readonly ruleModules.Owned<core.RuleEvent<any>>[],run(read,input){
-        const result=config.run(read,input.value);return{...result,events:result.events.map(e=>({event:e.event,payload:tracedEvents.has(e.event.public)?{value:e.payload,cause:input.cause}:e.payload}))};
+        const result=config.run(read,input.value);return{...result,events:events(result.events,input.cause)};
       }});
-      return core.defineEffect<I,O>(b=>{const result=b.local<O>();return core.sequence(b.assign(result,core.call(commit,{value:b.input,cause:core.query(effectTrace.exports.current,undefined)})),b.return(result));});
+      const wrapped=core.defineEffect<I,O>(b=>{const result=b.local<O>();return core.sequence(b.assign(result,core.call(commit,{value:b.input,cause:core.query(effectTrace.exports.current,undefined)})),b.return(result));});
+      probabilityAdapters.set(wrapped,kernel=>coreProbability(commit,{
+        space:i=>kernel.space(i.value),
+        ...(kernel.boundaryValue?{boundaryValue:(i:core.Borrowed<Envelope<I>>)=>kernel.boundaryValue!(i.value)}:{}),
+        ...(kernel.publication?{publication:(r:ruleModules.AtomRead<any>,i:core.Borrowed<Envelope<I>>,value:core.Borrowed<O>)=>kernel.publication!(r,i.value,value)}:{}),
+        ...(kernel.constraints?{constraints:(r:ruleModules.AtomRead<any>,i:core.Borrowed<Envelope<I>>,value:core.Borrowed<O>)=>kernel.constraints!(r,i.value,value)}:{}),
+        run(r,i,coordinate){const result=kernel.run(r,i.value,coordinate);return{...result,events:events(result.events,i.cause)};},
+      }));
+      return wrapped;
     }
     const builder:ruleModules.ModuleBuilder={...m,
       kind<C,S=undefined>(config:core.EntityKindSpec<C,S>):core.EntityKind<C,S>{

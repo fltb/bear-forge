@@ -76,3 +76,24 @@ npm run test:tui --workspace @bear-forge/cli
 退出时打印动作推进、存档和绘制的样本数量、中位数及最大耗时。启动/恢复计时包含加载与持久化相关工作；动作计时不含玩家思考和存档，绘制计时含构造文本和写入终端流，不等同终端像素呈现延迟。执行不等待动画，不设自动对局一分钟上限。
 
 2026-10-26 性能修复：已从普通执行中移除反复塞牌/消耗时急剧膨胀的概率语言维护。修复后新建压力夹具 1264 次动作最大约 178 ms；没有重放原 64 秒慢动作，该样本也不构成所有操作的响应上界。出现“正在执行或保存”时不要连续输入或另开同一存档。两个角色此前的完整人工实玩均到达第三幕死亡，完整结果、具体失误、版本和测量范围保留在 `plan.md`。界面文字完整但部分卡牌/敌人仍用英文名称或标识，复杂规则说明较长，需要翻页查看。
+
+
+## 运行 JSONL trace（2026-10-26）
+
+TUI 默认在存档目录创建新的 `trace-<时间>.jsonl`，`--trace /绝对路径/new.jsonl` 指定新文件，`--trace off` 关闭。文件使用独占创建（已存在就报告失败，不覆盖），权限0600；不改 `current.sts` 或 `pending.json` 格式及写入顺序。继续同局时创建新日志段，通过 sessionId/revision/cursor 关联，不重新输出旧批次或执行历史。旧源码存档仍遵守原有 program signature 匹配限制，禁止为了新日志迁移/重放真实存档。
+
+SDK 可传 `createSimulator({store,setup,trace})`；`openJsonlTrace(path)` 提供文件 sink。SDK 缺省无日志。`session.traceStatus()` 返回启用/错误/成功记录数/累计观测耗时。`traceText(record)` 将同一 JSONL 记录转成可读缩进文本；不需要加载游戏。
+
+每行含单调 traceSequence、recordedAt；原事件另保留连续 sequence、actionId、稳定实体 id、battle 关联：
+
+- header：格式、源码 program SHA-256、Node 版本、sessionId、新局 setup（含 seed/character）及字段可用性说明。旧存档恢复时 setup=null，不能拿默认seed冒充原局seed；须与原日志header关联。
+- command：动作bits及纯展示解释、目标/卡牌/选牌、动作前完整公开状态及合法候选（手牌uniqueId/升级/本回合费用/实际支付预览、能量/HP/block、敌人意图、牌堆数量及公开弃牌/消耗牌、力量等状态、蓄雷/领域/成长）。观察中的重复动作历史前缀省略，已由逐条command表达。
+- event：原展示事件逐条落盘，覆盖抽/弃/消耗、出牌、资源变化、伤害requested/blocked/blockSpent/unblocked/lost、敌人行动及回合/战斗边界。所有数值来自原事件，不重新结算。
+- boundary：动作后公开状态、下一选择或真实终局、实体映射、cursor。动作内的选牌同样是独立决策边界。
+- commit：原自动存档成功后记录revision/cursor、已有Context字节数和SHA-256；不额外save或解码RNG。fault/save-error分别表示原执行故障或原存档失败；日志绝不把未提交动作当已提交。
+
+日志只能保存原来可观察的事实。隐藏抽牌顺序/RNG不公开；Context摘要用于确认同一保存字节，不等于公开RNG值。伤害source/target和actionId是确定关联；原block-gain事件没有能力来源，嵌套能力精确因果链、领域本可阻止但未发生的效果/伤害量均明确不可得，不能从邻接事件猜成事实。领域收益可分析实际状态、清除/补抽和前后差异，不提供编造的反事实收益。旧日志缺失部分无法追补。
+
+观察器只消费既有batch/command及原persist已产生的Context字节；不调用游戏query、getters、RNG、advance或额外save。所有给sink的数据先复制，sink无法修改游戏状态。写入/序列化/关闭异常被隔离，首次失败停写；TUI提示缺口且继续原游戏/存档。文件每条await追加，正常关闭fsync；没有每事件fsync。崩溃可丢尾部/留下半行，读者丢弃不完整末行并检测sequence/commit缺口，不回放修补。磁盘延迟会增加墙钟耗时，traceStatus单列观测耗时；无异步无限队列、不把积压留在内存。坏盘/挂起I/O仍可能延迟UI，不承诺无墙钟开销。
+
+验收用全新临时目录的成对局，从相同seed执行相同明确动作，每个边界比较完整已保存Context（只归一化独立宿主call UUID），包含RNG、隐藏牌序与继续执行状态，并比较公开事件和真实终局。另验证失败隔离、sink修改隔离、去重、日志连续性、旧终局直接恢复、文件拒绝覆盖。真实用户存档不参加执行测试。

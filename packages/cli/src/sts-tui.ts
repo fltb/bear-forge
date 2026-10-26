@@ -1,3 +1,4 @@
+import {openJsonlTrace} from '../../../examples/sts/src/simulator-trace.ts';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -14,8 +15,8 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
   const flags=new Map<string,string>();
   for(let i=0;i<args.length;i++){
     const key=args[i]!;
-    if(key==='--help'){output.write('STS TUI\n新局: npm run sts:tui -- --save data/sts-saves/my-run --character ironclad\n继续: npm run sts:tui -- --resume data/sts-saves/my-run\n可选 --seed 十进制uint64；现有角色 ironclad / volibear，难度 A20。\n方向键选择，Enter 执行，左右切页，Tab 切焦点，PgUp/PgDn 滚动，/ 筛选，s 保存，q 保存退出。\n');return;}
-    if(!['--save','--resume','--character','--seed'].includes(key)||flags.has(key)||!args[i+1]||args[i+1]!.startsWith('--'))throw Error('未知、重复或缺少值的参数：'+key);
+    if(key==='--help'){output.write('STS TUI\n新局: npm run sts:tui -- --save data/sts-saves/my-run --character ironclad\n继续: npm run sts:tui -- --resume data/sts-saves/my-run\n可选 --trace 新JSONL路径（默认存档目录内新trace文件），--trace off 关闭；--seed 十进制uint64；现有角色 ironclad / volibear，难度 A20。\n方向键选择，Enter 执行，左右切页，Tab 切焦点，PgUp/PgDn 滚动，/ 筛选，s 保存，q 保存退出。\n');return;}
+    if(!['--save','--resume','--character','--seed','--trace'].includes(key)||flags.has(key)||!args[i+1]||args[i+1]!.startsWith('--'))throw Error('未知、重复或缺少值的参数：'+key);
     flags.set(key,args[++i]!);
   }
   if(!input.isTTY||!output.isTTY)throw Error('TUI 需要交互终端；请在终端运行 npm run sts:tui（--help 查看用法）。');
@@ -25,8 +26,13 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
   const directory=resolve(flags.get('--resume')??flags.get('--save')??`data/sts-saves/${new Date().toISOString().replace(/[:.]/g,'-')}-${randomUUID().slice(0,8)}`);
   output.write(`正在${flags.has('--resume')?'恢复':'创建'} STS；存档：${directory}\n`);
   const started=performance.now(),store=await openSimulatorStore(directory,flags.has('--resume')?'resume':'new');
+  let trace:Awaited<ReturnType<typeof openJsonlTrace>>|undefined;
+  if(flags.get('--trace')!=='off'){
+    const tracePath=resolve(flags.get('--trace')??`${directory}/trace-${new Date().toISOString().replace(/[:.]/g,'-')}.jsonl`);
+    try{trace=await openJsonlTrace(tracePath);output.write(`运行日志：${tracePath}\n`);}catch(error){output.write(`日志未启用（游戏仍可继续）：${String(error)}\n`);}
+  }
   let session:Awaited<ReturnType<typeof createSimulator>>;
-  try{session=await createSimulator({store,resume:flags.has('--resume'),setup:{character,seed}});}catch(error){await store.close();throw error;}
+  try{session=await createSimulator({store,...(trace?{trace}:{}),resume:flags.has('--resume'),setup:{character,seed}});}catch(error){await trace?.close?.();await store.close();throw error;}
   const initial=await session.observe(),model:TuiModel={batch:initial,tab:0,scroll:0,selected:0,filter:'',filtering:false,message:`${flags.has('--resume')?'直接恢复':'已创建'}；耗时 ${(performance.now()-started).toFixed(0)}ms；自动存档开启`,busy:false,log:eventLines(initial),focus:'actions',confirm:false,multi:null};
   let settle:((action:JsonValue)=>void)|null=null,finished=false,exitRequested=false,saved=true,abandonRequested=false,abandoned=false,faulted=false;
   const abort=new AbortController(),drawTimes:number[]=[];
@@ -47,6 +53,7 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
       const result=await session.decide(policy,abort.signal);
       if(result.accepted){model.batch=result.batch;saved=result.saved;model.log.push(...eventLines(result.batch));model.log=model.log.slice(-1000);model.filter='';model.selected=0;model.scroll=0;model.confirm=false;model.multi=null;model.message=result.saved?'已执行并保存':`动作已执行，但保存失败：${'saveError' in result?result.saveError:''}；按 s 重试，不能继续。`;}
       else model.message=result.reason;
+      if(session.traceStatus().failed)model.message+='；日志写入已停止：'+session.traceStatus().error;
       model.busy=false;draw();
       if(exitRequested&&saved){await quit();return;}
       void prompt();
@@ -85,6 +92,8 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
   output.write('\x1b[?1049h\x1b[?25l');emitKeypressEvents(input);input.setRawMode(true);input.resume();input.on('keypress',keypress);output.on('resize',onResize);process.on('SIGTERM',onSignal);process.on('SIGINT',onSignal);
   try{draw();void prompt();await completion;}
   finally{finished=true;abort.abort(Error('关闭界面'));input.off('keypress',keypress);output.off('resize',onResize);process.off('SIGTERM',onSignal);process.off('SIGINT',onSignal);input.setRawMode(false);input.pause();output.write('\x1b[?25h\x1b[?1049l');await session.close();}
+  const traceResult=session.traceStatus();
+  output.write(`日志：${traceResult.failed?'已失败，存在缺口':traceResult.enabled?'已关闭':'关闭'}；${traceResult.records}条；写入累计${traceResult.milliseconds.toFixed(1)}ms${traceResult.error?'；'+traceResult.error:''}\n`);
   const metric=(v:number[])=>{const a=[...v].sort((a,b)=>a-b);return a.length?`n=${a.length}, median=${a[Math.floor(a.length/2)]!.toFixed(1)}ms, max=${a.at(-1)!.toFixed(1)}ms`:'n=0';};
   const quotedDirectory="'"+directory.replaceAll("'", "'\"'\"'")+"'";
   const continuation=faulted||abandoned

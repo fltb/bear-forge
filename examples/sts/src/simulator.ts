@@ -1,3 +1,4 @@
+import {observeTrace,traceCoverage,traceBoundary,traceCommand,type SimulatorTrace} from './simulator-trace.ts';
 import {createHash,randomUUID} from 'node:crypto';
 import {readFile,readdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -36,14 +37,15 @@ async function programSignature(){
 }
 
 /** Shared Program, independently owned Context; persistence never executes inputs. */
-export async function createSimulator(options:{store:SimulatorStore;setup?:Setup;resume?:boolean}){
+export async function createSimulator(options:{store:SimulatorStore;setup?:Setup;resume?:boolean;trace?:SimulatorTrace}){
   const loaded=await(shared??=loadProgram()),program=await(signature??=programSignature());
-  return openSimulator({store:options.store,setup:{...options.setup,seed:options.setup?.seed??'0',detailedEvents:true},resume:options.resume??false,kernel:{loaded,snapshots,program,character:options.setup?.character??'ironclad'}});
+  return openSimulator({trace:options.trace,store:options.store,setup:{...options.setup,seed:options.setup?.seed??'0',detailedEvents:true},resume:options.resume??false,kernel:{loaded,snapshots,program,character:options.setup?.character??'ironclad'}});
 }
 
 /** Internal host seam: tests may supply original content fixtures, never alternate settlement. */
-export async function openSimulator<S>(options:{store:SimulatorStore;setup:S;resume:boolean;kernel:{loaded:LoadedCore<S,Ports,Frame>;snapshots:SnapshotStore;program:string;character:'ironclad'|'volibear'}}){
+export async function openSimulator<S>(options:{store:SimulatorStore;setup:S;resume:boolean;trace?:SimulatorTrace|undefined;kernel:{loaded:LoadedCore<S,Ports,Frame>;snapshots:SnapshotStore;program:string;character:'ironclad'|'volibear'}}){
   const {loaded,snapshots,program}=options.kernel,storage=options.store;
+  const trace=observeTrace(options.trace);
   if(ownedStores.has(storage))throw Error('存档句柄已属于一个会话');
   ownedStores.add(storage);
   try{
@@ -97,14 +99,21 @@ export async function openSimulator<S>(options:{store:SimulatorStore;setup:S;res
       await storage.commit(save);
       if(markerUncertain){await storage.pending(sessionId,revision);markerUncertain=false;}
       dirty=false;
+      await trace.write(()=>({kind:'commit',sessionId,revision,cursor,contextSha256:createHash('sha256').update(context).digest('hex'),contextBytes:context.length}));
     }finally{await snapshots.remove(reference.snapshotId);timings.save.push(performance.now()-started);}
   }
+  await trace.write(()=>({kind:'header',format:'sts-trace/1',sessionId,program,node:process.version,resumed:!!restored,revision,setup:restored?null:options.setup,coverage:traceCoverage}));
+  async function publishTrace(){
+    for(const entry of batch!.events)await trace.write(()=>({kind:'event',sessionId,revision,...entry}));
+    await trace.write(()=>({kind:'boundary',sessionId,...traceBoundary(batch!)}));
+  }
   try{
-    if(!restored){await storage.pending(sessionId,0);unwrap(await game.run());await collect(-1);dirty=true;await persist();}
+    if(!restored){await storage.pending(sessionId,0);unwrap(await game.run());await collect(-1);dirty=true;await publishTrace();await persist();}
     else { // Rebind a new instance identity, retaining the same logical request/revision.
       batch={...batch!,state:await view()};
+      await trace.write(()=>({kind:'resume-boundary',sessionId,...traceBoundary(batch!)}));
     }
-  }catch(error){await game.close();throw error;}
+  }catch(error){await trace.close();await game.close();throw error;}
   async function submit(command:SimulatorCommand,proposal:Proposal|null=null){command=structuredClone(command);return serial(async()=>{
     usable();
     if(!command||typeof command!=='object')return {accepted:false as const,reason:'需要动作命令对象'};
@@ -120,15 +129,16 @@ export async function openSimulator<S>(options:{store:SimulatorStore;setup:S;res
     if(!request)return {accepted:false as const,reason:'该局已结束'};
     if(!candidate||typeof candidate!=='object'||Object.keys(candidate).length!==1||!Number.isInteger(candidate.bits)||request.options.kind!=='exact'||!request.options.values.some(a=>(a as Action).bits===candidate.bits))return {accepted:false as const,reason:'非法动作；没有执行任何操作'};
     try{await storage.pending(sessionId,revision+1);markerUncertain=false;}catch(error){markerUncertain=true;return {accepted:false as const,reason:'执行前存档标记失败，动作未执行：'+String(error)};} // Durable BEFORE advance.
+    await trace.write(()=>({kind:'command',...traceCommand(command,current)}));
     actionId=command.id;events=[];pending={bits:candidate.bits!};const started=performance.now();
     try{
       const result=unwrap(await game.run());if(!result.accepted)throw Error('原宿主未接受已提交动作');
       if(proposal)policyState={version:proposal.policyVersion,encoderVersion:proposal.encoderVersion,memory:structuredClone(proposal.nextMemory),random:structuredClone(proposal.nextRandom)};
       revision++;lastCommand={id:command.id,revision:command.revision,bits:candidate.bits!,accepted:true,resultRevision:revision};
-      await collect(command.revision);dirty=true;
-    }catch(error){fault=String(error);throw error;}finally{timings.advance.push(performance.now()-started);}
+      await collect(command.revision);dirty=true;await publishTrace();
+    }catch(error){fault=String(error);await trace.write(()=>({kind:'fault',sessionId,revision,actionId,error:fault,events}));throw error;}finally{timings.advance.push(performance.now()-started);}
     try{await persist();return {accepted:true as const,duplicate:false,batch:structuredClone(batch!),saved:true};}
-    catch(error){return {accepted:true as const,duplicate:false,batch:structuredClone(batch!),saved:false,saveError:String(error)};}
+    catch(error){await trace.write(()=>({kind:'save-error',sessionId,revision,actionId,error:String(error)}));return {accepted:true as const,duplicate:false,batch:structuredClone(batch!),saved:false,saveError:String(error)};}
   });}
   return {
     act:(command:SimulatorCommand)=>submit(command),
@@ -140,9 +150,10 @@ export async function openSimulator<S>(options:{store:SimulatorStore;setup:S;res
       const proposal=await policy.decide({request:current.request,visibleHistory:[],memory:actor.memory,random:actor.random,signal});
       signal.throwIfAborted();return submit({id:randomUUID(),sessionId,revision:current.revision,action:proposal.action},proposal);
     },
+    traceStatus:()=>trace.status(),
     metrics:()=>structuredClone(timings),
-    close:()=>serial(async()=>{if(closed)return;await game.close();await storage.close();closed=true;ownedStores.delete(storage);}),
+    close:()=>serial(async()=>{if(closed)return;await game.close();await storage.close();await trace.close();closed=true;ownedStores.delete(storage);}),
   };
-  }catch(error){ownedStores.delete(storage);throw error;}
+  }catch(error){await trace.close();ownedStores.delete(storage);throw error;}
 }
 export type Simulator=Awaited<ReturnType<typeof createSimulator>>;

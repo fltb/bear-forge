@@ -87,3 +87,47 @@ for(const eligible of ['registered','captured'] as const)test(`replacement eligi
   assert.deepEqual(parent.advance(9),{kind:'done',result:eligible==='registered'?3:9});
   assert.deepEqual(restored.advance(11),{kind:'done',result:eligible==='registered'?3:11});
 });
+
+test('replacement candidates skipped earlier are reconsidered after the checkpoint value changes',()=>{
+  const m=fixture();
+  const double=defineEffect<ReplacementContext<number>,ReplacementResult<number>>(b=>b.return({kind:'change',value:b.read(v=>v.input.value*2)}));
+  const add=defineEffect<ReplacementContext<number>,ReplacementResult<number>>(b=>b.return({kind:'change',value:b.read(v=>v.input.value+10)}));
+  const first=replace(m.exports.checkpoint,{effect:double,condition:m.exports.positive,order:-1});
+  const second=replace(m.exports.checkpoint,{effect:add,order:1});
+  const entry=defineEffect<number,number>(b=>sequence(
+    install({source:0,owner:0,ability:first,environment:{},lifetime:0}),
+    install({source:0,owner:0,ability:second,environment:{},lifetime:0}),returnGuarded(b,m),
+  ));
+  assert.deepEqual(run(entry,m,3).advance(),{kind:'done',result:26});
+});
+
+test('a wide replacement chain resumes its applied membership from the current wait',()=>{
+  const m=fixture();
+  const callback=defineEffect<ReplacementContext<number>,ReplacementResult<number>>(b=>{
+    const answer=b.local<number>();return sequence(
+      b.assign(answer,call(choose,b.read(v=>v.input.value))),b.return({kind:'change',value:answer}),
+    );
+  });
+  const ability=replace(m.exports.checkpoint,{effect:callback});
+  const entry=defineEffect<number,number>(b=>sequence(
+    rules.forEach(Array.from({length:32},(_,i)=>i),()=>install({source:0,owner:0,ability,environment:{},lifetime:0})),
+    returnGuarded(b,m),
+  ));
+  const parent=run(entry,m,3);
+  let stop=parent.advance();
+  for(let index=0;index<16;index++){
+    assert.equal(stop.kind,'call');if(stop.kind!=='call')throw Error('Missing replacement wait');
+    assert.equal(stop.call.input,3+index);stop=parent.advance(stop.call.input+1);
+  }
+  assert.deepEqual(stop,{kind:'call',call:{port:'choose',input:19}});
+  const restored=new CardMachine(parent.program,plainCardStorage(structuredClone(parent.root)));
+  for(const [machine,increment,expected]of[[parent,1,35],[restored,2,51]]as const){
+    let current=machine.current(),remaining=0;
+    while(current.kind==='call'){
+      remaining++;assert.ok(remaining<=16,'an applied replacement cannot run again');
+      assert.ok(typeof current.call.input==='number');
+      current=machine.advance(current.call.input+increment);
+    }
+    assert.equal(remaining,16);assert.deepEqual(current,{kind:'done',result:expected});
+  }
+});

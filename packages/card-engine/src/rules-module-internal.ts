@@ -163,9 +163,10 @@ export function createModuleState(bindings: ModuleBindings, entities: readonly n
     const components: Record<number, any> = {};
     for (const slot of bindings.initialComponents) components[slot.index] = slot.create();
     state.entities[entity] = { components,definition:null,scope:0,owner:null,phase:'active' };
-    indexEntity(state, entity);
     state.nextEntity=Math.max(state.nextEntity,entity+1);
   }
+  // Component factories retain caller order; only the redundant ID indexes sort.
+  for(const entity of [...entities].sort((a,b)=>a-b))indexEntity(state,entity);
   return state;
 }
 export type AnyComponent = Component<any>;

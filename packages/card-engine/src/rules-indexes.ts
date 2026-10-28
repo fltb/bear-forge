@@ -4,7 +4,46 @@ import type { Registration } from './rules-reactions.types.ts';
 import type { RuleTask } from './rules-tasks.types.ts';
 import { compareOrder } from './rules-order.ts';
 
-type Buckets = Record<number, number[]>;
+/** Numeric identity order is explicit rather than Object.keys order, which
+ * changes above the array-index range. Flat links live in ordinary Context
+ * numeric tables: no per-member object/proxy or opaque host collection.
+ * Singleton buckets retain only their endpoints, without two extra rows. */
+export type RuleIndex = {
+  first: number | null;
+  last: number | null;
+  size: number;
+  previous: Record<number, number | null> | null;
+  next: Record<number, number | null> | null;
+};
+type Buckets = Record<number, RuleIndex>;
+export function createIndex(): RuleIndex { return {first:null,last:null,size:0,previous:null,next:null}; }
+function singletonIndex(id:number):RuleIndex { return {first:id,last:id,size:1,previous:null,next:null}; }
+function insertAfter(index:RuleIndex,id:number,previous:number|null):void {
+  const nextIds=index.next;
+  if(nextIds===null){
+    const existing=index.first;
+    if(existing===null){index.first=id;index.last=id;index.size=1;return;}
+    const first=previous===null?id:existing,last=previous===null?existing:id;
+    // Both complete tables transfer once; never mutate a transferred host row.
+    index.previous={[first]:null,[last]:first};index.next={[first]:last,[last]:null};
+    index.first=first;index.last=last;index.size=2;return;
+  }
+  const previousIds=index.previous!,next=previous===null?index.first:nextIds[previous]!;
+  previousIds[id]=previous;nextIds[id]=next;
+  if(previous===null)index.first=id;else nextIds[previous]=id;
+  if(next===null)index.last=id;else previousIds[next]=id;
+  index.size++;
+}
+/** A detached iteration snapshot; consumers that can mutate membership keep
+ * the same captured-ID semantics as the previous array copy. */
+export function indexIds(buckets:Buckets,key:number):number[]{
+  const index=buckets[key],ids:number[]=[];
+  if(index){
+    const next=index.next;
+    for(let id=index.first;id!==null;id=next===null?null:next[id]!)ids.push(id);
+  }
+  return ids;
+}
 export type RuleIndexes = {
   registrationsByTarget: Buckets;
   registrationsByTargetArrival: Buckets;
@@ -28,20 +67,33 @@ export function createRuleIndexes(): RuleIndexes {
 }
 
 export function insertIndex(buckets: Buckets, key: number, id: number): void {
-  const values = buckets[key];
-  if (!values) { buckets[key] = [id]; return; }
-  if (!values.length || values[values.length - 1]! < id) { values.push(id); return; }
-  let low = 0, high = values.length;
-  while (low < high) { const middle = (low + high) >>> 1; if (values[middle]! < id) low = middle + 1; else high = middle; }
-  if (values[low] !== id) values.splice(low, 0, id);
+  const index=buckets[key];
+  // Transfer a complete first member once. Small buckets need no follow-up
+  // proxy reads/writes, and the transferred host object is never mutated.
+  if(!index){buckets[key]=singletonIndex(id);return;}
+  const next=index.next;
+  if(next===null?index.first===id:next[id]!==undefined)return;
+  // Runtime identities arrive monotonically. Initialization/restoration build
+  // indexes in numeric order; the fallback retains internal insertion semantics.
+  let previous=index.last;const previousIds=index.previous;
+  while(previous!==null&&previous>id)previous=previousIds===null?null:previousIds[previous]!;
+  insertAfter(index,id,previous);
 }
 
 export function removeIndex(buckets: Buckets, key: number, id: number): void {
-  const values = buckets[key];
-  if (!values) return;
-  const at = values.indexOf(id);
-  if (at >= 0) values.splice(at, 1);
-  if (!values.length) delete buckets[key];
+  const index=buckets[key];if(!index)return;
+  const nextIds=index.next;
+  if(nextIds===null){if(index.first===id)delete buckets[key];return;}
+  const next=nextIds[id];if(next===undefined)return;
+  const size=index.size;
+  if(size===2){
+    const remaining=next===null?index.first:next;
+    index.first=remaining;index.last=remaining;index.size=1;index.previous=null;index.next=null;return;
+  }
+  const previousIds=index.previous!,previous=previousIds[id]!;
+  if(previous===null)index.first=next;else nextIds[previous]=next;
+  if(next===null)index.last=previous;else previousIds[next]=previous;
+  delete previousIds[id];delete nextIds[id];index.size=size-1;
 }
 
 type LinkedAbility = Extract<StaticDefinition, { kind: 'ability' }>;
@@ -53,16 +105,20 @@ function ability(bindings: ModuleBindings, definition: number): LinkedAbility {
 export function addRegistration(state: ModuleState, bindings: ModuleBindings, registration: Registration): void {
   const metadata = ability(bindings, registration.definition), target = bindings.indices.get(metadata.target)!;
   state.registrations[registration.id] = registration;
-  const buckets = state.indexes.registrationsByTarget, ids = buckets[target];
-  if (!ids) buckets[target] = [registration.id];
+  const buckets=state.indexes.registrationsByTarget;
+  const index=buckets[target];
+  if(!index)buckets[target]=singletonIndex(registration.id);
   else {
-    let low = 0, high = ids.length;
-    while (low < high) {
-      const middle = (low + high) >>> 1, previous = state.registrations[ids[middle]!]!;
-      const order = compareOrder(ability(bindings, previous.definition), metadata) || previous.sequence - registration.sequence;
-      if (order <= 0) low = middle + 1; else high = middle;
+    // Equal priorities append in arrival order. An earlier priority walks only
+    // the suffix it precedes; insertion remains O(k), as the former splice was,
+    // while arbitrary removals no longer shift the remaining registrations.
+    let previous=index.last;const previousIds=index.previous;
+    while(previous!==null){
+      const record=state.registrations[previous]!;
+      if((compareOrder(ability(bindings,record.definition),metadata)||record.sequence-registration.sequence)<=0)break;
+      previous=previousIds===null?null:previousIds[previous]!;
     }
-    ids.splice(low, 0, registration.id);
+    insertAfter(index,registration.id,previous);
   }
   insertIndex(state.indexes.registrationsBySource, registration.source, registration.id);
   insertIndex(state.indexes.registrationsByTargetArrival, target, registration.id);

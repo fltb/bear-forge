@@ -110,7 +110,10 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
     const layoutNodes:unknown[]=[];layoutTrees.push(layoutNodes);
     const lexicalItems = new Map<object, (context: ExpressionContext) => unknown>();
     const lexicalActive = new Set<object>();
-    const contexts=new WeakMap<CardScope<S>,ExpressionContext>();
+    // A CardScope is intentionally fresh for each instruction. The linked
+    // expression view instead belongs to one invocation's locals: branch and
+    // loop blocks share that call, while recursion, fork and restore do not.
+    const contexts=new WeakMap<object,ExpressionContext>();
     const createContext = (scope: CardScope<S>): ExpressionContext => ({
       owner, slots: locals, input: scope.input, locals: scope.locals, lexical: lexicalItems,
       world:scope.state, bindings:linkedModules.bindings,identity:()=>runtimeIdentity,evaluate:value=>evaluate(value,scope),
@@ -123,7 +126,11 @@ export function linkRules<S, Setup, P extends { [K in keyof P]: PortShape }, R>(
       },
     });
     const context=(scope:CardScope<S>):ExpressionContext=>{
-      let value=contexts.get(scope);if(!value){value=createContext(scope);contexts.set(scope,value);}return value;
+      let value=contexts.get(scope.locals);
+      if(!value||value.world!==scope.state||!Object.is(value.input,scope.input)){
+        value=createContext(scope);contexts.set(scope.locals,value);
+      }
+      return value;
     };
     type Reader=(scope:CardScope<S>)=>unknown;
     type LiteralReader=(scope:CardScope<S>,memo:unknown[]|null)=>unknown;

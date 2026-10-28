@@ -2,12 +2,12 @@ import {z} from 'zod';
 import type {ModuleBindings,ModuleState} from './rules-module-internal.ts';
 import {staticDefinitions} from './rules-module-internal.ts';
 import {createRuleIndexes,indexEntity,indexTask,insertIndex,addRegistration} from './rules-indexes.ts';
-import {sameRuleValue} from './rules-values.ts';
+import type {RuleIndexes} from './rules-indexes.ts';
 import type {RuleDeque} from './rules-deque.ts';
 
 const id=z.number().int().nonnegative(),positive=id.min(1),reference=id.nullable();
 const key=z.string().regex(/^(?:0|[1-9][0-9]*)$/).refine(value=>Number.isSafeInteger(Number(value))&&String(Number(value))===value);
-const bucket=z.record(key,z.array(id));
+const bucket=z.record(key,z.object({first:reference,last:reference,size:id,previous:z.record(key,reference).nullable(),next:z.record(key,reference).nullable()}).strict());
 const deque=z.object({first:reference,last:reference,size:id,links:z.record(key,z.object({previous:reference,next:reference}).strict())}).strict();
 const registration=z.object({id:positive,definition:id,source:id,owner:id,environment:z.unknown(),lifetime:id,sequence:positive}).strict();
 const schema=z.object({
@@ -33,6 +33,25 @@ function inspectDeque(queue:RuleDeque):number[]{
   return visited;
 }
 
+/** Index order belongs to the explicit links, not the insertion order of the
+ * numeric tables' object properties (including IDs beyond array indexes).
+ * Keep a bijection of containers: aliasing two equal-looking link tables can
+ * corrupt later edits even though their current scalar contents are equal. */
+function sameIndexes(expected:RuleIndexes,actual:RuleIndexes):boolean{
+  const forward=new Map<object,object>(),reverse=new Map<object,object>();
+  const compare=(left:unknown,right:unknown):boolean=>{
+    if(left===null||right===null||typeof left!=='object'||typeof right!=='object')return Object.is(left,right);
+    if(forward.has(left))return forward.get(left)===right;
+    if(reverse.has(right))return false;
+    forward.set(left,right);reverse.set(right,left);
+    const keys=Object.keys(left);if(keys.length!==Object.keys(right).length)return false;
+    const a=left as Record<string,unknown>,b=right as Record<string,unknown>;
+    for(const key of keys)if(!Object.hasOwn(b,key)||!compare(a[key],b[key]))return false;
+    return true;
+  };
+  return compare(expected,actual);
+}
+
 /** Only real restore calls this. Recompute redundant indexes from authoritative
  * records, reject disagreement, and retain the original graph/alias topology. */
 export function admitRuleState(root:unknown,bindings:ModuleBindings,effectCount:number,selectorCount:number):void{
@@ -44,14 +63,14 @@ export function admitRuleState(root:unknown,bindings:ModuleBindings,effectCount:
   checkNext(state.nextEntity,state.entities);checkNext(state.nextScope,state.scopes);checkNext(state.nextTask,state.tasks);checkNext(state.nextRegistration,state.registrations);checkNext(state.nextEvent,state.outbox);
   const rootScope=state.scopes[0];
   if(!rootScope||rootScope.parent!==null||rootScope.kind!==null||rootScope.phase!=='active')throw Error('Invalid saved root scope');
-  for(const [name,scope] of Object.entries(state.scopes)){
+  for(const [name,scope] of Object.entries(state.scopes).sort(([a],[b])=>Number(a)-Number(b))){
     const scopeId=Number(name);if(scopeId===0)continue;
     if(scope.kind===null||metadata(scope.kind)?.kind!=='scope-kind'||scope.parent===null||!state.scopes[scope.parent])throw Error('Invalid saved scope binding');
     const ancestry=new Set<number>([scopeId]);let parent:number|null=scope.parent;
     while(parent!==null){if(ancestry.has(parent))throw Error('Cyclic saved scope ancestry');ancestry.add(parent);const value:ModuleState['scopes'][number]|undefined=state.scopes[parent];if(!value)throw Error('Invalid saved scope parent');parent=value.parent;}
     if(scope.phase!=='closed')insertIndex(expected.indexes.childrenByScope,scope.parent,scopeId);
   }
-  for(const [name,entity] of Object.entries(state.entities)){
+  for(const [name,entity] of Object.entries(state.entities).sort(([a],[b])=>Number(a)-Number(b))){
     if(!state.scopes[entity.scope])throw Error('Invalid saved entity scope');
     const layout=entity.definition===null?bindings.initialComponents:bindings.entityLayouts.get(entity.definition)?.components;
     if(!layout||layout.length!==Object.keys(entity.components).length||layout.some(slot=>!Object.hasOwn(entity.components,slot.index)))throw Error('Invalid saved entity component layout');
@@ -60,7 +79,7 @@ export function admitRuleState(root:unknown,bindings:ModuleBindings,effectCount:
   const validRegistration=(record:ModuleState['registrations'][number])=>{
     if(!Object.hasOwn(record,'environment')||metadata(record.definition)?.kind!=='ability'||!state.scopes[record.lifetime]||record.id!==record.sequence||record.id>=state.nextRegistration)throw Error('Invalid saved ability binding');
   };
-  for(const [name,record] of Object.entries(state.registrations)){
+  for(const [name,record] of Object.entries(state.registrations).sort(([a],[b])=>Number(a)-Number(b))){
     validRegistration(record);if(Number(name)!==record.id||!state.entities[record.source])throw Error('Invalid saved registration source');
     addRegistration(expected,bindings,record);
   }
@@ -73,7 +92,7 @@ export function admitRuleState(root:unknown,bindings:ModuleBindings,effectCount:
       queuedTasks.add(taskId);
     }
   }
-  for(const [name,task] of Object.entries(state.tasks)){
+  for(const [name,task] of Object.entries(state.tasks).sort(([a],[b])=>Number(a)-Number(b))){
     if(!Object.hasOwn(task,'input')||Number(name)!==task.id||!state.scopes[task.lifetime]||metadata(task.queue)?.kind!=='queue'||task.effect.program!==bindings.programIdentity||task.effect.effect>=effectCount||task.effect.selector!==null&&task.effect.selector>=selectorCount)throw Error('Invalid saved task binding');
     if(task.at!==null&&metadata(task.at)?.kind!=='event'||task.condition!==null&&metadata(task.condition)?.kind!=='query')throw Error('Invalid saved task schedule');
     if(task.state==='scheduled'&&task.at===null||task.state==='pending'&&!queuedTasks.has(task.id))throw Error('Invalid saved task phase');
@@ -87,5 +106,7 @@ export function admitRuleState(root:unknown,bindings:ModuleBindings,effectCount:
     for(const handler of envelope.handlers){validRegistration(handler.registration);const ability=metadata(handler.registration.definition);if(ability?.kind!=='ability'||ability.abilityKind!=='event'||bindings.indices.get(ability.target)!==envelope.event)throw Error('Invalid saved captured handler');}
   }
   if(queuedEvents.size!==Object.keys(state.outbox).length)throw Error('Unqueued saved event');
-  if(!sameRuleValue(expected.indexes,state.indexes))throw Error('Invalid saved rule indexes');
+  // Parsing validates the fields but may duplicate shared input containers.
+  // Compare the admitted original graph so malformed aliases cannot disappear.
+  if(!sameIndexes(expected.indexes,(root as {$rules:ModuleState}).$rules.indexes))throw Error('Invalid saved rule indexes');
 }

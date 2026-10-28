@@ -1,6 +1,6 @@
 import {compareOrder} from './rules-order.ts';
 import {cancelTask} from './rules-tasks.ts';
-import { insertIndex, removeIndex, removeRegistration } from './rules-indexes.ts';
+import { insertIndex, removeIndex, removeRegistration, indexIds } from './rules-indexes.ts';
 import { card } from './card.ts';
 import { definitions,handle,statements,expression,freezeAuthorInput } from './rules-internal.ts';
 import { stateOf,staticDefinitions,declareStatic } from './rules-module-internal.ts';
@@ -41,15 +41,15 @@ export function closeScope(scope:Input<number>):Command<boolean>{
       const state=stateOf(s.state),record=state.scopes[s.input];if(!record||record.phase==='ending'||record.phase==='closed')return null;
       record.phase='ending';
       const callbacks=record.kind===null?[]:callbacksByKind.get(record.kind)??[];
-      return{parent:record.parent,callbacks:[...callbacks],children:[...(state.indexes.childrenByScope[s.input]??[])].reverse()};
+      return{parent:record.parent,callbacks:[...callbacks],children:indexIds(state.indexes.childrenByScope,s.input).reverse()};
     },'ending'),card.branch(s=>s.locals.ending===null,[card.return(()=>false)]),
     card.forEach(s=>s.locals.ending.children,self),
     card.operation(()=>0,'cursor'),card.repeat(s=>s.locals.cursor<s.locals.ending.callbacks.length,[
       card.invoke(s=>s.locals.ending.callbacks[s.locals.cursor],s=>({scope:s.input,parent:s.locals.ending.parent})),card.operation(s=>{s.locals.cursor++;}),
-    ]),card.operation(s=>(stateOf(s.state).indexes.entitiesByScope[s.input]??[]).map(entity=>({entity,reason:{kind:'scope-ended'}})),'entities'),
+    ]),card.operation(s=>indexIds(stateOf(s.state).indexes.entitiesByScope,s.input).map(entity=>({entity,reason:{kind:'scope-ended'}})),'entities'),
     card.forEach(s=>s.locals.entities,removeName),card.operation(s=>{
-      const state=stateOf(s.state);for(const id of [...(state.indexes.registrationsByScope[s.input]??[])])removeRegistration(state,link.bindings,id);
-      for(const id of [...(state.indexes.tasksByScope[s.input]??[])])cancelTask(state,id);
+      const state=stateOf(s.state);for(const id of indexIds(state.indexes.registrationsByScope,s.input))removeRegistration(state,link.bindings,id);
+      for(const id of indexIds(state.indexes.tasksByScope,s.input))cancelTask(state,id);
       const record=state.scopes[s.input]!;record.phase='closed';if(record.parent!==null)removeIndex(state.indexes.childrenByScope,record.parent,s.input);
     }),card.return(()=>true)];
   }});return command(effect,scope);

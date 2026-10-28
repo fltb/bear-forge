@@ -1,10 +1,13 @@
 import {CowStore} from './cow-index.ts';
 
+type Property<T>={value:T;order:number};
+const cloneProperty=<T>(entry:Property<T>):Property<T>=>({value:entry.value,order:entry.order});
+
 /** Property names are interned metadata only. Values and insertion order belong
  * to each branch. A sibling learning a name never adds a property here. */
 export class CowProperties<T> {
   private names=new Map<string,number>();
-  private values=new CowStore<{value:T;order:number}>();
+  private values=new CowStore<Property<T>>();
   private order=new CowStore<string>();
   private next=0;
   get size():number{return this.values.size;}
@@ -12,9 +15,9 @@ export class CowProperties<T> {
   has(key:string):boolean{const id=this.names.get(key);return id!==undefined&&this.values.has(id);}
   set(key:string,value:T):void{
     let id=this.names.get(key);if(id===undefined){id=this.names.size;this.names.set(key,id);}
-    const previous=this.values.get(id),order=previous?.order??this.next++;
-    if(!previous)this.order.set(order,key);
-    this.values.set(id,{value,order});
+    if(this.values.has(id)){this.values.edit(id,cloneProperty).value=value;return;}
+    const order=this.next++;
+    this.order.set(order,key);this.values.set(id,{value,order});
   }
   delete(key:string):void{const id=this.names.get(key),entry=id===undefined?undefined:this.values.get(id);if(entry){this.values.delete(id!);this.order.delete(entry.order);}}
   fork():CowProperties<T>{const result=new CowProperties<T>();result.names=this.names;result.values=this.values.fork();result.order=this.order.fork();result.next=this.next;return result;}

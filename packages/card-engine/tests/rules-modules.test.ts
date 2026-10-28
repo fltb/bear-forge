@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { CardMachine, CardProgram, plainCardStorage, linkRules, rules } from '../src/index.ts';
 import type { AtomSpec, Component, RuleEvent } from '../src/rules-module.types.ts';
 const emptyQueue=()=>({first:null,last:null,size:0,links:{}});
-const emptyIndexes=()=>({registrationsByTarget:{},registrationsByTargetArrival:{},registrationsBySource:{},registrationsByScope:{},entitiesByComponent:{0:[0]},entitiesByScope:{0:[0]},childrenByScope:{},tasksBySource:{},tasksByScope:{},tasksByEvent:{}});
+const singletonIndex=()=>({first:0,last:0,size:1,previous:null,next:null});
+const emptyIndexes=()=>({registrationsByTarget:{},registrationsByTargetArrival:{},registrationsBySource:{},registrationsByScope:{},entitiesByComponent:{0:singletonIndex()},entitiesByScope:{0:singletonIndex()},childrenByScope:{},tasksBySource:{},tasksByScope:{},tasksByEvent:{}});
 const { defineRules,defineComponent,defineEvent,defineEffect,sequence,call } = rules;
 const schema={setup:z.number(),result:z.number(),ports:{}};
 function temperature(options:{badValue?:boolean;badResult?:boolean;duplicate?:boolean;mutateRead?:boolean}={}){

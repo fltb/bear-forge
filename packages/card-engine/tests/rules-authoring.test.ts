@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { CardMachine, CardProgram, plainCardStorage, rules, linkRules } from '../src/index.ts';
 import { portEffect } from '../src/rules-internal.ts';
-import type { Effect, Value, Local } from '../src/rules.types.ts';
+import type { Effect, Value, Local, ReadView } from '../src/rules.types.ts';
 
 const { defineEffect, sequence, when, whileDo, forEach, call } = rules;
 type Ports = { choose: { kind: 'request'; input: number; output: number } };
@@ -138,4 +138,22 @@ test('a reusable utility may construct a finite nested effect during author lowe
   const add=(amount:number)=>defineEffect<number,number>(b=>b.return(b.read(v=>v.input+amount)));
   const entry=defineEffect<number,number>(b=>{const result=b.local<number>();return sequence(b.assign(result,call(add(7),b.input)),b.return(result));});
   assert.deepEqual(machine(entry,[entry],3).advance(),{kind:'done',result:10});
+});
+
+test('recursive rule calls retain separate read views while loops re-read their own locals',()=>{
+  const retained:ReadView<number>[]=[];let local:Local<number>;
+  const recursive:Effect<number,number>=defineEffect<number,number>(b=>{
+    const count=b.local<number>(),child=b.local<number>();local=count;
+    return sequence(
+      b.assign(count,b.read(v=>{retained.push(v);return v.input;})),
+      when(b.read(v=>v.input>0),b.assign(child,call(recursive,b.read(v=>v.input-1)))),
+      whileDo(b.read(v=>v.get(count)<v.input+3),b.assign(count,b.read(v=>v.get(count)+1))),
+      b.return(count),
+    );
+  });
+  assert.deepEqual(machine(recursive,[recursive],5).advance(),{kind:'done',result:8});
+  assert.equal(new Set(retained).size,6);
+  for(let index=0;index<retained.length;index++){
+    assert.equal(retained[index]!.input,5-index);assert.equal(retained[index]!.get(local!),8-index);
+  }
 });

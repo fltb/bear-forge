@@ -45,15 +45,19 @@ export function resolveCheckpoint<I,O>(owner:object,target:Owned<Checkpoint<I,O>
       return !checkCondition||!ability.condition||evaluateQuery(ability.condition,context(s,registration),s.state,link.bindings);
     };
     return[card.operation(s=>{
-      const parsed=metadata.inputPlan.own(s.input);s.locals.value=metadata.outputPlan.own(metadata.initial(parsed));s.locals.applied=[];s.locals.changed=false;
+      const parsed=metadata.inputPlan.own(s.input);s.locals.value=metadata.outputPlan.own(metadata.initial(parsed));s.locals.applied=Object.create(null);s.locals.changed=false;
     }),card.repeat(()=>true,[
       card.operation(s=>{
         const state=stateOf(s.state);let selected:Registration|null=null;
         // Conditions retain registration-arrival order; ranking chooses the
         // same first qualified replacement without sorting on every retry.
-        for(const id of state.indexes.registrationsByTargetArrival[targetIndex]??[]){
+        // Membership is Context data with constant-time lookup, not a scan of
+        // the growing applied prefix inside this already repeated scan.
+        const candidates=state.indexes.registrationsByTargetArrival[targetIndex];
+        const nextIds=candidates?.next??null;
+        for(let id=candidates?.first??null;id!==null;id=nextIds===null?null:nextIds[id]!){
           const registration=state.registrations[id]!;
-          if(s.locals.applied.includes(id)||!qualified(s,registration))continue;
+          if(Object.hasOwn(s.locals.applied,id)||!qualified(s,registration))continue;
           if(selected===null){selected=registration;continue;}
           const next=staticDefinitions.get(link.bindings.definitions[registration.definition]!)!,previous=staticDefinitions.get(link.bindings.definitions[selected.definition]!)!;
           if(next.kind==='ability'&&previous.kind==='ability'&&(compareOrder(next,previous)||registration.sequence-selected.sequence)<0)selected=registration;
@@ -61,7 +65,7 @@ export function resolveCheckpoint<I,O>(owner:object,target:Owned<Checkpoint<I,O>
         return selected===null?null:selected;
       },'candidate'),
       card.branch(s=>s.locals.candidate===null,[card.return(s=>({kind:s.locals.changed?'change':'keep',value:s.locals.value}))]),
-      card.operation(s=>{s.locals.applied.push(s.locals.candidate.id);stateOf(s.state).sources.push(s.locals.candidate.source);}),
+      card.operation(s=>{s.locals.applied[s.locals.candidate.id]=true;stateOf(s.state).sources.push(s.locals.candidate.source);}),
       card.invoke(s=>{
         return link.bindings.reactions.get(s.locals.candidate.definition)!.effect;
       },s=>context(s,s.locals.candidate),'replacement'),

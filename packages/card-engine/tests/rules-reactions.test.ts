@@ -5,6 +5,7 @@ import { CardMachine, CardProgram, plainCardStorage, linkRules, rules } from '..
 import { dispatchQueuedEvents } from '../src/rules-reactions.ts';
 import { portEffect } from '../src/rules-internal.ts';
 import type { ReactionContext } from '../src/rules-reactions.types.ts';
+import {createIndex,type RuleIndex} from '../src/rules-indexes.ts';
 const {defineRules,defineComponent,defineEvent,defineQuery,defineEffect,query,on,install,uninstall,sequence,call}=rules;
 const choose=portEffect<number,number>('choose');
 const schemas={setup:z.number(),result:z.array(z.number()),ports:{choose:{input:z.number(),output:z.number()}}};
@@ -37,8 +38,8 @@ test('restore admission follows linked effects through a definition wrapper and 
   const program=new CardProgram({...definition,initialize:definition.initialize}),machine=new CardMachine(program,plainCardStorage(program.initial(0)));
   assert.equal(machine.advance().kind,'call');
   const valid=structuredClone(machine.root);program.validate(valid);
-  const state=(valid.state as unknown as {$rules:{indexes:{entitiesByComponent:Record<number,number[]>}}}).$rules;
-  const index=Number(Object.keys(state.indexes.entitiesByComponent)[0]);state.indexes.entitiesByComponent[index]=[];
+  const state=(valid.state as unknown as {$rules:{indexes:{entitiesByComponent:Record<number,RuleIndex>}}}).$rules;
+  const index=Number(Object.keys(state.indexes.entitiesByComponent)[0]);state.indexes.entitiesByComponent[index]=createIndex();
   assert.throws(()=>program.validate(valid),/Invalid saved rule indexes/);
 });
 

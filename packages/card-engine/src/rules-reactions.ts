@@ -1,9 +1,9 @@
 import {temporaryLocalBlock} from './card-execution-hints.ts';
 import {captureScheduled,activateScheduled} from './rules-tasks.ts';
 import { card } from './card.ts';
-import { detachRuleValue, ownRuleValue } from './rules-values.ts';
+import { ownRuleValue } from './rules-values.ts';
 import {resolveOrder} from './rules-order.ts';
-import { addRegistration, removeRegistration } from './rules-indexes.ts';
+import { addRegistration, removeRegistration, indexIds } from './rules-indexes.ts';
 import { appendDeque, removeDeque } from './rules-deque.ts';
 import { evaluateQuery,defineQuery } from './rules-queries.ts';
 import {z} from 'zod';
@@ -73,10 +73,13 @@ function reactionInput(registration:Registration,payload:any):ReactionContext<an
 }
 export function captureEvent(event:number,payload:any,world:unknown,bindings:ModuleBindings,overlay?:ComponentOverlay):Omit<EventEnvelope,'id'>{
   const state=stateOf(world);
-  const handlers=(state.indexes.registrationsByTarget[event]??[]).map(id=>state.registrations[id]!).filter(registration=>{
+  // Capture the registration record, but borrow its already-owned environment.
+  // Removing the live registration cannot change this immutable snapshot, and
+  // a large captured environment is not copied for every emitted event.
+  const handlers=indexIds(state.indexes.registrationsByTarget,event).map(id=>state.registrations[id]!).filter(registration=>{
     const {metadata}=bindings.reactions.get(registration.definition)!;
     return !metadata.condition||evaluateQuery(metadata.condition,reactionInput(registration,payload),world,bindings,overlay);
-  }).map(registration=>({registration:detachRuleValue(registration)}));
+  }).map(registration=>({registration:ownRuleValue(registration)}));
   return{event,payload,handlers,scheduled:captureScheduled(event,payload,world,bindings,overlay)};
 }
 export function commitEvent(world:unknown,envelope:Omit<EventEnvelope,'id'>,mode:'immediate'|'queued'):void{

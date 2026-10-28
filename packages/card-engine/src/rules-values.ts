@@ -19,10 +19,12 @@ export function admitImmutableRuleBlock(root: object, admitted: (value: object) 
   for(let index=nodes.length-1;index>=0;index--){const node=nodes[index]!;Object.freeze(node);markImmutable(node,context(node));admitted(node);}
 }
 
-function materialize<T>(input: T, freeze: boolean, reference?: (value: object) => unknown, share=false): T {
-  if (typeof input === 'function' || typeof input === 'symbol') throw Error('Rule values must be data');
-  if (input === null || typeof input !== 'object') return input;
-  const seen = new Map<object, object>(), pending: { source: object; target: Record<string, unknown>; trusted:boolean }[] = [];
+type RuleCopy={source:object;target:Record<string,unknown>;trusted:boolean};
+type StartedRuleCopy=RuleCopy&{keys:string[];index:number;value:unknown};
+
+/** Continue a partially copied root without reading its earlier fields again. */
+function materializeGraph<T>(input:T,freeze:boolean,reference:((value:object)=>unknown)|undefined,share:boolean,started?:StartedRuleCopy):T{
+  const seen = new Map<object, object>(), pending: RuleCopy[] = [];
   const nodes: object[] = [];
   const allocate = (value: unknown): unknown => {
     if (typeof value === 'function' || typeof value === 'symbol') throw Error('Rule values must be data');
@@ -45,12 +47,16 @@ function materialize<T>(input: T, freeze: boolean, reference?: (value: object) =
     seen.set(value, target); pending.push({ source: value, target, trusted }); nodes.push(target);
     return target;
   };
-  const result = allocate(input) as T;
+  if(started){seen.set(started.source,started.target);pending.push(started);nodes.push(started.target);}
+  const result = (started?started.target:allocate(input)) as T;
   for (let cursor = 0; cursor < pending.length; cursor++) {
     const { source, target, trusted } = pending[cursor]!;
-    for (const key of Object.keys(source)) {
+    const first=cursor===0?started:undefined,keys=first?first.keys:Object.keys(source);
+    for (let index=first?first.index:0;index<keys.length;index++) {
+      const key=keys[index]!;
       let input:unknown;
-      if(trusted)input=(source as Record<string,unknown>)[key];
+      if(first&&index===first.index)input=first.value;
+      else if(trusted)input=(source as Record<string,unknown>)[key];
       else {const descriptor=Object.getOwnPropertyDescriptor(source,key)!;if(!Object.hasOwn(descriptor,'value'))throw Error('Rule values cannot contain accessors');input=descriptor.value;}
       const value = allocate(input);
       // Own __proto__/constructor and array prototype names must stay data.
@@ -62,6 +68,32 @@ function materialize<T>(input: T, freeze: boolean, reference?: (value: object) =
     const node = nodes[index]!; Object.freeze(node); markImmutable(node);
   }
   return result;
+}
+
+function materialize<T>(input:T,freeze:boolean,reference?:((value:object)=>unknown),share=false):T{
+  if(typeof input==='function'||typeof input==='symbol')throw Error('Rule values must be data');
+  if(input===null||typeof input!=='object')return input;
+  const trusted=isImmutableRuleValue(input);
+  if(share&&trusted)return input;
+  if(!trusted&&isStaticHandle(input))return materializeGraph(input,freeze,reference,share);
+  const array=Array.isArray(input);
+  if(!trusted&&!array){const prototype=Object.getPrototypeOf(input);if(prototype!==Object.prototype&&prototype!==null)throw Error('Rule values must be plain data');}
+  const target=(array?new Array(input.length):{}) as Record<string,unknown>,keys=Object.keys(input);
+  for(let index=0;index<keys.length;index++){
+    const key=keys[index]!;
+    let value:unknown;
+    if(trusted)value=(input as Record<string,unknown>)[key];
+    else{const descriptor=Object.getOwnPropertyDescriptor(input,key)!;if(!Object.hasOwn(descriptor,'value'))throw Error('Rule values cannot contain accessors');value=descriptor.value;}
+    if(typeof value==='function'||typeof value==='symbol')throw Error('Rule values must be data');
+    // Most arguments contain only scalar fields or already-owned blocks. Only
+    // a child that must be copied needs a graph worklist and alias bookkeeping.
+    if(value!==null&&typeof value==='object'&&!(share&&isImmutableRuleValue(value)))
+      return materializeGraph(input,freeze,reference,share,{source:input,target,trusted,keys,index,value});
+    if(key in target)Object.defineProperty(target,key,{value,enumerable:true,configurable:true,writable:true});
+    else target[key]=value;
+  }
+  if(freeze){Object.freeze(target);markImmutable(target);}
+  return target as T;
 }
 
 /** A real mutable transfer/snapshot, not an internal argument-forwarding step. */

@@ -81,6 +81,9 @@ const numeric = (key: string): number | undefined => {
   return value < 0xffffffff ? value : undefined;
 };
 const fields = (): Record<string, Value> => Object.create(null);
+// Numeric pages have a null prototype and at most 64 own fields. Stop at the
+// first retained field instead of allocating a complete key array per delete.
+const emptyFields = (values: Record<string, Value>): boolean => { for (const _key in values) return false; return true; };
 const clone = (row: Row): Row => ({ ...row, props: row.props.fork(), pages: row.pages?.fork() ?? null });
 
 /** Branch-local views of data identities; shared nodes contain no live proxies. */
@@ -253,13 +256,35 @@ export class CardGraph<T> {
         const current = writable();
         if (current.array && key === 'length') {
           if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) throw RangeError('Invalid array length');
-          if (value < current.length) current.pages!.forEach((_values, page) => {
-            if (page * pageWidth >= value) current.pages!.delete(page);
-            else if ((page + 1) * pageWidth > value) {
-              const values = current.pages!.edit(page, values => Object.assign(fields(), values));
-              for (const name of Object.keys(values)) if (Number(name) >= value) delete values[name];
+          if (value < current.length) {
+            const pages=current.pages!;
+            if(value===0)pages.clear();
+            else if(value===current.length-1){
+              // Shrinking by one can discard only this index. Array.pop has
+              // already deleted it, so that path needs neither edits nor a cursor.
+              const page=Math.floor(value/pageWidth),retained=pages.get(page);
+              if(retained&&Object.hasOwn(retained,value)){
+                const values=pages.edit(page,values=>Object.assign(fields(),values));delete values[value];
+                if(emptyFields(values))pages.delete(page);
+              }
             }
-          });
+            else {
+              // Start at the truncation boundary. Scanning the retained prefix
+              // on every pop made draining N items quadratic in page count.
+              // The radix cursor skips holes, including huge sparse arrays;
+              // removing its current entry does not invalidate its traversal.
+              const cursor=pages.cursor(Math.floor(value/pageWidth));
+              while(cursor.advance()){
+                const page=cursor.key;
+                if(page*pageWidth>=value)pages.delete(page);
+                else {
+                  const values=pages.edit(page,values=>Object.assign(fields(),values));
+                  for(const name of Object.keys(values))if(Number(name)>=value)delete values[name];
+                  if(emptyFields(values))pages.delete(page);
+                }
+              }
+            }
+          }
           current.length = value;
         } else graph.put(current, key, graph.encode(value));
         return true;
@@ -268,7 +293,15 @@ export class CardGraph<T> {
         if (typeof key !== 'string' || key === 'length' && row().array) return false;
         const current = writable(), index = numeric(key);
         if (index === undefined) current.props.delete(key);
-        else { const page = Math.floor(index / pageWidth); if (current.pages!.has(page)) delete current.pages!.edit(page, values => Object.assign(fields(), values))[key]; }
+        else {
+          const pages=current.pages!,page=Math.floor(index/pageWidth);
+          if(pages.has(page)){
+            const values=pages.edit(page,values=>Object.assign(fields(),values));delete values[key];
+            // Monotonic identity tables must not retain one empty page for
+            // every historical group of IDs while a few entries remain live.
+            if(emptyFields(values))pages.delete(page);
+          }
+        }
         return true;
       },
       has(_target, key) { return typeof key === 'string' && (key === 'length' && row().array || graph.has(row(), key)) || !row().nullPrototype && key in (row().array ? Array.prototype : Object.prototype); },

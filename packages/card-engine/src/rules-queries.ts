@@ -1,11 +1,14 @@
+import {indexIds} from './rules-indexes.ts';
 import { ownRuleValue, readRuleValue } from './rules-values.ts';
 import {prepareOrdering} from './rules-order.ts';
 import { expression, handle, freezeAuthorInput } from './rules-internal.ts';
 import { declareStatic, definitionOwners,staticDefinitions, resolveDefinition, stateOf } from './rules-module-internal.ts';
-import type { ComponentOverlay, ModuleBindings } from './rules-module-internal.ts';
+import type { ComponentOverlay, ModuleBindings, StaticDefinition } from './rules-module-internal.ts';
 import type { Borrowed, Input, Value } from './rules.types.ts';
 import type { Query, QuerySpec, QueryRead,EntityQuerySelection } from './rules-query.types.ts';
 export type { Query, QuerySpec, QueryRead,EntityQuerySelection } from './rules-query.types.ts';
+
+type QueryModifier = {index:number;metadata:Extract<StaticDefinition,{kind:'ability';abilityKind:'modifier'}>};
 
 export function captureQuerySelections(input:readonly EntityQuerySelection<any,any,any,any>[]=[]):readonly EntityQuerySelection<any,any,any,any>[]{
   for(const selection of input){
@@ -53,6 +56,16 @@ export function query<I,O>(definition:Query<I,O>,input:Input<I>):Value<O>{
 }
 export function validateQueries(bindings:ModuleBindings):void{
   const active=new Set<object>(),done=new Set<object>();
+  // Program metadata is fixed here. Index modifiers once instead of scanning
+  // every unrelated definition for each query during validation and binding.
+  const modifiersByTarget=new Map<object,QueryModifier[]>();
+  for(let index=0;index<bindings.definitions.length;index++){
+    const metadata=staticDefinitions.get(bindings.definitions[index]!);
+    if(metadata?.kind!=='ability'||metadata.abilityKind!=='modifier')continue;
+    let candidates=modifiersByTarget.get(metadata.target);
+    if(!candidates){candidates=[];modifiersByTarget.set(metadata.target,candidates);}
+    candidates.push({index,metadata});
+  }
   const validateReads=(creator:object|null,reads:readonly object[])=>{
     for(const component of reads){
       if(staticDefinitions.get(component)?.kind!=='component'||!bindings.indices.has(component))throw Error('Unbound query component');
@@ -66,20 +79,17 @@ export function validateQueries(bindings:ModuleBindings):void{
     validateReads(d.creator,d.reads);for(const kind of d.kinds)if(!bindings.indices.has(kind)||staticDefinitions.get(kind)?.kind!=='entity-kind')throw Error('Unlinked query entity kind');active.add(definition);
     for(const dependency of d.dependencies)visit(dependency);
     for(const selection of d.selections)for(const target of bindings.querySelections.get(selection)?.values()??[])visit(target);
-    for(const candidate of bindings.definitions){
-      const modifier=staticDefinitions.get(candidate);
-      if(modifier?.kind==='ability'&&modifier.abilityKind==='modifier'&&modifier.target===definition){
+    for(const {metadata:modifier} of modifiersByTarget.get(definition)??[]){
         validateReads(modifier.creator,modifier.reads);
         for(const dependency of modifier.dependencies)visit(dependency);
         for(const selection of modifier.selections)for(const target of bindings.querySelections.get(selection)?.values()??[])visit(target);
         if(modifier.condition)visit(modifier.condition);
         if(typeof modifier.eligible==='object')visit(modifier.eligible);
-      }
     }
     active.delete(definition);done.add(definition);
   };
   for(const definition of bindings.indices.keys())if(staticDefinitions.get(definition)?.kind==='query')visit(definition);
-  for(const definition of done)bindings.queryExecutors.set(definition,compileQuery(definition,bindings));
+  for(const definition of done)bindings.queryExecutors.set(definition,compileQuery(definition,bindings,modifiersByTarget.get(definition)??[]));
 }
 function prepareRead(reads:readonly object[],kinds:readonly object[],dependencies:readonly object[],selections:readonly object[],bindings:ModuleBindings):(world:unknown,overlay?:ComponentOverlay)=>QueryRead{
   const components=new Map(reads.map(definition=>[definition,bindings.indices.get(definition)!]));
@@ -97,7 +107,7 @@ function prepareRead(reads:readonly object[],kinds:readonly object[],dependencie
     entities(component:any):readonly number[]{
       const index=components.get(resolveDefinition(component));
       if(index===undefined)throw Error('Undeclared rule query read');
-      return Object.freeze([...(stateOf(world).indexes.entitiesByComponent[index]??[])]);
+      return Object.freeze(indexIds(stateOf(world).indexes.entitiesByComponent,index));
     },
     component<T>(entity:number,component:any):Borrowed<T>{
       const index=components.get(resolveDefinition(component));
@@ -142,17 +152,14 @@ function prepareRead(reads:readonly object[],kinds:readonly object[],dependencie
     if(!view){view=create(world);views.set(root,view);}return view;
   };
 }
-function compileQuery(definition:object,bindings:ModuleBindings):(input:unknown,world:unknown,overlay?:ComponentOverlay)=>unknown{
+function compileQuery(definition:object,bindings:ModuleBindings,candidates:readonly QueryModifier[]):(input:unknown,world:unknown,overlay?:ComponentOverlay)=>unknown{
   const d=staticDefinitions.get(definition);
   if(d?.kind!=='query')throw Error('Unbound rule query');
   const index=bindings.indices.get(definition)!;
   const read=prepareRead(d.reads,d.kinds,d.dependencies,d.selections,bindings);
-  const modifiers=new Map<number,{metadata:Extract<import('./rules-module-internal.ts').StaticDefinition,{kind:'ability';abilityKind:'modifier'}>;read:ReturnType<typeof prepareRead>}>();
-  for(let candidate=0;candidate<bindings.definitions.length;candidate++){
-    const metadata=staticDefinitions.get(bindings.definitions[candidate]!);
-    if(metadata?.kind==='ability'&&metadata.abilityKind==='modifier'&&metadata.target===definition)
-      modifiers.set(candidate,{metadata,read:prepareRead(metadata.reads,[],metadata.dependencies,metadata.selections,bindings)});
-  }
+  const modifiers=new Map<number,{metadata:QueryModifier['metadata'];read:ReturnType<typeof prepareRead>}>();
+  for(const {index,metadata} of candidates)
+    modifiers.set(index,{metadata,read:prepareRead(metadata.reads,[],metadata.dependencies,metadata.selections,bindings)});
   const lowerReference=(value:object)=>{
       const index=bindings.indices.get(value);
       if(staticDefinitions.get(value)?.kind!=='entity'||index===undefined)throw Error('Unbound static entity query argument');
@@ -166,7 +173,8 @@ function compileQuery(definition:object,bindings:ModuleBindings):(input:unknown,
     const state=stateOf(world);
     const candidates=state.indexes.registrationsByTarget[index];
     if(!candidates)return result;
-    for(const id of candidates){
+    const nextIds=candidates.next;
+    for(let id=candidates.first;id!==null;id=nextIds===null?null:nextIds[id]!){
       const registration=state.registrations[id]!;
       const bound=modifiers.get(registration.definition)!,modifier=bound.metadata;
       const context={input:parsed,value:result,source:registration.source,owner:registration.owner,environment:registration.environment,registration:registration.id};

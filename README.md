@@ -6,7 +6,7 @@ Bear Forge 是通用的卡牌执行与实验框架：同一份游戏规则可以
 
 ### 玩 STS
 
-Node >= 22.18，在仓库根目录：
+Node 24（`.node-version` 已固定，fnm/nvm 进入仓库会切换；`engines` 最低 22.18），在仓库根目录：
 
 ```sh
 npm install

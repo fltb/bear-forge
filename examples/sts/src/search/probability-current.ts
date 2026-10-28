@@ -1,4 +1,4 @@
-import type {ProbabilityCurrent} from '../../../../packages/runtime-card/src/probability.ts';
+import type {ProbabilityCurrent} from '@bear-forge/runtime-card/probability';
 import {contract} from '../contract.ts';
 import type {Ports,Frame,Action,StsEvent,Observation} from '../game.schemas.ts';
 import {publicEvents,type PublicDecision} from './information.ts';

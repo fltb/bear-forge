@@ -67,10 +67,9 @@ Web 可从上个展示状态顺序播放当前批次，再采用最终 `state`�
 
 ```sh
 npm run typecheck --workspace @bear-forge/sts
-npm run typecheck --workspace @bear-forge/cli
 npm run check --workspace @bear-forge/policies
 npm run test:simulator --workspace @bear-forge/sts
-npm run test:tui --workspace @bear-forge/cli
+npm run test:cli --workspace @bear-forge/sts
 ```
 
 跨进程测试必须普通请求与原 SECRET_TECHNIQUE 中途选牌分别保存/关闭/重启；恢复时禁止 Program.initial，随后只执行一个新选择。测试还覆盖过期/重复/非法输入、存档失败、隔离、公开边界和事件顺序。真实 TUI 操作与生产完整终局另行验收，状态仅记录在 plan.md，不以测试或首屏替代。

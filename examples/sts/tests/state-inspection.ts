@@ -1,5 +1,5 @@
 // Exact observations of production owners. No old World or alternate evaluator.
-import {inspectRuleQuery,inspectRuleQueue} from '../../../packages/card-engine/src/rules-inspection.ts';
+import {inspectRuleQuery,inspectRuleQueue} from '@bear-forge/card-engine/rules-inspection';
 import {cardDefinition} from '../src/card.ts';
 import {adventures} from '../src/rules/adventures.ts';
 import {combatSessions} from '../src/rules/combat-sessions.ts';

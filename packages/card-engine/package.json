@@ -2,7 +2,18 @@
   "name": "@bear-forge/card-engine",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./probability": "./src/probability.ts",
+    "./probability-mass": "./src/probability-mass.ts",
+    "./probability-cursor": "./src/probability-cursor.ts",
+    "./probability-image": "./src/probability-image.ts",
+    "./rules-probability": "./src/rules-probability.ts",
+    "./rules-inspection": "./src/rules-inspection.ts",
+    "./rules-internal": "./src/rules-internal.ts",
+    "./rules-module-internal": "./src/rules-module-internal.ts",
+    "./rules-module.types": "./src/rules-module.types.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",

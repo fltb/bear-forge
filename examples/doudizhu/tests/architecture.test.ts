@@ -1,7 +1,7 @@
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
 import {readdirSync} from 'node:fs';
-import {assertSourceBoundaries} from '../../../packages/contracts/tests/support/source-boundaries.ts';
+import {assertSourceBoundaries} from '@bear-forge/contracts/tests/support/source-boundaries';
 test('game entry and its transitive dependencies exclude host experiment code',()=>{
   const root = fileURLToPath(new URL('../src',import.meta.url));
   // Host-side experiment wiring is separate; every game source remains checked,

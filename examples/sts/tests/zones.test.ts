@@ -1,4 +1,4 @@
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
 import {requireDifftest} from './reference/client.ts';
 requireDifftest();
 import test from 'node:test';
@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {rules} from '../src/rules/execution.ts';
 import {linkRules,CardProgram,CardMachine} from '@bear-forge/card-engine';
-import {portEffect} from '../../../packages/card-engine/src/rules-internal.ts';
+import {portEffect} from '@bear-forge/card-engine/rules-internal';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {zones} from '../src/rules/zones.ts';
 import {ReferenceClient} from './reference/client.ts';

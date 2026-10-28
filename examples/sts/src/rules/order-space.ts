@@ -1,6 +1,6 @@
-import {divideMass,massNumber,probabilityMass,unitMass,zeroMass,type ProbabilityMass} from '../../../../packages/card-engine/src/probability-mass.ts';
+import {divideMass,massNumber,probabilityMass,unitMass,zeroMass,type ProbabilityMass} from '@bear-forge/card-engine/probability-mass';
 import {blockLanguage,insertLanguage,insertRandomLanguage,removeLanguage,observeLanguage,lastGroupMasses,firstLanguageOrder,canonicalLanguage,lastMatchLanguage,type ReadonlyOrderLanguage} from './order-language.ts';
-import {permutationAt,permutationCount,permutationCoordinate} from '../../../../packages/card-engine/src/probability.ts';
+import {permutationAt,permutationCount,permutationCoordinate} from '@bear-forge/card-engine/probability';
 
 /** Groups of exchangeable members. Without a language they are consecutive
  * bottom-to-top blocks; a language instead determines their weighted positions.

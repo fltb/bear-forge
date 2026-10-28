@@ -4,7 +4,7 @@ import type {ruleModules} from '@bear-forge/card-engine';
 import {entityId} from './resources.schemas.ts';
 import {zoneMoveSchema,zoneMovedSchema,zoneContentsSchema,zoneReorderSchema} from './zones.schemas.ts';
 import {insertOrdered,removeOrdered,revealOrdered,revealPositions,canonicalOrder,observeLastMatch,topOrderMasses,afterTop,prefixRepresentative,orderSize,orderAt,type OrderKnowledge} from './order-space.ts';
-import type {AtomRead} from '../../../../packages/card-engine/src/rules-module.types.ts';
+import type {AtomRead} from '@bear-forge/card-engine/rules-module.types';
 type Move=z.infer<typeof zoneMoveSchema>;
 const {defineRules,defineComponent,defineEvent,defineCheckpoint,defineQuery,defineEffect,sequence,forEach,when,call,query}=rules;
 

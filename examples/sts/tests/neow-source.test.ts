@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {CardProgram,CardMachine,linkRules} from '@bear-forge/card-engine';
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
 import {rules} from '../src/rules/execution.ts';
 import {adventures} from '../src/rules/adventures.ts';
 import {resources} from '../src/rules/resources.ts';

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import type {CardStop} from '@bear-forge/card-engine';
 import type {PortShape} from '@bear-forge/contracts/core';
-import {ProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
-import {ProbabilityExpansion} from '../../../packages/runtime-card/src/probability-expansion.ts';
-import {addMass,unitMass,zeroMass} from '../../../packages/card-engine/src/probability-mass.ts';
+import {ProbabilityCurrent} from '@bear-forge/runtime-card/probability';
+import {ProbabilityExpansion} from '@bear-forge/runtime-card/probability-expansion';
+import {addMass,unitMass,zeroMass} from '@bear-forge/card-engine/probability-mass';
 
 /** Verify the complete law while releasing each inspected Context. Keeping
  * hundreds of completed worlds alive is unnecessary when a test only needs

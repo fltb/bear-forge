@@ -51,7 +51,7 @@
 
 ## 目录约定
 
-- packages/ 放公共库，examples/ 放完整游戏示例；模块均采用 src/ 与 tests/。
+- packages/ 放公共库，examples/ 放完整游戏示例，tools/ 放仓库开发工具（命令聚合器 `@bear-forge/dev-cli`，可依赖 examples）；模块均采用 src/ 与 tests/。
 - contracts/src 按 core/、instance/、game/ 归属协议；internal/ 仅放包内类型辅助。横向能力放入所属层，使用具名文件，不为每个概念创建 types.ts/index.ts 小目录。
 - 类型文件使用 *.types.ts，Zod schema 使用 *.schemas.ts；index.ts 仅承担公共导出。保留既有公共子路径需要的兼容入口，只做 re-export。
 - 测试按模块、层和被测功能组织；跨层协议测试留在模块 tests/ 根部。

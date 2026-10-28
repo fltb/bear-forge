@@ -29,12 +29,13 @@
     "test:cli": "node --experimental-strip-types --test tests/cli/*.test.ts"
   },
   "dependencies": {
-    "@bear-forge/policies": "*",
-    "@bear-forge/experiments": "*",
+    "@bear-forge/boundary": "*",
     "@bear-forge/card-engine": "*",
-    "@bear-forge/runtime-card": "*",
     "@bear-forge/contracts": "*",
+    "@bear-forge/experiments": "*",
     "@bear-forge/game-host": "*",
+    "@bear-forge/policies": "*",
+    "@bear-forge/runtime-card": "*",
     "zod": "4.6.5"
   },
   "devDependencies": {

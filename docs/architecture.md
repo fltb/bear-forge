@@ -1,6 +1,6 @@
 # 三层与横向能力
 
-沃利贝尔当前规则为 [S2-3.0 / S2_BUFF_D4](volibear/DEVELOPMENT.md)。雷势、逐段雷伤计数、部署实例的每回合限次、兽化原牌与行为实体关联均保存在战斗Context；共享Program保存唯一规则组合。兽化保持原牌身份与永久牌组，展示、合法性及执行读取同一形态定义。
+本页只描述框架的三层边界与横向能力。具体游戏内容（STS 铁甲／沃利贝尔、斗地主、Forge Duel）的规则、卡表与内容目录在各自文档中维护，例如沃利贝尔的定稿契约见 [S2-3.0 / S2_BUFF_D4](volibear/DEVELOPMENT.md)；游戏规则不写入本页。Core／Instance／BaseGame 的职责分工与 Context 边界见下表及后文。
 
 当前第二层设计入口：[类型化原子函数与组合规则](card-core-spec.md#typed-rule-layer)。稳定内核／规则模块／组合实体是 Program 内的组织方式，与本页 Core／Instance／BaseGame 的运行职责不同。作者定义引用在装配时链接，动态登记和续接仍属于唯一 Context；类型化作者、模块提交、查询、派发、检查点和实体生命周期已有生产实现，STS 铁甲内容通过这些接口装配；验收范围及实际结果见 plan.md。
 
@@ -105,7 +105,16 @@ examples/
   doudizhu/
     src/
     tests/
+  sts/
+    src/
+    tests/
+tools/
+  cli/
+    src/
+    tests/
 ```
+
+`packages/` 是公共库，`examples/` 是完整游戏示例，`tools/` 是仓库开发工具（命令聚合器 `@bear-forge/dev-cli`，可依赖 examples）；模块均采用 `src/` 与 `tests/`。
 
 协议文件按职责命名为 `*.types.ts` 和 `*.schemas.ts`。各层的公共导出和保存/捕捉兼容入口仅做 re-export。源码归属与包的公共导入路径分别管理；目录迁移保持下列导入路径不变。
 

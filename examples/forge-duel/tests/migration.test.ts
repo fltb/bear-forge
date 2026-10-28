@@ -1,4 +1,4 @@
-import { runCard } from '../../../packages/runtime-card/tests/run-support.ts';
+import { runCard } from '@bear-forge/runtime-card/tests/run-support';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { game } from '../src/module.ts';

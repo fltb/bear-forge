@@ -1,4 +1,4 @@
-import { runCard } from '../../../packages/runtime-card/tests/run-support.ts';
+import { runCard } from '@bear-forge/runtime-card/tests/run-support';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { IO, PortCall } from '@bear-forge/contracts/core';
@@ -144,7 +144,7 @@ test('native inner SDK uses decision and event ports; seed is explicit controlle
 
 
 test('complete games use pure action callbacks and independent optional timeout control',async()=>{
-  const {nativeGame}=await import('../../../packages/runtime-card/tests/game-support.ts');
+  const {nativeGame}=await import('@bear-forge/runtime-card/tests/game-support');
   for(const timed of [false,true]){
     const base=await nativeGame(game,{game:setup(),seed:31});
     assert.equal(base.fork,undefined);assert.equal(base.save,undefined);
@@ -189,7 +189,7 @@ test('complete games use pure action callbacks and independent optional timeout 
 });
 
 test('session clock advances independently and equality deadline rejects a pure action',async()=>{
-  const {nativeGame}=await import('../../../packages/runtime-card/tests/game-support.ts');const base=await nativeGame(game,{game:setup(),seed:7});
+  const {nativeGame}=await import('@bear-forge/runtime-card/tests/game-support');const base=await nativeGame(game,{game:setup(),seed:7});
   if(!base.bindControl)throw new Error('session control required');await base.bindControl(async request=>({kind:'reply',value:{kind:'clock',at:request.data.deadlines[0]!.at}}));
   const advanced=await base.run();assert.ok(advanced.ok);if(!advanced.ok)return;assert.equal(advanced.value.accepted?.kind,'control');
   assert.equal(advanced.value.state.kind,'request');if(advanced.value.state.kind!=='request')return;

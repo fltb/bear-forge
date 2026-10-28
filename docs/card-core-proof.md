@@ -392,7 +392,7 @@ L(fork(S).parent) = L(S) = L(fork(S).child)
 
 ## 21. STS 迁移的证明关系与文字论证
 
-固定参考为 sts_lightspeed 提交 `7476a81954020087da31d41d16fddf475746ec2d`。建立源配置 S 与目标 C 的关系 R_sts：
+固定参考为 sts_lightspeed，当前 pin 为本地修正提交 `3cea139e546bd8f8a21a2791e1c62b7266743d70`（早期迁移 pin `7476a81954020087da31d41d16fddf475746ec2d` 仅作历史）。建立源配置 S 与目标 C 的关系 R_sts：
 
 - GameContext/BattleContext 的有效领域字段对应到 H；长久牌组与战斗副本的对应身份明确。
 - 各随机流的内部值、调用进度和数值运算语义对应。

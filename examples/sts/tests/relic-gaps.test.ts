@@ -3,7 +3,7 @@ requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CardProgram,CardMachine} from '@bear-forge/card-engine';
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
 import {deckCaseFixture,mapRelicFixture,potionRelicFixture,prismRelicFixture} from './adventure-case-fixture.ts';
 import {generateMap} from '../src/map.ts';
 import {relicId,potionId,type RelicId} from '../src/identifiers.ts';

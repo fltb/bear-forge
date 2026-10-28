@@ -1,18 +1,18 @@
 import {adventureDraws} from '../src/content/rewards/draws.ts';
 import test from 'node:test';
 import {expandAll,visitAll} from './probability-fixture.ts';
-import {ProbabilityExpansion} from '../../../packages/runtime-card/src/probability-expansion.ts';
-import {probabilityCursor,nextProbabilityCoordinate} from '../../../packages/card-engine/src/probability-cursor.ts';
+import {ProbabilityExpansion} from '@bear-forge/runtime-card/probability-expansion';
+import {probabilityCursor,nextProbabilityCoordinate} from '@bear-forge/card-engine/probability-cursor';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {CardProgram,CardMachine,linkRules,ruleModules} from '@bear-forge/card-engine';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {createGameBinder} from '@bear-forge/game-host';
-import {forkGameCurrent} from '../../../packages/game-host/src/current.ts';
-import {ProbabilityCurrent,takeProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
-import {permutationAt} from '../../../packages/card-engine/src/probability.ts';
-import {probabilityMass,addMass,divideMass,unitMass,zeroMass} from '../../../packages/card-engine/src/probability-mass.ts';
+import {forkGameCurrent} from '@bear-forge/game-host/current';
+import {ProbabilityCurrent,takeProbabilityCurrent} from '@bear-forge/runtime-card/probability';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
+import {permutationAt} from '@bear-forge/card-engine/probability';
+import {probabilityMass,addMass,divideMass,unitMass,zeroMass} from '@bear-forge/card-engine/probability-mass';
 import {rules} from '../src/rules/execution.ts';
 import {random} from '../src/rules/random.ts';
 import {randomState,randomInt,randomBoolean,randomLong,randomFloat,javaShuffle,rngView} from '../src/rng.ts';
@@ -22,8 +22,8 @@ import {encounterId,potionId} from '../src/identifiers.ts';
 import {describeAction} from '../src/presentation.ts';
 import {observe,contract} from '../src/contract.ts';
 import type {Ports,Frame} from '../src/game.schemas.ts';
-import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
-import {stateOf} from '../../../packages/card-engine/src/rules-module-internal.ts';
+import {inspectRuleQuery} from '@bear-forge/card-engine/rules-inspection';
+import {stateOf} from '@bear-forge/card-engine/rules-module-internal';
 import {adventures} from '../src/rules/adventures.ts';
 import {combatSessions} from '../src/rules/combat-sessions.ts';
 import {battles} from '../src/rules/battles.ts';
@@ -347,7 +347,7 @@ test('grouped shuffle preserves the original RNG and executes order-dependent ca
       b.return({order:b.read(v=>[...v.get(order)]),checksum,state:query(random.exports.current,rng)}));
   });
   const program=new CardProgram(linkRules({id:'sts/grouped-shuffle-continuation',schemas:{setup:z.string(),result:output,ports:{begin:{input:z.null(),output:z.null()}}},initialize:()=>({}),entry:effect,definitions:[effect,begin],modules:[random]}));
-  const machine=new CardMachine(program,privateCardGraph(program.initial('130')));machine.advance();const current=new ProbabilityCurrent(new CardMachine(program,(machine.storage as import('../../../packages/runtime-card/src/graph.ts').CardGraph<any>).fork()));
+  const machine=new CardMachine(program,privateCardGraph(program.initial('130')));machine.advance();const current=new ProbabilityCurrent(new CardMachine(program,(machine.storage as import('@bear-forge/runtime-card/graph').CardGraph<any>).fork()));
   const before=current.machine.storage.export(current.machine.root);
   try{
     const rng=randomState(130n),shuffled=[...items];javaShuffle(shuffled,randomLong(rng));
@@ -388,7 +388,7 @@ test('original combat declares only the same immutable roster names as its publi
 
 test('original merchant publishes final prices after its sale and discount sequence',async()=>{
   const {shopCaseFixture}=await import('./adventure-case-fixture.ts');
-  const {inspectRuleQuery}=await import('../../../packages/card-engine/src/rules-inspection.ts');
+  const {inspectRuleQuery}=await import('@bear-forge/card-engine/rules-inspection');
   const {adventures}=await import('../src/rules/adventures.ts');
   const {adventureViews}=await import('../src/adapters/adventure-views.ts');
   for(const owned of [[],['THE_COURIER'],['MEMBERSHIP_CARD'],['THE_COURIER','MEMBERSHIP_CARD','SMILING_MASK','MAW_BANK']] as import('../src/identifiers.ts').RelicId[][]){

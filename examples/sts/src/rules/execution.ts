@@ -1,4 +1,4 @@
-import {withProbability as coreProbability,type AtomProbability} from '../../../../packages/card-engine/src/rules-probability.ts';
+import {withProbability as coreProbability,type AtomProbability} from '@bear-forge/card-engine/rules-probability';
 import {effectPolicy,type EffectKind} from './effect-policy.ts';
 import {z} from 'zod';
 import {rules as core} from '@bear-forge/card-engine';

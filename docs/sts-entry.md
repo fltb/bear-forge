@@ -21,7 +21,7 @@ npm run sts -- play --character ironclad --ascension 20 --seed 130 --output data
 
 评审模式默认开启，动作必须有非空理由。普通手动游玩可加 `--review false`，此时可以省略理由。生产详细事件始终记录。
 
-需要纯 JSONL 标准输出时，使用 `npm run --silent sts -- play ...`，或直接运行 `node --experimental-strip-types packages/cli/src/sts.ts play ...`；普通 `npm run` 会先打印 npm 自己的命令提示。
+需要纯 JSONL 标准输出时，使用 `npm run --silent sts -- play ...`，或直接运行 `node --experimental-strip-types examples/sts/src/cli/sts.ts play ...`，也可在示例包内运行 `npm run sts -w @bear-forge/sts -- play ...`；普通 `npm run` 会先打印 npm 自己的命令提示。
 
 ## JSONL 协议
 

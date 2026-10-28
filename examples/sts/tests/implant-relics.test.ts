@@ -1,12 +1,12 @@
 import {requireDifftest} from './reference/client.ts';
 requireDifftest();
-import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
+import {inspectRuleQuery} from '@bear-forge/card-engine/rules-inspection';
 import {adventures} from '../src/rules/adventures.ts';
 import {permanentDecks} from '../src/rules/permanent-decks.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CardProgram,CardMachine} from '@bear-forge/card-engine';
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
 import {implantFixture} from './implant-fixture.ts';
 import {ReferenceClient} from './reference/client.ts';
 import {oracleViewOf} from './state-inspection.ts';

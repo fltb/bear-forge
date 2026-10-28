@@ -4,7 +4,7 @@ import {beginMapConstruction,advanceMapConstruction,mapDraw,mapRandomState,drawM
 import type {MapConstruction,MapDraw,SpireMap} from '../map.types.ts';
 import type {RandomState} from '../rng.ts';
 import {typedValue} from './value.schemas.ts';
-import {withProbability} from '../../../../packages/card-engine/src/rules-probability.ts';
+import {withProbability} from '@bear-forge/card-engine/rules-probability';
 
 type Work={construction:MapConstruction;random:RandomState};
 type DrawInput={random:RandomState;request:MapDraw};

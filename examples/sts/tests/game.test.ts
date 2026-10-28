@@ -1,4 +1,4 @@
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
 import {requireDifftest} from './reference/client.ts';
 requireDifftest();
 import test from 'node:test';

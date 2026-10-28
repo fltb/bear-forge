@@ -1,4 +1,4 @@
-import {isolatedDataSchema} from '../../../packages/boundary/src/compiled-schema.ts';
+import {isolatedDataSchema} from '@bear-forge/boundary/compiled-schema';
 import {z} from 'zod';
 import {CombatPrivateSchema} from "./program/combat-state.ts";
 export const SetupSchema=z.strictObject({character:z.enum(['ironclad','volibear']).optional(),detailedEvents:z.boolean().optional(),seed:z.string().regex(/^\d+$/).refine(v=>BigInt(v)<=0xffffffffffffffffn)});

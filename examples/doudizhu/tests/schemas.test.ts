@@ -1,7 +1,7 @@
 import test from 'node:test';
 import {z} from 'zod';
 import * as schemas from '../src/schemas.ts';
-import {assertBoundarySchema} from '../../../packages/contracts/tests/support/schema-admission.ts';
+import {assertBoundarySchema} from '@bear-forge/contracts/tests/support/schema-admission';
 // Domain predicates approved for this fixture; production admission is separate.
 const policy={checks:new Set<object>([
   ...(schemas.StageSchema._zod.def.checks??[]),

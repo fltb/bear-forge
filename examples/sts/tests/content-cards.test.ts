@@ -3,7 +3,7 @@ requireDifftest();
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CardProgram,CardMachine} from '@bear-forge/card-engine';
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
 import {contentCardDefinition,type ContentCase} from './content-card-fixture.ts';
 import {oracleViewOf} from './state-inspection.ts';
 import {ReferenceClient,type ReferenceState} from './reference/client.ts';

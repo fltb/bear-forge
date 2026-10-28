@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {CardProgram,CardMachine} from '@bear-forge/card-engine';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import {createGameBinder} from '@bear-forge/game-host';
-import {PolicyWorkSuspended,policyWork} from '../../../packages/policies/src/search/work.ts';
+import {PolicyWorkSuspended,policyWork} from '@bear-forge/policies/search/work';
 import {cardDefinition} from '../src/card.ts';
 import {contract} from '../src/contract.ts';
 import type {JsonValue} from '@bear-forge/contracts/game';
@@ -11,7 +11,7 @@ import type {StsEvent} from '../src/game.schemas.ts';
 import {publicDecision} from '../src/search/information.ts';
 import {createSearchPolicy,type StsSearchResult} from '../src/search/policy.ts';
 import type {StsCurrentSnapshot,StsExpansionSnapshot} from '../src/search/current-session.ts';
-import type {SearchSessionSnapshot} from '../../../packages/policies/src/search/session.types.ts';
+import type {SearchSessionSnapshot} from '@bear-forge/policies/search/session.types';
 
 const unwrap=<T>(result:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!result.ok)throw Error(JSON.stringify(result.error));return result.value;};
 type SavedWork={entries:{search:SearchSessionSnapshot<StsCurrentSnapshot,StsExpansionSnapshot>}[]};

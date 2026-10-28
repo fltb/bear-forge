@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import { cardDefinition } from '../src/card.ts';
 import { contract } from '../src/module.ts';
 import { game as reference } from './reference/module.ts';
-import { verifyInteractiveGames } from '../../../packages/runtime-card/tests/game-benchmark.ts';
+import { verifyInteractiveGames } from '@bear-forge/runtime-card/tests/game-benchmark';
 
 test('complete DDZ GameHosts preserve real player requests, choices and event deliveries in both modes', async () => {
   await verifyInteractiveGames({ definition: cardDefinition, contract, reference,

@@ -1,5 +1,5 @@
-import {probabilityMass,numericMass,zeroMass,unitMass} from '../../../../packages/card-engine/src/probability-mass.ts';
-import type {ExactPosition,TerminalBound} from '../../../../packages/policies/src/search/session.types.ts';
+import {probabilityMass,numericMass,zeroMass,unitMass} from '@bear-forge/card-engine/probability-mass';
+import type {ExactPosition,TerminalBound} from '@bear-forge/policies/search/session.types';
 import {potionId} from '../identifiers.ts';
 import type {Observation} from '../game.schemas.ts';
 import {compressedPublicKey,type PublicDecision} from './information.ts';

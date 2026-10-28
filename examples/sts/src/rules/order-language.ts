@@ -1,4 +1,4 @@
-import {addMass,multiplyMass,divideMass,probabilityMass,unitMass,zeroMass,type ProbabilityMass} from '../../../../packages/card-engine/src/probability-mass.ts';
+import {addMass,multiplyMass,divideMass,probabilityMass,unitMass,zeroMass,type ProbabilityMass} from '@bear-forge/card-engine/probability-mass';
 const positive=(mass:ProbabilityMass)=>mass.numerator>0n;
 const keyOf=(value:unknown)=>JSON.stringify(value,(_key,item)=>typeof item==='bigint'?item.toString():item);
 

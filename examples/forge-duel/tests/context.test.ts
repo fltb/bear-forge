@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { compileEntry } from '@bear-forge/compiler';
-import { ProgramExecution, decode } from '../../../packages/runtime-controlled/src/execution.ts';
+import { ProgramExecution, decode } from '@bear-forge/runtime-controlled/execution';
 import { baseDeck } from '../src/index.ts';
 
 test('real game snapshots exclude dependency initialization frames and forks reuse loaded code', async t => {

@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {rules} from './execution.ts';
-import {withProbability} from '../../../../packages/card-engine/src/rules-probability.ts';
-import {probabilityMass} from '../../../../packages/card-engine/src/probability-mass.ts';
+import {withProbability} from '@bear-forge/card-engine/rules-probability';
+import {probabilityMass} from '@bear-forge/card-engine/probability-mass';
 
 export const orderChoiceSchema=z.object({key:z.string(),value:z.int32(),weight:z.object({numerator:z.bigint().nonnegative(),denominator:z.bigint().positive()}),publication:z.object({name:z.string(),value:z.union([z.string(),z.number(),z.boolean()])}).nullable().optional()});
 export type OrderChoice=z.infer<typeof orderChoiceSchema>;

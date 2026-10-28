@@ -1,4 +1,4 @@
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
 import {createCardLoader} from '@bear-forge/runtime-card';
 import test from 'node:test';
 import assert from 'node:assert/strict';

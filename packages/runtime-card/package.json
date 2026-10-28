@@ -2,7 +2,18 @@
   "name": "@bear-forge/runtime-card",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./graph": "./src/graph.ts",
+    "./probability": "./src/probability.ts",
+    "./probability-expansion": "./src/probability-expansion.ts",
+    "./store": "./src/store.ts",
+    "./tests/process-support": "./tests/process-support.ts",
+    "./tests/benchmark-support": "./tests/benchmark-support.ts",
+    "./tests/game-benchmark": "./tests/game-benchmark.ts",
+    "./tests/run-support": "./tests/run-support.ts",
+    "./tests/game-support": "./tests/game-support.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",

@@ -5,7 +5,7 @@ import { createCardLoader, fileSnapshotStore } from '@bear-forge/runtime-card';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { advanceRestoredProcess } from '../../../packages/runtime-card/tests/process-support.ts';
+import { advanceRestoredProcess } from '@bear-forge/runtime-card/tests/process-support';
 import { createGameBinder } from '@bear-forge/game-host';
 import { createNativeLoader } from '@bear-forge/runtime-native';
 import { cardDefinition } from '../src/card.ts';

@@ -5,7 +5,7 @@ import {rooms} from "../../rules/rooms.ts";
 import {adventures,emptyAdventureRewards} from "../../rules/adventures.ts";
 import {nextEncounterChoices,secondBossChoices} from '../enemies/plans.ts';
 import {ordering,uniformMappedChoices} from '../../rules/ordering.ts';
-import {unitMass} from '../../../../../packages/card-engine/src/probability-mass.ts';
+import {unitMass} from '@bear-forge/card-engine/probability-mass';
 import {random,float24Image} from "../../rules/random.ts";
 import {resources} from "../../rules/resources.ts";
 import {permanentDecks} from "../../rules/permanent-decks.ts";

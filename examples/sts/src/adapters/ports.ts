@@ -6,7 +6,7 @@ import {CardScreen} from "./selection-presentations.ts";
 import {z} from 'zod';
 import {rules} from '../rules/execution.ts';
 import {ruleModules} from '@bear-forge/card-engine';
-import {withProbability} from '../../../../packages/card-engine/src/rules-probability.ts';
+import {withProbability} from '@bear-forge/card-engine/rules-probability';
 import {FrameSchema,ActionSchema,type Action,type GameEvent} from "../game.schemas.ts";
 import {adventures} from "../rules/adventures.ts";
 import {battles} from "../rules/battles.ts";

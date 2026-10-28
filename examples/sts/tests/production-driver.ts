@@ -1,5 +1,5 @@
 import {CardMachine,CardProgram} from '@bear-forge/card-engine';
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
 import {cardDefinition} from '../src/card.ts';
 import type {Frame} from '../src/game.schemas.ts';
 const program=new CardProgram(cardDefinition);

@@ -1,9 +1,9 @@
-import {monotoneProbabilityImage} from '../../../../packages/card-engine/src/probability-image.ts';
-import type {ProbabilityConstraint} from '../../../../packages/card-engine/src/probability.ts';
-import {probabilityMass} from '../../../../packages/card-engine/src/probability-mass.ts';
+import {monotoneProbabilityImage} from '@bear-forge/card-engine/probability-image';
+import type {ProbabilityConstraint} from '@bear-forge/card-engine/probability';
+import {probabilityMass} from '@bear-forge/card-engine/probability-mass';
 import {groupOrder,orderSize,orderAt} from './order-space.ts';
-import {withProbability,registerCoordinateIndependentResult} from '../../../../packages/card-engine/src/rules-probability.ts';
-import {permutationAt,permutationCount,type ProbabilitySpace} from '../../../../packages/card-engine/src/probability.ts';
+import {withProbability,registerCoordinateIndependentResult} from '@bear-forge/card-engine/rules-probability';
+import {permutationAt,permutationCount,type ProbabilitySpace} from '@bear-forge/card-engine/probability';
 import {z} from 'zod';
 import {rules} from './execution.ts';
 import {floatAtUnit,randomState,randomInt,randomFloat,randomLong,nextLong,randomLongRange,randomBoolean,setRandomCounter,javaShuffle,rngView} from '../rng.ts';

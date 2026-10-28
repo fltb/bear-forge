@@ -1,12 +1,12 @@
 import {deserialize} from 'node:v8';
-import {memorySnapshotStore} from '../../../packages/runtime-card/src/store.ts';
+import {memorySnapshotStore} from '@bear-forge/runtime-card/store';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CardMachine,CardProgram} from '@bear-forge/card-engine';
-import {inspectRuleQuery} from '../../../packages/card-engine/src/rules-inspection.ts';
-import {stateOf} from '../../../packages/card-engine/src/rules-module-internal.ts';
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
-import {ProbabilityCurrent,takeProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
+import {inspectRuleQuery} from '@bear-forge/card-engine/rules-inspection';
+import {stateOf} from '@bear-forge/card-engine/rules-module-internal';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
+import {ProbabilityCurrent,takeProbabilityCurrent} from '@bear-forge/runtime-card/probability';
 import {combatContentDefinition} from './combat-content-fixture.ts';
 import type {Ports,Frame} from '../src/game.schemas.ts';
 import {rules} from '../src/rules/execution.ts';
@@ -25,8 +25,8 @@ import {contract,observe} from '../src/contract.ts';
 import {describeAction} from '../src/presentation.ts';
 import {createCardLoader} from '@bear-forge/runtime-card';
 
-import {ProbabilityExpansion} from '../../../packages/runtime-card/src/probability-expansion.ts';
-import {addMass,compareMass,unitMass,zeroMass,probabilityMass,type ProbabilityMass} from '../../../packages/card-engine/src/probability-mass.ts';
+import {ProbabilityExpansion} from '@bear-forge/runtime-card/probability-expansion';
+import {addMass,compareMass,unitMass,zeroMass,probabilityMass,type ProbabilityMass} from '@bear-forge/card-engine/probability-mass';
 
 const program=new CardProgram(combatContentDefinition);
 const unwrap=<T>(r:{ok:true;value:T}|{ok:false;error:unknown}):T=>{if(!r.ok)throw Error(JSON.stringify(r.error));return r.value;};

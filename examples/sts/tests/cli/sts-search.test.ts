@@ -1,4 +1,4 @@
-import {SearchSession} from '../../../../packages/policies/src/search/session.ts';
+import {SearchSession} from '@bear-forge/policies/search/session';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';

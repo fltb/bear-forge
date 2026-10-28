@@ -23,6 +23,7 @@
     "packages/analysis",
     "examples/forge-duel-viewer",
     "tools/cli",
+    "tools/checks",
     "examples/resolution",
     "packages/session"
   ],

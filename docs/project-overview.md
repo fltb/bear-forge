@@ -2,6 +2,8 @@
 
 Bear Forge 的目标是用同一份游戏规则，运行不同策略和构筑，保留真实对局证据，分析有条件的克制、卡牌替换和协同关系。它不把一次胜负当成平衡结论，也不承诺找出最优策略。
 
+仓库当前以 `examples/sts`（完整 STS 复刻与玩家 TUI）作为旗舰示例，`examples/doudizhu` 与 `examples/forge-duel` 用于验证框架、训练与实验闭环；框架本身与具体游戏解耦，其他游戏按同一协议接入。目录定位见 README 与第 11 节。
+
 首版用固定脚本完成这个流程。现成 DouZero 学习器支持 WP 预训练、输入迁移、冻结对手和跨局更新；自研 Transformer/PPO 使用独立环境，为斗地主全部决策阶段与 Forge Duel 提供共用训练代码，冻结模型可进入原有关系实验和证据界面。具体运行及验收结果只见 plan.md。STS 已接入基于完整当前 Context 的 R0/R1/R2 玩家受限搜索，按 next(current) 用原执行器展开未来概率空间；实现、信息边界与独立评估见 player-search-spec.md 和 plan.md。策略进化、MCTS、正式多人运营和更多商业游戏仍是后续范围。搜索树属于策略层，概率分支属于执行适配；不重建假设根，不重放历史。
 
 受控执行已拆分共享 Program 与独立 Context：同产物代码注册一次，装载时以临时 Context 检查 schema，新局 start 初始化实例数据，fork/restore 不再初始化模块或静态元数据。结构检查与行为差分分别验收，见 plan.md。
@@ -78,6 +80,7 @@ fork 复制完整当前现场，不更改真实父局。STS 搜索适配直接�
 | doudizhu | 完整实际游戏与协议接线 | 固定规则版本、全部牌型、叫分、加倍、出牌、超时和结算 |
 | forge-duel | 可构筑实验闭环 | 八种卡牌、费用、准备状态、守卫、伤害/死亡、见证者、抽牌、烧牌、疲劳、终局 |
 | resolution | 双潮焚契复杂结算压力场景 | 两波目标/防止选择、私密取牌、响应、来源离场后的触发、K2–K6 恢复及凭证反例 |
+| sts | 当前旗舰示例：完整游戏复刻与玩家入口 | 铁甲／沃利贝尔 A20 内容、TUI 与存档恢复、参考差分、封存搜索；命令见 README 与 sts-simulator.md |
 
 Forge Duel 的规则与卡池见 forge-duel.md。12 张牌的构筑由显式种子洗牌；策略看不到种子和隐藏顺序。动作提供 exact 完整列表，由独立规则测试核对。
 
@@ -166,7 +169,9 @@ npm run analyze -- --output ./data/baseline
 | packages/training | 自研策略/价值网络、PPO、真实概率采样、接受轨迹和进程连接 |
 | packages/experiments | 登记、调度、尝试/任务区分、检查点和文件提交 |
 | packages/analysis / examples/forge-duel | 通用重采样统计；游戏实现配对、发现/确认、机会和未知状态 |
-| packages/cli / examples/forge-duel-viewer | 实际命令、Forge Duel 的只读 API、关系图和证据 |
+| tools/cli | 根 scripts 的聚合入口（experiment/analyze/serve/demo/card/evaluate/training/build:games）；可依赖 examples |
+| examples/sts | 旗舰示例：完整 STS 内容、玩家 TUI 与参考差分；`npm run sts:tui` 见 sts-simulator.md |
+| examples/forge-duel-viewer | Forge Duel 的只读 API、关系图和证据界面 |
 | examples/*/tests | 游戏正确性、编译差分、恢复和隐藏信息反例 |
 | vendor/effectful | 上游来源、许可与实际必要补丁 |
 

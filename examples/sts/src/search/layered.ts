@@ -1,6 +1,6 @@
 import type {Observation} from '../game.schemas.ts';
 import type {RandomCursor} from '@bear-forge/policies';
-import {searchEntropyWord} from '../../../../packages/policies/src/search/entropy.ts';
+import {searchEntropyWord} from '@bear-forge/policies/search/entropy';
 import {describeAction,describeCard} from '../presentation.ts';
 import {cards} from '../cards.ts';
 import {PS} from '../combat-identifiers.ts';

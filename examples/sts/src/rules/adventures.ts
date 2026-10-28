@@ -10,7 +10,7 @@ import {cardInstances} from './card-instances.ts';
 import {potions} from './potions.ts';
 import {random} from './random.ts';
 import {ordering,type OrderChoice} from './ordering.ts';
-import {probabilityMass} from '../../../../packages/card-engine/src/probability-mass.ts';
+import {probabilityMass} from '@bear-forge/card-engine/probability-mass';
 import {relics} from './relics.ts';
 import {entityId} from './resources.schemas.ts';
 import {adventureSetupSchema,adventureStateSchema,cardDefinitionSchema,relicDefinitionSchema,relicTiers,rewardsSchema,selectionSchema,selectedSchema} from './adventures.schemas.ts';

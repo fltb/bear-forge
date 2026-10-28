@@ -12,7 +12,9 @@
     "./branching": "./src/instance/branching.types.ts",
     "./capture": "./src/instance/capture.ts",
     "./loading": "./src/loading.ts",
-    "./session": "./src/game/session.types.ts"
+    "./session": "./src/game/session.types.ts",
+    "./tests/support/source-boundaries": "./tests/support/source-boundaries.ts",
+    "./tests/support/schema-admission": "./tests/support/schema-admission.ts"
   },
   "dependencies": {
     "zod": "4.6.5"

@@ -1,137 +1,105 @@
 # Bear Forge
 
-当前玩家入口：`npm run sts:tui`；保存退出后按打印命令 `npm run sts:tui -- --resume <目录>` 继续。[TUI 操作、存档与接口](docs/sts-simulator.md)。验收进度见 docs/plan.md。
+Bear Forge 是通用的卡牌执行与实验框架：同一份游戏规则可以运行不同策略和构筑，保留真实对局证据，并分析卡牌替换、条件克制与协同关系。仓库同时带完整游戏示例，其中 `examples/sts`（杀戮尖塔式 A20 玩法复刻，含铁甲与沃利贝尔两名角色及玩家 TUI）是当前旗舰示例，`examples/doudizhu` 与 `examples/forge-duel` 用于验证框架、训练和实验闭环。
 
-2026-10-25：STS 启发式搜索实验已按用户要求封存，未实现铁甲第四幕碎心；不再继续脚本调参。玩家模拟器首批提供 TUI、共享会话和直接存档恢复；后续策略方向仍为 Transformer。封存状态、检查边界与未验证修改见 [实施清单](docs/plan.md)。
+## 30 秒入口
 
-正式名称 **Bear Forge**，目录与包写法 `bear-forge`。用于固定策略下的游戏对局、构筑替换实验和带证据的关系分析。实现包含提前编译、原生/受控执行、保存恢复与分支、游戏绑定、策略、文件实验、分析及本地查看界面；受控执行采用共享 Program 与独立 Context，分支及恢复不重新初始化程序；完整验收进度见 docs/plan.md。训练入口包含现成 DouZero 学习器及两游戏共用的自研 Transformer/PPO，模型通过同一 Policy 和 Card Core 执行。STS/Card Core 的[三层整体优化设计与计划](docs/card-core-spec.md#whole-stack-optimization)已写定，实施与验收状态见 docs/plan.md；玩家搜索正按[局部决策与完整概率空间规格](docs/player-search-spec.md)重构，旧有界策略的评估仅为历史结果，当前未完成项见 docs/plan.md；Rust 迁移继续后置。
+### 玩 STS
 
-下述搜索说明为封存历史，不代表重新启用搜索。当前玩家入口与验收以本文开头的 TUI 文档及 plan.md 为准。
-
-完整介绍与审核入口：[项目介绍](docs/project-overview.md)。玩家搜索严格执行 `next(current)`：直接分支完整真实当前 Context，未来随机与隐藏排序由概率内核展开，不初始化后重跑历史。当前敌人意图按背板授权沿原路径复用，包括 Runic Dome；未来选招仍由原规则展开。卡牌、敌人与机制共用原数据和同一生产结算，公共协议不变。
-
-当前战斗目标是局部前瞻：尽量保血、尽快结束战斗、避开明显死亡，兼顾顺手的跨战斗收益。允许公开场面估值和游戏常识剪枝，不再等待整场终局证明。完整未来支持、条件概率、信息约束和未展开质量仍保留，估计不能冒充精确证明。真实动作执行后只能从实际后继继续，即使必死也不得回退重选；丢失最新现场时不能恢复旧检查点补跑。当前生产策略已编辑接入局部场面评价和动作选择，明确区分估计与证明；正式检查和真实碎心状态以实施清单为准，真实碎心尚未完成。生产实局、历史失败及检查证据见 [实施清单](docs/plan.md)，不得从历史记录恢复旧局重选。
-
-决策引擎信任宿主交付的类型化当前输入，只返回动作建议。请求/Context 守卫、重复 schema 解析、逐节点断言、概率游标重复验证、概率前沿与 Context 存档重验已删除；冒险与唯一动作不获取 Context，同根续搜直接使用已有根。真实推进和禁止回退由原宿主负责。
-
-STS 生产定义已解除历史后验跟踪包装，敌人原选招路径已移除有限粒子前向捕获及近似意图分布存储。共享加载器的历史后验跟踪、执行器的前向捕获以及原规则 Context 中的捕获额度也已删除；未来选招由精确前沿执行原随机调用与原 choose。旧有限 ProbabilityFrontier、采样生成、有限分区及样本提交入口已删除。第一至第三幕地图使用原构造状态逐次续行，保留每次随机调用的完整空间和重复拒绝的长尾；第四幕地图不消耗随机数。原地图算法与概率路径共用，逐次随机调用、未完成前沿保存及直接恢复的相关回归已通过；这不表示所有地图的完整联合空间已经穷尽。
-
-STS 手动逐步游玩与 JSONL 接口：[STS 交互入口](docs/sts-entry.md)。正式多 agent 卡组评审目前暂停，入口验收不计入正式对局。
-
-本机零新增训练卡组评估使用现有 Forge 游戏、规则策略和冻结模型：
+Node >= 22.18，在仓库根目录：
 
 ```sh
-npm run evaluate -- --config examples/forge-duel/experiments/deck-evaluation.json --output data/forge-deck-evaluation
-# 中断后读取原目录冻结的配置、批次和模型身份继续
-npm run evaluate -- --resume --output data/forge-deck-evaluation
-npm run serve -- --output data/forge-deck-evaluation --port 4184
+npm install
+npm run sts:tui
+# 指定新局目录与角色；目录必须不存在或为空
+npm run sts:tui -- --save data/sts-saves/my-run --character ironclad
+# 保存退出后直接装载原 Context 继续
+npm run sts:tui -- --resume data/sts-saves/my-run
 ```
 
-示例需已有 `data/forge-ppo/model.pt`（可通过下方 Forge 自研训练命令生成）。纯脚本评估可将 policies 改为 `["rule"]` 并清空 models，无需 Python 模型进程。配置显式指定合法卡组、单卡替换或四条件协同、对手卡组/策略、可选环境权重及总任务预算；比较复用配对种子和交换座位，共享基准不重复执行。示例首批 3,072 局、最多 12,288 个独立对局任务，每任务最多 2 次尝试；重试全计成本，新增训练样本为 0。配置改变使用新目录。
+现有角色 `ironclad` / `volibear`，现有难度 A20。默认自动存档，`q` 或 Ctrl-C 保存退出；不指定目录时会自动生成路径并打印。不同规则源码或 Node 主版本的存档拒绝加载。
 
-发现阶段仅筛选假设；冻结候选和确认样本量后，才生成独立确认对局。确认采用按种子块的有界经验 Bernstein 区间，并按冻结候选数控制多重比较；常量样本仍有不确定性。无候选不跑确认，预算内可输出未决。页面展示对战矩阵、替换/协同效应、适用策略、机会统计、预算与停止原因，并通过原有证据接口查看玩家可见对局。不同操作策略的效果分别报告；权重仅聚合指定对手环境，不默认合并操作策略。固定策略结果不代表充分适应后的卡组上限，适应训练和搜索仍在后续范围。评估结果由调度器发布，勿对该目录运行旧 analyze 命令。
+- 操作键位、界面分区、存档与事件接口：[STS 玩家模拟器与 TUI](docs/sts-simulator.md)
+- 旧 JSONL／数字终端逐步入口（评审用，非 TUI）：[STS 玩家入口](docs/sts-entry.md)
+- 交给代理的独立玩家指导与停机规则：[STS agent 指导](docs/sts-agent-guide.md)
+- 已知规则差异与修复依据：[STS 规则差异清单](docs/sts-rule-gaps.md)
+- 沃利贝尔定稿卡表与实现契约：[卡表](docs/volibear/CARDS.md)、[实现契约](docs/volibear/DEVELOPMENT.md)
 
-本机已完成该示例的 3,072 局发现及 9,214 局独立确认，全部正常结束，新增训练为 0。11 项确认关系中 2 项达到确定判断、9 项未决；共耗约 53.6 分钟评估阶段时间，细节与条件限制见 [计划中的实际结果](docs/plan.md)。终态 resume 已验证不重复任务。
-
-本机斗地主脚本实验复用已有策略与共享实验 runner：
+### 框架 / 其他游戏
 
 ```sh
-npm run doudizhu:experiment -- data/ddz-scripts examples/doudizhu/experiments/scripts.json
-# 省略配置，读取原目录注册信息续跑；已提交的任务不重复执行
-npm run doudizhu:experiment -- data/ddz-scripts
+npm run check
+npm run card -- --game forge-duel --seed 87
+npm run experiment -- --config examples/forge-duel/experiments/baseline.json --output ./data/baseline
+npm run analyze -- --output ./data/baseline
+npm run serve -- --output ./data/baseline
 ```
 
-配置中 `seats` 按 0/1/2 席位选择 `first`、`last`、`random`；`games` 和 `seed` 控制局数与起始种子，`engine` 可选 `native`/`controlled`，两者都运行现有 Card Core。输出目录保存现有实验格式的观察、已接受决策和结果。全员 `first` 会持续不叫并按 `maxSteps` 截断，这是策略行为，不计为输局。目录绑定配置与实现版本，改变配置或源码时使用新目录。三个脚本及现成训练器闭环已验证；当前自研训练与模型实验进度见 [计划](docs/plan.md)。
+框架目标、三层边界、实验与证据的完整说明见 [项目介绍](docs/project-overview.md)；执行模型与分层见 [架构](docs/architecture.md)；公共字段语义见 [协议](docs/protocol.md)；从协议到首版完整系统的实施方案见 [完整实施规格](docs/implementation-spec.md)。
 
-现成训练器接入使用固定提交的 [DouZero](https://github.com/kwai/DouZero/tree/718a5c920bf3361e34178a38f3b80458e176b351)（Apache-2.0），直接调用其模型、优化器及 DMC `learn`；Python 游戏环境不参与推进。先创建隔离环境，再在仓库根目录运行：
+其他示例：
 
-```sh
-uv sync --frozen --project examples/doudizhu --python 3.14
-npm run doudizhu:training -- train examples/doudizhu/experiments/train.json
-npm run doudizhu:training -- resume examples/doudizhu/experiments/resume.json
-npm run doudizhu:training -- eval examples/doudizhu/experiments/eval.json
-```
+| 示例 | 用途 | 文档 |
+| --- | --- | --- |
+| `examples/doudizhu` | 完整实际游戏与协议接线，DouZero 与自研 PPO 训练 | [斗地主规则和接线](docs/doudizhu.md) |
+| `examples/forge-duel` | 可构筑研究游戏与关系实验闭环 | [Forge Duel v1](docs/forge-duel.md) |
+| `examples/resolution` | 双潮焚契复杂结算、分支与恢复压力案例 | [结算与恢复案例](docs/scenario-resolution-requirements.md) |
+| `examples/sts` | 完整 STS 复刻、玩家 TUI、差分参考 | [STS 玩家模拟器](docs/sts-simulator.md) |
 
-`train` 默认目标 20,000 条出牌样本或 10 分钟，`resume` 新增最多 100,000 条或 60 分钟；达到任一预算后在完整对局边界保存。模型通过既有 Policy 和实验 runner 执行完整斗地主，叫分与加倍使用固定脚本，当前只学习出牌。`data/ddz-training/model.pt` 保存模型、优化器、随机状态、下一局种子和计数，另保留两份旧 checkpoint；Ctrl-C 请求在当前局结束后保存退出。新训练拒绝覆盖已有模型目录，恢复必须保持采样配置。评测使用独立种子和三个席位，统一叫分/加倍脚本，First/Last/Random 只作为出牌对手（阶段 1 的原始脚本不变）；可在评测配置中加入 `previousCheckpoint` 对战旧模型。指标写标准输出，模型产物不提交 Git。
+实验、策略、训练与查看器的命令细节统一写在 [完整实施规格](docs/implementation-spec.md) 和 [项目介绍](docs/project-overview.md)，不在本页重复。
 
-WP 预训练接入使用同一个运行器：
+## 当前状态与边界
 
-```sh
-npm run doudizhu:weights -- data/douzero-wp
-npm run doudizhu:training -- init examples/doudizhu/experiments/wp-baseline.json
-npm run doudizhu:training -- init examples/doudizhu/experiments/wp-initialize.json
-npm run doudizhu:training -- train examples/doudizhu/experiments/wp-train.json
-npm run doudizhu:training -- resume examples/doudizhu/experiments/wp-resume.json
-npm run doudizhu:training -- eval examples/doudizhu/experiments/wp-eval.json
-```
-
-官方 README 的 Google Drive 下载入口目前返回 404；下载命令采用 [DouZero_API 固定提交中的 WP 镜像](https://github.com/pineoncellar/DouZero_API/tree/ca8c841552e08d602ad326d2c7450b683bf41226/baselines/douzero_WP)，来源和 Apache-2.0 代码许可证链接写入模型元数据，不声称已与失效入口的原文件核验一致。三角色权重以 `weights_only=True` 严格检查后导入。`wp-baseline` 保存原始维度的冻结教师；`wp-initialize` 保存扩展维度、尚未更新的学生。迁移按输入列位置复制参数，新增 91 列权重为零；其余层保持原值。原教师对我们的全部合法候选评分，同牌不同解释采用现有候选顺序破同分，绝不裁掉动作或让 Python Env 结算游戏。
-
-当前默认每角色跨完整对局累计 `batchSamples:3200` 条样本调用上游 `learn`。`samples` 计已采集的学生出牌样本，`learnedSamples` 计实际参与更新的样本，`pendingSamples` 是未满批尾部；三者可核对。旧 checkpoint 没有角色样本计数，其已学习总量另保留为 `legacyLearnedSamples`。尾部随模型/优化器一起保存，预算结束不强制用很小的尾批更新。恢复保持批次、探索及教师配置；旧 checkpoint 可读取并转入跨局训练。WP 训练默认每两局插入一局冻结教师对手，学生地主和两名学生农民轮换，其余局自博弈，教师从不更新；`teacherCheckpoint` 与 `teacherEvery` 控制此配置。预训练初始化与冻结对手提供训练指导，未另写蒸馏算法。
-
-默认 `evaluationMode:team`：同 seed 同副牌，学生地主对两名对手农民，再用两名学生农民对对手地主；报告两阵营与等权综合结果、规则团队得分和按 seed 聚类区间。每阵营 300 局来自 300 个独立 seed。`single` 保留旧单座位替换诊断，`both` 同时输出，两种口径分别标记。单阵营另报 Wilson 区间，避免 0/1 胜率时区间退化。评测和训练种子必须分开，已有模型目录可直接用于 `eval`，新训练及初始化拒绝覆盖。导入模型后的训练计数仅表示本框架新增样本和更新，不包含上游预训练量；初始化即具备的棋力不能归因于本机这轮训练。
-
-## 自研训练与模型实验
-
-`packages/training` 提供独立的 PyTorch/NumPy 环境、小型 Transformer 候选动作策略/价值网络及 PPO，不调用 DouZero 的学习算法。斗地主的叫分、加倍、反加倍和出牌都由模型决策；Forge Duel 复用同一网络与更新代码。游戏规则和推进仍只由 TS/Card Core 执行，Python 接收玩家可见特征和完整合法候选。
-
-```sh
-npm run training:setup
-# 斗地主示例使用上方已初始化的 WP 教师；无教师训练可设置 teacher:false 并移除 teacherCheckpoint
-npm run training -- train examples/doudizhu/experiments/ppo-train.json
-npm run training -- resume examples/doudizhu/experiments/ppo-resume.json
-# 可在评测配置中加 previousCheckpoint，与另行保留的旧模型比较
-npm run training -- eval examples/doudizhu/experiments/ppo-eval.json
-
-npm run training -- train examples/forge-duel/experiments/ppo-train.json
-npm run training -- resume examples/forge-duel/experiments/ppo-resume.json
-npm run training -- eval examples/forge-duel/experiments/ppo-eval.json
-```
-
-模型仅收集完整终局中实际接受的动作，保存行为版本和真实采样概率。默认跨局累计 1,024 条后执行四轮 PPO；未满批尾部随模型、Adam、随机状态和下一局种子原子保存，Ctrl-C 在完整对局边界退出。恢复须使用相同游戏、编码、学习/采样配置、教师版本及 Python 实现。教师标签来自学生实际到达的可见状态，只用于可选交叉熵监督；标签不会替换已经执行的动作。
-
-斗地主评测的 `evaluationScope:both` 分开报告两种结果：`all` 由模型决定所有阶段，逐座位替换后地主身份可能变化；`playing` 统一叫分/加倍，交换完整地主/农民阵营比较出牌。两者不能混成同一个棋力指标。评测不更新模型，使用与训练不重叠的种子；短预算训练不保证超过 WP。
-
-冻结 Forge 模型后，用 `model-` 前缀命名并在 `models` 映射 checkpoint，即可进入已有构筑替换、交互分析和证据页面：
-
-```sh
-npm run experiment -- --config examples/forge-duel/experiments/ppo-relations.json --output data/ppo-relations
-npm run analyze -- --output data/ppo-relations
-npm run serve -- --output data/ppo-relations
-```
-
-该配置执行 1,024 局，包含发现/确认、交换座次和四种干预条件。模型版本、文件内容和学习器实现共同冻结；继续实验时改动权重会被拒绝。查看页面沿用原有策略筛选、关系图、任务和逐玩家证据入口。模型、依赖环境及实验数据保存在本地忽略目录，不提交 Git。
-
-## 阅读入口
-
-- [目标与边界](docs/requirements.md)
-- [分层与数据流](docs/architecture.md)
-- [协议字段和语义](docs/protocol.md)
-- [斗地主规则和接线](docs/doudizhu.md)
-- [受控程序规范](docs/controlled-program-spec.md)
-- [业务压力场景](docs/scenario-resolution-requirements.md)
-- [完整实施规格](docs/implementation-spec.md)
-- [当前进度与计划](docs/plan.md)
+- STS 玩家 TUI 已可启动、完整游玩、保存退出并跨进程恢复；旧启发式搜索路线已封存（[搜索规格](docs/player-search-spec.md)），不继续调参或自动开局。未完成真实第四幕碎心，普通死亡／第三幕胜利不等同碎心。
+- 严禁历史重放：真实动作执行后只能从实际后继继续，恢复必须接续最新已保存现场；动作带、日志和记录只作只读证据。
+- 框架侧已完成编译器、原生／受控执行、保存恢复与分支、游戏绑定、策略、文件实验、统计分析与本地查看界面；训练侧有现成 DouZero 接线和两游戏共用的 Transformer/PPO，模型通过同一 Policy 与 Card Core 执行。完成状态以 [进度清单](docs/plan.md) 为准。
+- 完整状态与未完成项只维护在 [docs/plan.md](docs/plan.md)；`archive/` 是已失效的历史设计，不作为当前依据。
 
 ## 目录
 
 | 目录 | 内容 |
 | --- | --- |
-| packages/contracts | 公共 TS 类型与 Zod schema |
+| packages/contracts | 公共 TS 类型与 Zod schema（冻结协议） |
 | packages/game-sdk | 程序内使用的类型化端口薄封装 |
-| packages/card-engine | 卡牌声明与专用同步执行器；另保留通用程序使用的旧 async 组合库 |
-| packages/runtime-card | 并列专用卡牌后端：同步结算、COW 分支、保存恢复与当前状态续行；不经过通用编译器 |
-| packages/training | 自研 Transformer/PPO、接受轨迹、概率采样及学习器进程连接 |
-| examples/doudizhu | 真实斗地主规则、卡牌定义与外侧适配 |
-| packages/contracts/tests | 协议类型、schema、依赖边界测试；support 存放可复用的协议测试夹具 |
-| packages/game-sdk/tests | SDK 调用、类型及与外侧游戏接口的接线测试 |
-| examples/doudizhu/tests | 规则、合法动作独立核对、领域 schema 与完整原生对局测试 |
-| docs | 当前设计、需求和计划 |
+| packages/boundary、packages/compiler、packages/runtime、packages/runtime-native、packages/runtime-controlled | 值复制与 schema 准入、通用程序编译、执行、原生／受控后端与快照 |
+| packages/card-engine、packages/runtime-card | 专用卡牌内核：声明、同步结算、COW 分支与持久化 |
+| packages/game-host、packages/policies、packages/session | 请求／观察／动作投影、策略隔离、会话时间 |
+| packages/experiments、packages/analysis、packages/training | 实验登记与调度、关系统计、自研 Transformer/PPO |
+| examples/sts | 旗舰示例：完整 STS 内容、CLI/TUI、参考差分与搜索 |
+| examples/doudizhu | 完整斗地主规则、训练与实验接线 |
+| examples/forge-duel | 可构筑研究游戏与实验闭环 |
+| examples/forge-duel-viewer | 只读关系图与证据界面 |
+| examples/resolution | 双潮焚契结算压力案例 |
+| tools/cli | 仓库开发命令聚合器（`@bear-forge/dev-cli`），可依赖 examples |
+| docs | 设计、规格、进度；分类索引见 [docs/README.md](docs/README.md) |
 | archive | 已失效的历史设计，不作为当前依据 |
 
-Core 提供执行机制，Instance 持有完整现场，BaseGame 在外侧解释游戏交互。通用程序和专用卡牌后端遵循同一对外协议。通用原生入口运行受信任 JS，通用编译入口提供其准入保障；专用卡牌原生/受控都执行同一 Card Core，受控模式增加图状态隔离、保存、恢复、分支及步骤记录。
+公共协议由 Core／Instance／BaseGame 三层组成：Core 提供执行机制，Instance 持有完整现场，BaseGame 在游戏侧解释请求、动作与事件。通用程序与专用卡牌后端遵循同一对外协议。代理工作规则见 [AGENTS.md](AGENTS.md)。
 
-游戏入口：[模块导出](examples/doudizhu/src/index.ts)、[卡牌流程](examples/doudizhu/src/card.ts)、[生产契约](examples/doudizhu/src/contract.ts)。代理工作规则见 [AGENTS.md](AGENTS.md)。
+## 常用命令
+
+```sh
+# 安装与检查
+npm ci --ignore-scripts
+npm run check                 # 全仓汇总类型检查与测试
+npm run typecheck             # 仅类型检查
+npm test                      # 仅测试
+
+# STS
+npm run sts:tui
+npm run sts -- play --character ironclad --ascension 20 --seed 130 --output data/sts-review/ironclad-001 --interface terminal
+npm test -w @bear-forge/sts
+
+# 框架游戏 / 实验 / 查看器
+npm run card -- --game forge-duel --seed 87
+npm run build:games
+npm run build:viewer
+npm run demo -- --output ./data/demo
+npm run serve -- --output ./data/demo
+npm run evaluate -- --config examples/forge-duel/experiments/deck-evaluation.json --output data/forge-deck-evaluation
+```
+
+训练与评估（DouZero、WP 预训练、自研 PPO、斗地主脚本实验）需要 Python 环境与额外安装步骤，命令和验收边界见 [完整实施规格](docs/implementation-spec.md) 第 17–20 节；本机已完成的零训练卡组评估结果与限制见 [计划归档](docs/plan-archive-2026-10.md)。
 
 ## 正式检查
 
@@ -142,73 +110,15 @@ npm run training:setup
 npm run check
 ```
 
-作者程序及传递依赖使用严格 ES Module。`.js`/`.ts` 按 ESM 解析，`.mjs`/`.mts` 明确为 ESM；CommonJS 和 Script 输入在准入阶段拒绝。
-
-根目录的 `npm run check` 汇总各 workspace 的类型检查和测试。`npm run typecheck`、`npm test` 分别汇总对应检查；每个模块都有自己的 package.json 脚本和 tsconfig.json。
-
-只检查一个模块：
+根 `npm run check` 汇总各 workspace 的类型检查和测试，每个模块有自己的 `typecheck`／`test`／`check` 脚本。也可只查一个模块：
 
 ```sh
 npm run check --workspace @bear-forge/contracts
-npm run check --workspace @bear-forge/game-sdk
-npm run check --workspace @bear-forge/doudizhu
+npm run check --workspace @bear-forge/sts
 ```
 
-也可以进入模块目录直接运行 `npm run check`。测试输出直接显示，不提交运行日志或验收报告。协议测试夹具可以被依赖方的测试复用，不进入生产导出。
+作者程序及传递依赖使用严格 ES Module；`.js`/`.ts` 按 ESM 解析，CommonJS 和 Script 输入在准入阶段拒绝。测试输出直接显示，不提交运行日志或验收报告。构建产物在 `build/`，演示与实验输出由 `--output` 指定，均为业务产物，不提交 Git。
 
-受控执行改用提前编译、运行时装载产物；库选择、通用 benchmark/游戏差分与恢复测试见 [编译与差分规格](docs/compiler-and-differential-spec.md)。
+## 文档
 
-## 首版演示
-
-```sh
-npm run build:viewer
-npm run demo -- --output ./data/demo
-npm run serve -- --output ./data/demo
-```
-
-打开 http://127.0.0.1:4173。demo 从空目录运行真实对局、文件提交和关系分析；小样本显示未知。完整实验、恢复和限制见项目介绍。
-
-## 专用卡牌路径
-
-同一 cardDefinition 的原生/受控模式都经过卡牌 Core，没有无 Core 的正式卡牌模式。斗地主、Forge Duel 的 card:run 接此路径；STS 使用受控的 sts play 或独立搜索实验入口，通用 card:run 拒绝 STS。历史重放命令对所有游戏禁用，runtime-card 不再导出 replayCard；build:games 装配 STS 受控产物。demo/experiment 继续使用既有游戏。旧 async 游戏入口在 tests/generic 中；已迁移的差分和基准按各自当前请求生成新回复，历史记录仅用于比较。尚未审查的历史动作带夹具不得执行，也不能充当本轮验收。
-
-当前基准为同一 Card Core 上的完整可交互 GameHost：原生游戏自身的多余路径单独核算，受控再核算新增能力的成本。默认原生不承担未启用的训练、记录、COW 或存档管理；游戏历史、观察、合法动作及实际事件交付保留。[完整游戏优化方案](docs/card-core-spec.md#gamehost-optimization) 与尚未完成项保留，当前按三层整体优化方案实施，实际完成状态见 plan.md。原生审计使用已有 recordCore:true；默认原生不发布 capture，--records 只保存当次真实记录，不执行历史或声称重放核验通过。
-
-通用 Program/编译执行入口保留。专用卡牌规则导出为各游戏的 `cardDefinition`，通过 `createCardLoader({ controlled: true | false })` 装载；加载结果仍为既有 Core/Instance/capture/persistence，GameContract 与 BaseGameBinder 不变。专用 Card Core 解释静态效果步骤，内部同步推进，遇端口才返回；受控模式提供步骤预算、分支隔离、存档与记录，不宣称任意 JS 的编译沙箱保障。
-
-GameContract 作者适配函数按用户确定的纯只读契约借用稳定发布数据，两模式一致。活动世界、schema 可写输入、玩家回调及公开返回仍彼此隔离；不为每次纯适配调用复制整份 view。
-
-```sh
-npm run card -- --game forge-duel --seed 87
-npm run card -- --game doudizhu --seed 31 --native
-npm run card -- --game sts --seed 130 --native
-npm run card -- --game forge-duel --records /tmp/forge-card-records.json
-npm run benchmark:card -w @bear-forge/forge-duel -- card-controlled
-npm run benchmark:card -w @bear-forge/doudizhu -- instance-controlled
-```
-
-STS 从正常铁甲 A20 开局，CLI 使用首个合法动作策略。规则按稳定内核、类型化规则模块和组合实体装配；历史碎心动作带不得驱动生产或测试执行，独立规则对照必须从各自当前状态产生新动作，禁止重放历史。设计与扩展契约见 [第二层接口](docs/card-core-spec.md#第二层向上公开的完整接口目录2026-10-20设计收敛)，当前验收结果见 plan.md。
-
-STS 的第三层按游戏内容和角色组织，入口如下：
-
-~~~text
-examples/sts/src/
-├── rules/                         # 第二层：公共领域状态、操作与扩展契约
-├── content/                       # 第三层：具体游戏内容
-│   ├── characters/ironclad/        # 铁甲的开局、卡牌、状态和专属遗物
-│   ├── cards/{colorless,curses,statuses,shared}/
-│   ├── powers/                    # 多种内容共用的具体状态与 hooks 工具
-│   ├── relics/                    # 公共遗物、获取与登记
-│   ├── potions/
-│   ├── enemies/{exordium,city,beyond,ending,events,shared}/
-│   ├── events/                    # 冒险事件与 Neow
-│   ├── rooms/
-│   └── rewards/
-├── program/                       # 组装内容并编排冒险、战斗、跨房间流程
-└── adapters/                      # IO、观察、展示和参考编号转换
-~~~
-
-查找一张铁甲牌从 content/characters/ironclad/cards/ 开始，无色牌从 content/cards/colorless/ 开始；卡牌目录只收集定义引用，规则求值仍经第二层。混合文件已拆分，没有旧路径转发入口。
-
-
-完整游戏基准使用 game-native/game-controlled（benchmark:card 默认 game-controlled），两模式都按收到的合法选项选动作并实际接收事件，计时前与独立旧游戏逐项比较完整交互。card-native、card-controlled、card-controlled-recorded、instance-native、instance-controlled、basegame-native、basegame-controlled 保留为局部诊断；裸 Core/Instance 不包含完整交互，不能据此计算合理包装预算或完整原生下界。游戏规则与装载、声明语义、正确性证明及边界见 [专用后端方案](docs/card-core-spec.md)、[证明](docs/card-core-proof.md)。实际进度与尚未完成的验证只见 docs/plan.md。
+全部文档的分类索引（框架通用／STS 专属／历史归档）见 [docs/README.md](docs/README.md)。最短阅读路径：本页 → [项目介绍](docs/project-overview.md) → [需求](docs/requirements.md)／[架构](docs/architecture.md)／[协议](docs/protocol.md) → 按任务读规格文档 → [当前进度](docs/plan.md)。

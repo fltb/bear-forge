@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {serialize,deserialize} from 'node:v8';
 import {z} from 'zod';
 import {CardProgram,CardMachine,linkRules,ruleModules} from '@bear-forge/card-engine';
-import {privateCardGraph} from '../../../packages/runtime-card/src/graph.ts';
-import {ProbabilityCurrent} from '../../../packages/runtime-card/src/probability.ts';
-import {ProbabilityExpansion} from '../../../packages/runtime-card/src/probability-expansion.ts';
-import {addMass,multiplyMass,probabilityMass,unitMass,zeroMass,type ProbabilityMass} from '../../../packages/card-engine/src/probability-mass.ts';
+import {privateCardGraph} from '@bear-forge/runtime-card/graph';
+import {ProbabilityCurrent} from '@bear-forge/runtime-card/probability';
+import {ProbabilityExpansion} from '@bear-forge/runtime-card/probability-expansion';
+import {addMass,multiplyMass,probabilityMass,unitMass,zeroMass,type ProbabilityMass} from '@bear-forge/card-engine/probability-mass';
 import {rules} from '../src/rules/execution.ts';
 import {random} from '../src/rules/random.ts';
 

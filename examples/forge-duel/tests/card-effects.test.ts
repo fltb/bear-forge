@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CardProgram, CardMachine, plainCardStorage } from '@bear-forge/card-engine';
-import { CardGraph } from '../../../packages/runtime-card/src/graph.ts';
+import { CardGraph } from '@bear-forge/runtime-card/graph';
 import { cardDefinition } from '../src/card.ts';
 import { create, apply, legal, baseDeck, cards } from './reference/rules.ts';
 import type { State, Definition, Unit } from '../src/forge.schemas.ts';

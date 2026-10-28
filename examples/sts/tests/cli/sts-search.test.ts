@@ -1,14 +1,14 @@
-import {SearchSession} from '../../policies/src/search/session.ts';
+import {SearchSession} from '../../../../packages/policies/src/search/session.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Writable} from 'node:stream';
-import {runStsSearch} from '../src/sts-search.ts';
+import {runStsSearch} from '../../src/cli/sts-search.ts';
 import {ExperimentFiles} from '@bear-forge/experiments';
 import {searchRegistration} from '@bear-forge/sts';
-import {searchTasks} from '../../../examples/sts/src/search/experiment.ts';
+import {searchTasks} from '../../src/search/experiment.ts';
 // These fixtures exercise scheduling/cancellation/storage, not process RSS.
 // Shared test-process imports must not preempt the boundary under assertion;
 // memory-pressure behavior has separate controlled runner regressions.

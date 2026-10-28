@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 test('default game build links Card definitions in both modes without creating a generic program', async () => {
   const root = new URL('../../../', import.meta.url);
-  await promisify(execFile)(process.execPath, ['--experimental-strip-types', 'packages/cli/src/main.ts', 'build:games'], { cwd: fileURLToPath(root) });
+  await promisify(execFile)(process.execPath, ['--experimental-strip-types', 'tools/cli/src/main.ts', 'build:games'], { cwd: fileURLToPath(root) });
   for (const name of ['forge-duel', 'doudizhu', 'sts']) {
     const { game } = await import(new URL('build/' + name + '.card.mjs', root).href);
     assert.equal(Object.hasOwn(game, 'program'), false);
@@ -57,7 +57,7 @@ test('ordinary native CLI games finish without collecting or replaying an unrequ
   }
 });
 
-test('STS rejects generic execution and replay before starting a game', async () => {
-  await assert.rejects(runCardGame({game:'sts',controlled:true,seed:'18446744073709551615'}), /dedicated sts play/);
+test('STS is not a generic card CLI game', async () => {
+  await assert.rejects(main(['card:run','--game','sts']), /--game must be forge-duel or doudizhu/);
   for(const game of ['sts','forge-duel','doudizhu'])await assert.rejects(main(['card:replay','--game',game,'--records','/must-not-be-read']),/Historical replay is disabled/);
 });

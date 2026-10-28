@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import type {Writable} from 'node:stream';
-import {createSearchExperiment, searchRegistration} from '@bear-forge/sts';
+import {createSearchExperiment, searchRegistration} from '../index.ts';
 
 export async function runStsSearch(args: string[], output: Writable = process.stdout) {
   const [directory, configPath, ...extra] = args;

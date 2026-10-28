@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import type {Readable,Writable} from 'node:stream';
-import type {InteractiveStatus,InteractiveCommand} from '@bear-forge/sts';
+import type {InteractiveStatus,InteractiveCommand} from '../index.ts';
 export async function runSts(args=process.argv.slice(2),input:Readable=process.stdin,output:Writable=process.stdout){
   if(args[0]==='search')return (await import('./sts-search.ts')).runStsSearch(args.slice(1),output);
   if(args[0]==='play')args=args.slice(1);
@@ -26,16 +26,16 @@ export async function runSts(args=process.argv.slice(2),input:Readable=process.s
   if(flags.ascension!==undefined&&flags.ascension!=='20')throw Error('Only ascension 20 is supported');
   const outputPath=flags.output??flags.out;if(!outputPath)throw Error('--output is required');const out=resolve(outputPath);
   await mkdir(out,{recursive:true});if((await readdir(out)).length)throw Error('Output directory must be empty');
-  const sessionId=randomUUID(),startedAt=new Date().toISOString(),root=fileURLToPath(new URL('../../../',import.meta.url));
+  const sessionId=randomUUID(),startedAt=new Date().toISOString(),root=fileURLToPath(new URL('../../../../',import.meta.url));
   const git=(...a:string[])=>{try{return execFileSync('git',a,{cwd:root,encoding:'utf8',maxBuffer:64*1024*1024});}catch{return null;}};
-  const entrySources=['packages/cli/src/sts.ts','examples/sts/src/index.ts','examples/sts/src/interactive-session.ts','examples/sts/src/interactive-session.types.ts','examples/sts/src/presentation.ts'].map(path=>({path,blob:git('rev-parse','HEAD:'+path)?.trim()??null}));
+  const entrySources=['examples/sts/src/cli/sts.ts','examples/sts/src/index.ts','examples/sts/src/interactive-session.ts','examples/sts/src/interactive-session.types.ts','examples/sts/src/presentation.ts'].map(path=>({path,blob:git('rev-parse','HEAD:'+path)?.trim()??null}));
   const metadata={pid:process.pid,sessionId,character,seed,ascension:20,review:flags.review!=='false',mode,startedAt,engine:'controlled production BaseGame',entrySources,git:{commit:git('rev-parse','HEAD')?.trim()??null,status:git('status','--porcelain'),diff:git('diff','HEAD','--binary','--','examples/sts/src','examples/sts/package.json','examples/sts/tsconfig.json','packages','vendor','package.json','tsconfig.json'),untracked:git('ls-files','--others','--exclude-standard','--','examples/sts/src','packages','vendor')}};
   await writeFile(resolve(out,'run.json'),JSON.stringify({...metadata,status:'initializing'},null,2),{flag:'wx'});
   await Promise.all(['decisions.jsonl','events.jsonl'].map(f=>writeFile(resolve(out,f),'')));
   const emit=(v:unknown)=>{if(mode==='jsonl')output.write(JSON.stringify(v)+'\n');else output.write(JSON.stringify(v,null,2)+'\n');};
   let eventWrites=Promise.resolve();const maps=new Map<number,unknown>();let historyOffset=0,decisionCount=0,eventSeq=0;
-  let session:Awaited<ReturnType<typeof import('@bear-forge/sts').createInteractiveSession>>|undefined;
-  const route:unknown[]=[],changes:unknown[]=[],battles:{battle:number;startEventSeq:number;endEventSeq?:number;act?:number;floor?:number;enemies?:unknown;outcome?:unknown}[]=[];let lastObservation:import('@bear-forge/sts').Observation|null=null,currentDecision=0;
+  let session:Awaited<ReturnType<typeof import('../index.ts').createInteractiveSession>>|undefined;
+  const route:unknown[]=[],changes:unknown[]=[],battles:{battle:number;startEventSeq:number;endEventSeq?:number;act?:number;floor?:number;enemies?:unknown;outcome?:unknown}[]=[];let lastObservation:import('../index.ts').Observation|null=null,currentDecision=0;
   let finalStatus:'aborted'|'death'|'heart-victory'|'act3-clear'|'fault'='aborted',termination='eof',result:unknown=null;
   const lines=createInterface({input,terminal:false});
   const commands=lines[Symbol.asyncIterator]();
@@ -57,8 +57,8 @@ export async function runSts(args=process.argv.slice(2),input:Readable=process.s
       await writeFile(resolve(out,'source.patch'),patch);
     }catch(error){throw Error('Unable to record source provenance: '+String(error));}
 
-    const {createInteractiveSession}=await import('@bear-forge/sts');
-    const {presentDecision,formatDecision}=await import('@bear-forge/sts');
+    const {createInteractiveSession}=await import('../index.ts');
+    const {presentDecision,formatDecision}=await import('../index.ts');
     session=await createInteractiveSession({character,seed,sessionId,review:metadata.review,onEvent:event=>{
       const seq=eventSeq++;
       if(event.kind==='detail'&&typeof event.data.battle==='number'){

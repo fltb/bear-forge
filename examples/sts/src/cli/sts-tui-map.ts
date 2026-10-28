@@ -1,5 +1,5 @@
-import type {EventBatch} from '../../../examples/sts/src/simulator.types.ts';
-import {encounterId} from '../../../examples/sts/src/identifiers.ts';
+import type {EventBatch} from '../simulator.types.ts';
+import {encounterId} from '../identifiers.ts';
 import type {decisionPresentation} from './sts-tui-view.ts';
 type Presentation=ReturnType<typeof decisionPresentation>;
 const rooms:Record<string,[string,string]>={MONSTER:['M','战斗'],ELITE:['E','精英'],REST:['R','营火'],SHOP:['$','商店'],EVENT:['?','未知房间'],TREASURE:['T','宝箱'],BOSS:['B','Boss']};

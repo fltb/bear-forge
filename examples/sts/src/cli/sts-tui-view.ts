@@ -1,9 +1,9 @@
 import {routeMap,routeDetails} from './sts-tui-map.ts';
-import {describeCard,describeRelic,describePotion,presentDecision} from '@bear-forge/sts';
-import {enemyIntentLabel} from '../../../examples/sts/src/presentation.ts';
-import type {Action} from '@bear-forge/sts';
-import type {EventBatch} from '../../../examples/sts/src/simulator.types.ts';
-import {encounterId} from '../../../examples/sts/src/identifiers.ts';
+import {describeCard,describeRelic,describePotion,presentDecision} from '../index.ts';
+import {enemyIntentLabel} from '../presentation.ts';
+import type {Action} from '../index.ts';
+import type {EventBatch} from '../simulator.types.ts';
+import {encounterId} from '../identifiers.ts';
 
 // Terminal cells: combining marks are zero-width; CJK and emoji use two cells.
 export function cellWidth(character:string){

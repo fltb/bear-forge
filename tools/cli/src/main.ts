@@ -20,7 +20,6 @@ export function argumentsOf(args: string[]) {
 }
 export async function main(args = process.argv.slice(2)) {
   if(args[0]==='card:replay')throw Error('Historical replay is disabled');
-  if(args[0]==='sts'){const {runSts}=await import('./sts.ts');await runSts(args.slice(1));return;}
   const [command, ...rest] = args,
     flags = argumentsOf(rest);
   const allowed: Record<string, string[]> = {
@@ -36,9 +35,8 @@ export async function main(args = process.argv.slice(2)) {
   const budgets = Object.fromEntries([['concurrency', 'concurrency'], ['memory-mb', 'memoryBudgetMB'], ['compute-steps', 'computeStepBudget']].filter(([flag]) => flags[flag!] !== undefined).map(([flag, field]) => [field, Number(flags[flag!])]));
   const directory = typeof flags.output === 'string' ? flags.output : './data/forge';
   if (command === 'card:run') {
-    if (flags.game !== 'forge-duel' && flags.game !== 'doudizhu' && flags.game !== 'sts') throw Error('--game must be forge-duel, doudizhu or sts');
+    if (flags.game !== 'forge-duel' && flags.game !== 'doudizhu') throw Error('--game must be forge-duel or doudizhu');
     if (flags.native !== undefined && flags.native !== true) throw Error('--native takes no value');
-    if (flags.game === 'sts') throw Error('Use sts play; generic STS run and replay are disabled');
     const seed = Number(flags.seed ?? 991);
     if (typeof seed === 'number' && (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff)) throw Error('Invalid seed');
     if (flags.records !== undefined && typeof flags.records !== 'string') throw Error('--records requires a path');

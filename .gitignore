@@ -157,3 +157,6 @@ __pycache__/
 # Generated programs and local experiments
 /build/
 /data/
+
+# Example build artifacts (C++ reference harness, card bundles)
+examples/*/build/

@@ -1,4 +1,4 @@
-import {openJsonlTrace} from '../../../examples/sts/src/simulator-trace.ts';
+import {openJsonlTrace} from '../simulator-trace.ts';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -6,8 +6,8 @@ import {emitKeypressEvents} from 'node:readline';
 import type {Key} from 'node:readline';
 import {createHumanPolicy} from '@bear-forge/policies';
 import type {JsonValue} from '@bear-forge/contracts/game';
-import {createSimulator} from '../../../examples/sts/src/simulator.ts';
-import {openSimulatorStore} from '../../../examples/sts/src/simulator-store.ts';
+import {createSimulator} from '../simulator.ts';
+import {openSimulatorStore} from '../simulator-store.ts';
 import {decisionPresentation,actionMatches,chooseMultiple,eventLines,renderTui,tabs,needsConfirmation,resultSummary} from './sts-tui-view.ts';
 import type {TuiModel} from './sts-tui-view.ts';
 

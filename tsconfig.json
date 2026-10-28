@@ -16,6 +16,7 @@
   },
   "include": [
     "packages/**/*.ts",
-    "examples/**/*.ts"
+    "examples/**/*.ts",
+    "tools/**/*.ts"
   ]
 }

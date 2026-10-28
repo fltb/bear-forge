@@ -6,8 +6,8 @@ import {join} from 'node:path';
 import {Readable,Writable} from 'node:stream';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {runSts} from '../src/sts.ts';
-import {createInteractiveSession} from '../../../examples/sts/src/interactive-session.ts';
+import {runSts} from '../../src/cli/sts.ts';
+import {createInteractiveSession} from '../../src/interactive-session.ts';
 
 test('interactive decisions reject stale/illegal actions and observe never advances',async()=>{
   const session=await createInteractiveSession({character:'volibear',seed:'130',sessionId:'fixture',review:true,onEvent:()=>{}});
@@ -63,7 +63,7 @@ test('terminal numeric choice uses the same session and requires a reason',async
 
 test('CLI signal archives an interrupted session without a death',async()=>{
   const out=await mkdtemp(join(tmpdir(),'sts-signal-'));
-  const child=spawn(process.execPath,['--experimental-strip-types','packages/cli/src/sts.ts','play','--character','volibear','--ascension','20','--seed','130','--output',out,'--interface','jsonl'],{cwd:fileURLToPath(new URL('../../../',import.meta.url)),stdio:['pipe','pipe','pipe']});
+  const child=spawn(process.execPath,['--experimental-strip-types','examples/sts/src/cli/sts.ts','play','--character','volibear','--ascension','20','--seed','130','--output',out,'--interface','jsonl'],{cwd:fileURLToPath(new URL('../../../../',import.meta.url)),stdio:['pipe','pipe','pipe']});
   try{
     let text='';await new Promise<void>((done,reject)=>{
       child.stdout.on('data',chunk=>{text+=String(chunk);if(text.includes('"kind":"decision"'))done();});child.once('error',reject);child.once('exit',code=>reject(Error('Unexpected early exit '+code)));

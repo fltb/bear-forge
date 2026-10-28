@@ -3,13 +3,12 @@ import { createCardLoader, readCardTrace } from '@bear-forge/runtime-card';
 import { createGameBinder } from '@bear-forge/game-host';
 import { cardDefinition as forge, game as forgeGame, baseDeck } from '@bear-forge/forge-duel';
 import { cardDefinition as ddz, game as ddzGame } from '@bear-forge/doudizhu';
-type CardGameName = 'forge-duel' | 'doudizhu' | 'sts';
+type CardGameName = 'forge-duel' | 'doudizhu';
 const games = { 'forge-duel': { definition: forge, contract: forgeGame.contract, players: ['0', '1'] }, doudizhu: { definition: ddz, contract: ddzGame.contract, players: ['0', '1', '2'] } };
 
 /** A production route through Card Core → Instance → the existing BaseGame. */
 export async function runCardGame(options: { game: CardGameName; controlled: boolean; seed: number | string; records?: string }) {
   const unwrap = (r: any): any => { if (!r.ok) throw Error(JSON.stringify(r.error)); return r.value; };
-  if (options.game === 'sts') throw Error('STS uses the dedicated sts play entrance; generic run and replay are disabled');
   const { definition, contract, players }: any = games[options.game];
   if (typeof options.seed !== 'number') throw Error('Invalid numeric seed');
   const numericSeed = Number(options.seed);

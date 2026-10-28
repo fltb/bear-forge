@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCardLoader } from '@bear-forge/runtime-card';
 import { game as module } from '@bear-forge/doudizhu';
-import { createGameBinder } from '../src/index.ts';
+import { createGameBinder } from '@bear-forge/game-host';
 const unwrap = <T,>(x: {
   ok: true;
   value: T;

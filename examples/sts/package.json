@@ -23,7 +23,10 @@
     "test:search-core": "node --experimental-strip-types --test --test-concurrency=1 tests/adventure-probability.test.ts tests/search-windows.test.ts tests/rest-probability.test.ts tests/adventure-search.test.ts tests/map-probability.test.ts tests/enemy-probability.test.ts tests/order-space.test.ts tests/player-search.test.ts tests/policy-current.test.ts tests/search-experiment.test.ts tests/layered-search.test.ts tests/exact-combat-session.test.ts tests/exact-random.test.ts",
     "test:search-windows": "node --experimental-strip-types --test --test-concurrency=1 tests/search-windows.test.ts",
     "test:layered": "node --experimental-strip-types --test --test-concurrency=1 tests/layered-search.test.ts tests/exact-combat-session.test.ts tests/exact-random.test.ts",
-    "test:simulator": "node --experimental-strip-types --test --test-concurrency=1 tests/simulator.test.ts tests/simulator-trace.test.ts"
+    "test:simulator": "node --experimental-strip-types --test --test-concurrency=1 tests/simulator.test.ts tests/simulator-trace.test.ts",
+    "sts": "node --expose-gc --experimental-strip-types src/cli/sts.ts",
+    "sts:tui": "node --experimental-strip-types src/cli/sts-tui.ts",
+    "test:cli": "node --experimental-strip-types --test tests/cli/*.test.ts"
   },
   "dependencies": {
     "@bear-forge/policies": "*",

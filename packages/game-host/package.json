@@ -18,7 +18,6 @@
   "devDependencies": {
     "@bear-forge/card-engine": "*",
     "@bear-forge/runtime-native": "*",
-    "@bear-forge/doudizhu": "*",
     "@bear-forge/runtime-card": "*"
   }
 }

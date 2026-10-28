@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fit,wrap,cellWidth,renderTui,cardLines,turnThreat,damageLines,engageLines,actionMatches,needsConfirmation,resultSummary} from '../src/sts-tui-view.ts';
-import {routeMap,routeDetails} from '../src/sts-tui-map.ts';
-import {runTui} from '../src/sts-tui.ts';
-import type {TuiModel} from '../src/sts-tui-view.ts';
+import {fit,wrap,cellWidth,renderTui,cardLines,turnThreat,damageLines,engageLines,actionMatches,needsConfirmation,resultSummary} from '../../src/cli/sts-tui-view.ts';
+import {routeMap,routeDetails} from '../../src/cli/sts-tui-map.ts';
+import {runTui} from '../../src/cli/sts-tui.ts';
+import type {TuiModel} from '../../src/cli/sts-tui-view.ts';
 
 test('terminal layout measures Chinese cells, wraps descriptions and strips control sequences',()=>{
   assert.equal(cellWidth('中'),2);assert.equal(cellWidth('A'),1);assert.equal(fit('中文abc',5),'中文a');
@@ -27,11 +27,11 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createCardLoader,memorySnapshotStore} from '@bear-forge/runtime-card';
-import {openSimulator} from '../../../examples/sts/src/simulator.ts';
-import {openSimulatorStore} from '../../../examples/sts/src/simulator-store.ts';
-import {combatContentDefinition} from '../../../examples/sts/tests/combat-content-fixture.ts';
-import {encounterId,potionId} from '../../../examples/sts/src/identifiers.ts';
-import {chooseMultiple,decisionPresentation,contentLines,actionLabel} from '../src/sts-tui-view.ts';
+import {openSimulator} from '../../src/simulator.ts';
+import {openSimulatorStore} from '../../src/simulator-store.ts';
+import {combatContentDefinition} from '../combat-content-fixture.ts';
+import {encounterId,potionId} from '../../src/identifiers.ts';
+import {chooseMultiple,decisionPresentation,contentLines,actionLabel} from '../../src/cli/sts-tui-view.ts';
 
 const plainFrame=(frame:string)=>frame.replace(/\x1b\[[0-9;]*[A-Za-z]/g,'');
 
@@ -205,7 +205,7 @@ for(const [kind,bark,expected] of [['drink-potion',false,2],['discard-potion',fa
   });
 }
 
-import {simulatorRoomDefinition} from '../../../examples/sts/tests/simulator-room-fixture.ts';
+import {simulatorRoomDefinition} from '../simulator-room-fixture.ts';
 for(const room of ['SHOP','REST','EVENT'] as const)test(`TUI and host accept original ${room} choices and expose the next real decision`,async()=>{
   const dir=await mkdtemp(join(tmpdir(),'sts-tui-room-')),snapshots=memorySnapshotStore(),loaded=await createCardLoader({snapshots,recordCore:false,controlled:true,instructionsPerSlice:100_000}).load(simulatorRoomDefinition);
   if(!loaded.ok)throw Error(JSON.stringify(loaded.error));

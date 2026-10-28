@@ -1,7 +1,7 @@
 import {enemyOperations} from '../shared/operations.ts';
 import {enemySuicide} from '../shared/cards.ts';
 import type {EnemyAction} from '../../../rules/enemies.types.ts';
-import {describedEnemyAbility,enemyPowerAbilities,defineDescribedEnemyPower,strengthAbility,contribution,settlement} from '../shared/abilities.ts';
+import {describedEnemyAbility,enemyPowerAbilities,defineDescribedEnemyPower,strengthAbility,contribution,drawback,settlement} from '../shared/abilities.ts';
 import {afterCardUse,firstEnemyCardUse,blockedHit,ownUnblockedHit,queuedRetaliation,hitBattle,owner,hitAttacker,level,enemyRoundEnd,ownTurn,addCounter,setCounter,incomingPlayerAttackPerLayer,gainStrength,playerEndPowers,turnBattle,noSource,applyPower,hitSource,unblockedAmount,sequencePrograms,wouldDie,ownDeathWithTargets,ownerEnemy,enterRebirth} from '../shared/status-programs.ts';
 import { typedValue } from '../../../rules/value.schemas.ts';
 import {shackledPower} from "../../powers/shackled.ts";
@@ -39,7 +39,7 @@ export const beyondPowers=defineRules({requires:[enemyOperations,powers,battles,
     applyPower(basicPowers.exports.programs.Strength,{target:owner<HpDamageRequest>(),source:hitSource(),amount:unblockedAmount(true)},true),
     applyPower(shackledPower.exports.programs.Shackled,{target:owner<HpDamageRequest>(),source:noSource<HpDamageRequest>(),amount:unblockedAmount()},false),
   )});
-  const Shifting=defineDescribedEnemyPower("变换",{presentation:{key:MS.SHIFTING,flag:true},...counterPolicies({bits:32,flag:true})},{},enemyPowerAbilities(strengthAbility(shift)));
+  const Shifting=defineDescribedEnemyPower("变换",{presentation:{key:MS.SHIFTING,flag:true},...counterPolicies({bits:32,flag:true})},{},enemyPowerAbilities(drawback(shift)));
   // The counter has no passive listener: its owner invokes this continuation
   // after enqueueing the attack. Keep suicide queued before noop/consumption.
   const fadingStep=1;

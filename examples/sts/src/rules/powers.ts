@@ -75,7 +75,12 @@ export const powers=defineRules({requires:[effectPolicy],build(m){
   const admitSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>c.admit??alwaysAdmit};
   const grantKinds=[EffectKind.Attack,EffectKind.Block,EffectKind.Strength,EffectKind.Special,EffectKind.BattleFact].map(effect=>defineQuery({input:z.undefined(),output:effectKindSchema,base:()=>effect}));
   const grantSelection={kind,select:(c:rules.Borrowed<PowerConfig>)=>grantKinds[c.grantEffect??EffectKind.Special]!};
-  const grantAllowed=defineQuery({input:powerApplySchema,output:z.boolean(),selections:[grantSelection],dependencies:[effectPolicy.exports.allowed,effectTrace.exports.current],base:(r,i)=>r.query(effectPolicy.exports.allowed,{actor:i.source??r.query(effectTrace.exports.current,undefined).at(-1)?.owner??i.actor,effect:r.selectedDefinition(grantSelection,i.definition,undefined),polarity:1})});
+  const grantAllowed=defineQuery({input:powerApplySchema,output:z.boolean(),selections:[grantSelection,initialSelection,polaritySelection],dependencies:[effectPolicy.exports.allowed,effectTrace.exports.current],base:(r,i)=>{
+    const source=i.source??r.query(effectTrace.exports.current,undefined).at(-1)?.owner??i.actor;
+    const initial=r.selectedDefinition(initialSelection,i.definition,{amount:i.amount,source:i.source,debuff:i.debuff,skipFirstDecay:i.skipFirstDecay});
+    const sign=r.selectedDefinition(polaritySelection,i.definition,{...initial,registry:i.registry,actor:i.actor,phase:PowerPhase.Creating});
+    return r.query(effectPolicy.exports.allowed,{actor:source,target:i.actor,effect:r.selectedDefinition(grantSelection,i.definition,undefined),polarity:sign});
+  }});
   const admitted=defineQuery({input:powerApplySchema,output:z.boolean(),selections:[admitSelection],base:(r,input)=>r.selectedDefinition(admitSelection,input.definition,{actor:input.actor,change:{amount:input.amount,source:input.source,debuff:input.debuff}})});
   const initialState=defineQuery({input:z.object({entity:entityId,setup:powerSetupSchema,definition:powerDefinitionSchema}),output:powerStateSchema,selections:[initialSelection],dependencies:[find],base:(r,input)=>{
     if(r.query(find,{registry:input.setup.registry,actor:input.setup.actor,definition:input.definition})!==null)throw Error('Duplicate active status definition');
@@ -87,8 +92,13 @@ export const powers=defineRules({requires:[effectPolicy],build(m){
   const enabled=defineQuery({input:entityId,output:z.boolean(),reads:[raw],base:(r,entity)=>{const state=r.component(entity,raw);return state.phase===PowerPhase.Attached&&state.active;}});
   const level=defineQuery({input:entityId,output:z.int32(),reads:[raw],dependencies:[enabled],base:(r,entity)=>r.query(enabled,entity)?r.component(entity,raw).level:0});
   const polarity=defineQuery({input:entityId,output:polaritySchema,reads:[raw],selections:[polaritySelection],base:(r,entity)=>r.selected(polaritySelection,entity,r.component(entity,raw))});
-  const contributes=defineQuery({input:z.object({entity:entityId,effect:effectKindSchema}),output:z.boolean(),dependencies:[current,enabled,polarity,effectPolicy.exports.allowed],base:(r,i)=>
-    r.query(enabled,i.entity)&&r.query(effectPolicy.exports.allowed,{actor:r.query(current,i.entity).actor,effect:i.effect,polarity:r.query(polarity,i.entity)})});
+  // Powers declare holder-relative polarity and carry the holder into the
+  // policy, so an enemy debuff on the player is an enemy benefit.
+  const contributes=defineQuery({input:z.object({entity:entityId,effect:effectKindSchema,polarity:polaritySchema.optional()}),output:z.boolean(),dependencies:[current,enabled,polarity,provenance,effectPolicy.exports.allowed],base:(r,i)=>{
+    const holder=r.query(current,i.entity).actor,source=r.query(provenance,i.entity).at(-1)?.source??holder;
+    const sign=i.polarity??r.query(polarity,i.entity);
+    return r.query(enabled,i.entity)&&r.query(effectPolicy.exports.allowed,{actor:source,effect:i.effect,target:holder,polarity:sign});
+  }});
   const entries=defineQuery({input:entityId,output:z.array(powerEntrySchema),reads:[registry],base:(r,entity)=>r.component(entity,registry).entries});
   const accepting=defineQuery({input:entityId,output:z.boolean(),reads:[registry],base:(r,entity)=>r.component(entity,registry).accepting});
   const patch=m.atom({input:z.object({entity:entityId,next:powerMutableSchema}),output:powerChangedSchema,reads:[raw],writes:[raw],emits:[changed],run(r,input){

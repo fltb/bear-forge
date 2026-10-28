@@ -2,7 +2,7 @@ import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {powers} from '../../../../rules/powers.ts';
 import {cardAmount,describeAmounts,type CardAmount,type DescribedPower} from '../../../cards/shared/programs.ts';
-import {describeProgram,describeAmount,amountText,programText,inheritPrograms} from '../../../cards/shared/program-facts.ts';
+import {describeProgram,describeAmount,amountText,programText,inheritPrograms,inheritDamageTerms,opensDomain} from '../../../cards/shared/program-facts.ts';
 import type {CardUse} from '../../../../rules/card-instances.types.ts';
 import {stormCharge} from '../mechanics/storm-charge.ts';
 import {volibearDomain} from '../mechanics/domain.ts';
@@ -21,6 +21,7 @@ export function conditional(condition:(view:rules.ReadView<CardUse>)=>boolean,ye
   // The predicate is an opaque author callback, not evaluated for its description.
   // Include it in completeness as well as the branches actually called above.
   inheritPrograms(effect,...[...(before?[before]:[]),yes,...(no?[no]:[]),condition as unknown as rules.Effect<CardUse,void>]);
+  inheritDamageTerms(effect,...(before?[before]:[]));
   const conditionText=programText(condition),yesText=programText(yes),noText=no?programText(no):'',beforeText=before?programText(before):'';
   if(conditionText!==undefined&&yesText!==undefined&&noText!==undefined&&beforeText!==undefined)
     describeProgram(effect,`${before?'效果开始时判断条件。'+beforeText:''}若${conditionText}则${yesText}${no?'否则'+noText:''}`);
@@ -28,11 +29,11 @@ export function conditional(condition:(view:rules.ReadView<CardUse>)=>boolean,ye
 }
 /** These are ordinary effect constructors; callers retain their existing queue boundaries. */
 export function gainCharge(amount:CardAmount){
-  return describeAmounts(rules.defineEffect<CardUse,void>(b=>rules.call(stormCharge.exports.gain,{battle:b.read(v=>v.input.battle),owner:b.read(v=>v.input.owner),amount:b.read(v=>cardAmount(amount,v))})),[amount],n=>`获得${n}蓄雷。`);
+  return describeAmounts(rules.defineEffect<CardUse,void>(b=>rules.call(stormCharge.exports.gain,{battle:b.read(v=>v.input.battle),owner:b.read(v=>v.input.owner),amount:b.read(v=>cardAmount(amount,v))})),[amount],n=>`获得${n}雷势。`);
 }
 export function openDomain(turns:CardAmount|null){
   const effect=rules.defineEffect<CardUse,void>(b=>rules.call(volibearDomain.exports.open,{battle:b.read(v=>v.input.battle),turns:turns===null?null:b.read(v=>cardAmount(turns,v))}));
-  return turns===null?describeProgram(effect,volibearDomain.exports.describe(null)+volibearDomain.exports.text):describeAmounts(effect,[turns],n=>volibearDomain.exports.describe(n)+volibearDomain.exports.text);
+  return opensDomain(turns===null?describeProgram(effect,volibearDomain.exports.describe(null)):describeAmounts(effect,[turns],n=>volibearDomain.exports.describe(n)));
 }
 export function deployPower(power:DescribedPower&{complete?:boolean},amount:CardAmount){
   const effect=rules.defineEffect<CardUse,void>(b=>rules.call(powers.exports.apply,{

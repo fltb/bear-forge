@@ -33,7 +33,7 @@ export const volibearBattleBody=rules.defineRules({requires:[cardEffects,battles
       });
       return rules.sequence(
         rules.when(b.read(v=>v.query(cardInstances.exports.metadata,v.input.event.card).type===0),gain(basicPowers.exports.Strength)),
-        rules.when(b.read(v=>{return v.get(rules.readComponent(v.input.source,blocked)).some(receipt=>receipt.battle===v.input.event.battle&&receipt.play===v.input.event.play);}),gain(basicPowers.exports.Dexterity)),
+        rules.when(b.read(v=>{return v.query(cardInstances.exports.metadata,v.input.event.card).type===0&&v.get(rules.readComponent(v.input.source,blocked)).some(receipt=>receipt.battle===v.input.event.battle&&receipt.play===v.input.event.play);}),gain(basicPowers.exports.Dexterity)),
         rules.call(clear,{entity:b.read(v=>v.input.source),battle:b.read(v=>v.input.event.battle),play:b.read(v=>v.input.event.play)}),
       );
     }),'若为攻击，按层数获得力量；若本次打出记录过正数格挡，按层数获得敏捷；随后清除本次记录。'),

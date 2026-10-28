@@ -1,0 +1,1768 @@
+{
+  "version": "S2-3.0",
+  "configuration": "S2_BUFF_D4",
+  "source": "User final card table, 2026-10-28",
+  "main_cards": 87,
+  "forms": 2,
+  "faces": 178,
+  "starting_hp": 80,
+  "starting_max_hp": 80,
+  "starting_deck": {
+    "B01": 4,
+    "B02": 4,
+    "B03": 1,
+    "B04": 1
+  },
+  "relic_draw": [
+    1,
+    2
+  ],
+  "domain_lightning": 4,
+  "engage_cards": [
+    "B04",
+    "C04",
+    "C10",
+    "C11",
+    "U28",
+    "U35",
+    "R09"
+  ],
+  "force_sources": {
+    "C25": [
+      1,
+      2
+    ],
+    "U29": [
+      2,
+      3
+    ],
+    "U26": [
+      1,
+      2
+    ],
+    "U04": [
+      1,
+      1
+    ],
+    "R28": [
+      1,
+      1
+    ],
+    "R17": [
+      "paidX",
+      "paidX+1"
+    ]
+  },
+  "rules_document": "DEVELOPMENT.md",
+  "cards_document": "CARDS.md",
+  "ambiguities": {
+    "U26": "Upgraded face (2 force) takes precedence over summary (1).",
+    "R28": "可选1兽化1张 normalized to 可选兽化1张."
+  },
+  "execution_source": "examples/sts/src/content/characters/volibear/catalog.ts (byCode); JSON files document the contract and are not an alternative effect interpreter.",
+  "shared_resolution": {
+    "actual_play": "capture prior conditions; pay costs; U26/R28 pre-effect grants; printed effects; finished callbacks; one shared domain attachment",
+    "domain": "4+force to all after first ordinary hit; expires after normal start draws and before R28 selection",
+    "domain_suppression": "Suppress only enemy-beneficial special contributions; keep negative/neutral contributions and attack/direct strength/direct block. Preserve Slow, Shifting, Fading, Flight loss/stun, armor wear and lifecycle cleanup. Enemy debuffs on the player remain suppressible; classify relative to the source side. Guardian damage threshold and interrupt persist and renew inside domain; its passive 20 block and Sharp Hide remain suppressed.",
+    "beast_entity": "same combat entity and master; replace behavior, base cost and stats; keep upgrade, temporary discount and retention; exhaust on use; permanent master unchanged",
+    "canceled_events": "pending revival cleared on domain open; suppressed one-shot phase/split is consumed and cannot resume after expiry or restore",
+    "lightning_spell": "a skill with direct printed lightning; passive counter-lightning is not a lightning spell",
+    "scope": "single-character S2 contract in the existing STS engine; five-character S2 balance calibration is recorded but not performed",
+    "conduction": "U02 deployment: AoE lightning 6/9; after each actual ordinary attack segment: AoE lightning 3/4 + force; AoE segment counted once across targets; effect repetitions trigger by segments; zero segments do not trigger; lightning cannot recursively trigger",
+    "exhaust_draw": "C13/U15 exhaust another hand card if available, then draw; empty hand skips exhaust without preventing play or drawing",
+    "energy_returns": "No once-per-turn cap: C26/U40 grant energy whenever the captured pre-play lightning threshold is met; copies and repeated effects are independent. Each U21 instance grants 1 energy on strikes 2,4,6,... of the current turn; deployment at >=2 strikes grants 1 immediately, without retroactive payouts. R30 grants 1 energy on each actual body-form play; claw block remains first-per-turn."
+  },
+  "cards": [
+    {
+      "code": "B01",
+      "runtime_id": "VOLIBEAR_B01",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#B01"
+    },
+    {
+      "code": "B02",
+      "runtime_id": "VOLIBEAR_B02",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#B02"
+    },
+    {
+      "code": "B03",
+      "runtime_id": "VOLIBEAR_B03",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#B03"
+    },
+    {
+      "code": "B04",
+      "runtime_id": "VOLIBEAR_B04",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#B04"
+    },
+    {
+      "code": "C01",
+      "runtime_id": "VOLIBEAR_C01",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 0,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C01"
+    },
+    {
+      "code": "C02",
+      "runtime_id": "VOLIBEAR_C02",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C02"
+    },
+    {
+      "code": "C03",
+      "runtime_id": "VOLIBEAR_C03",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C03"
+    },
+    {
+      "code": "C04",
+      "runtime_id": "VOLIBEAR_C04",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C04"
+    },
+    {
+      "code": "C05",
+      "runtime_id": "VOLIBEAR_C05",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C05"
+    },
+    {
+      "code": "C06",
+      "runtime_id": "VOLIBEAR_C06",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C06"
+    },
+    {
+      "code": "C07",
+      "runtime_id": "VOLIBEAR_C07",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C07"
+    },
+    {
+      "code": "C08",
+      "runtime_id": "VOLIBEAR_C08",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C08"
+    },
+    {
+      "code": "C09",
+      "runtime_id": "VOLIBEAR_C09",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C09"
+    },
+    {
+      "code": "C10",
+      "runtime_id": "VOLIBEAR_C10",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C10"
+    },
+    {
+      "code": "C11",
+      "runtime_id": "VOLIBEAR_C11",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C11"
+    },
+    {
+      "code": "C12",
+      "runtime_id": "VOLIBEAR_C12",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C12"
+    },
+    {
+      "code": "C13",
+      "runtime_id": "VOLIBEAR_C13",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C13"
+    },
+    {
+      "code": "C14",
+      "runtime_id": "VOLIBEAR_C14",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C14"
+    },
+    {
+      "code": "C15",
+      "runtime_id": "VOLIBEAR_C15",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C15"
+    },
+    {
+      "code": "C17",
+      "runtime_id": "VOLIBEAR_C17",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 0,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C17"
+    },
+    {
+      "code": "C18",
+      "runtime_id": "VOLIBEAR_C18",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C18"
+    },
+    {
+      "code": "C19",
+      "runtime_id": "VOLIBEAR_C19",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 0,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C19"
+    },
+    {
+      "code": "C20",
+      "runtime_id": "VOLIBEAR_C20",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C20"
+    },
+    {
+      "code": "C21",
+      "runtime_id": "VOLIBEAR_C21",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C21"
+    },
+    {
+      "code": "C22",
+      "runtime_id": "VOLIBEAR_C22",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C22"
+    },
+    {
+      "code": "C24",
+      "runtime_id": "VOLIBEAR_C24",
+      "target": "none_or_effect_selected",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C24"
+    },
+    {
+      "code": "C25",
+      "runtime_id": "VOLIBEAR_C25",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C25"
+    },
+    {
+      "code": "C26",
+      "runtime_id": "VOLIBEAR_C26",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 0,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#C26"
+    },
+    {
+      "code": "U02",
+      "runtime_id": "VOLIBEAR_U02",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U02"
+    },
+    {
+      "code": "U03",
+      "runtime_id": "VOLIBEAR_U03",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U03"
+    },
+    {
+      "code": "U04",
+      "runtime_id": "VOLIBEAR_U04",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U04"
+    },
+    {
+      "code": "U05",
+      "runtime_id": "VOLIBEAR_U05",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U05"
+    },
+    {
+      "code": "U06",
+      "runtime_id": "VOLIBEAR_U06",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U06"
+    },
+    {
+      "code": "U07",
+      "runtime_id": "VOLIBEAR_U07",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 3,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 3,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U07"
+    },
+    {
+      "code": "U08",
+      "runtime_id": "VOLIBEAR_U08",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U08"
+    },
+    {
+      "code": "U10",
+      "runtime_id": "VOLIBEAR_U10",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U10"
+    },
+    {
+      "code": "U11",
+      "runtime_id": "VOLIBEAR_U11",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U11"
+    },
+    {
+      "code": "U12",
+      "runtime_id": "VOLIBEAR_U12",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U12"
+    },
+    {
+      "code": "U13",
+      "runtime_id": "VOLIBEAR_U13",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U13"
+    },
+    {
+      "code": "U14",
+      "runtime_id": "VOLIBEAR_U14",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 0,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U14"
+    },
+    {
+      "code": "U15",
+      "runtime_id": "VOLIBEAR_U15",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 0,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U15"
+    },
+    {
+      "code": "U17",
+      "runtime_id": "VOLIBEAR_U17",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 0,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U17"
+    },
+    {
+      "code": "U19",
+      "runtime_id": "VOLIBEAR_U19",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U19"
+    },
+    {
+      "code": "U20",
+      "runtime_id": "VOLIBEAR_U20",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U20"
+    },
+    {
+      "code": "U21",
+      "runtime_id": "VOLIBEAR_U21",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U21"
+    },
+    {
+      "code": "U23",
+      "runtime_id": "VOLIBEAR_U23",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U23"
+    },
+    {
+      "code": "U24",
+      "runtime_id": "VOLIBEAR_U24",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U24"
+    },
+    {
+      "code": "U25",
+      "runtime_id": "VOLIBEAR_U25",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U25"
+    },
+    {
+      "code": "U26",
+      "runtime_id": "VOLIBEAR_U26",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U26"
+    },
+    {
+      "code": "U27",
+      "runtime_id": "VOLIBEAR_U27",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U27"
+    },
+    {
+      "code": "U28",
+      "runtime_id": "VOLIBEAR_U28",
+      "target": "selected_enemy",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U28"
+    },
+    {
+      "code": "U29",
+      "runtime_id": "VOLIBEAR_U29",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U29"
+    },
+    {
+      "code": "U31",
+      "runtime_id": "VOLIBEAR_U31",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": "X",
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": "X",
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U31"
+    },
+    {
+      "code": "U32",
+      "runtime_id": "VOLIBEAR_U32",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U32"
+    },
+    {
+      "code": "U34",
+      "runtime_id": "VOLIBEAR_U34",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U34"
+    },
+    {
+      "code": "U35",
+      "runtime_id": "VOLIBEAR_U35",
+      "target": "selected_enemy",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U35"
+    },
+    {
+      "code": "U36",
+      "runtime_id": "VOLIBEAR_U36",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 0,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U36"
+    },
+    {
+      "code": "U37",
+      "runtime_id": "VOLIBEAR_U37",
+      "target": "none_or_effect_selected",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U37"
+    },
+    {
+      "code": "U38",
+      "runtime_id": "VOLIBEAR_U38",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 3,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 3,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U38"
+    },
+    {
+      "code": "U39",
+      "runtime_id": "VOLIBEAR_U39",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U39"
+    },
+    {
+      "code": "U40",
+      "runtime_id": "VOLIBEAR_U40",
+      "target": "selected_enemy",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U40"
+    },
+    {
+      "code": "U41",
+      "runtime_id": "VOLIBEAR_U41",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U41"
+    },
+    {
+      "code": "U42",
+      "runtime_id": "VOLIBEAR_U42",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U42"
+    },
+    {
+      "code": "U43",
+      "runtime_id": "VOLIBEAR_U43",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 0,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#U43"
+    },
+    {
+      "code": "R01",
+      "runtime_id": "VOLIBEAR_R01",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 3,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R01"
+    },
+    {
+      "code": "R02",
+      "runtime_id": "VOLIBEAR_R02",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R02"
+    },
+    {
+      "code": "R05",
+      "runtime_id": "VOLIBEAR_R05",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R05"
+    },
+    {
+      "code": "R06",
+      "runtime_id": "VOLIBEAR_R06",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R06"
+    },
+    {
+      "code": "R07",
+      "runtime_id": "VOLIBEAR_R07",
+      "target": "none_or_effect_selected",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R07"
+    },
+    {
+      "code": "R08",
+      "runtime_id": "VOLIBEAR_R08",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 3,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 3,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R08"
+    },
+    {
+      "code": "R09",
+      "runtime_id": "VOLIBEAR_R09",
+      "target": "none_or_effect_selected",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R09"
+    },
+    {
+      "code": "R10",
+      "runtime_id": "VOLIBEAR_R10",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R10"
+    },
+    {
+      "code": "R12",
+      "runtime_id": "VOLIBEAR_R12",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R12"
+    },
+    {
+      "code": "R13",
+      "runtime_id": "VOLIBEAR_R13",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R13"
+    },
+    {
+      "code": "R14",
+      "runtime_id": "VOLIBEAR_R14",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R14"
+    },
+    {
+      "code": "R16",
+      "runtime_id": "VOLIBEAR_R16",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R16"
+    },
+    {
+      "code": "R17",
+      "runtime_id": "VOLIBEAR_R17",
+      "target": "selected_enemy",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": "X",
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": "X",
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R17"
+    },
+    {
+      "code": "R18",
+      "runtime_id": "VOLIBEAR_R18",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R18"
+    },
+    {
+      "code": "R21",
+      "runtime_id": "VOLIBEAR_R21",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R21"
+    },
+    {
+      "code": "R23",
+      "runtime_id": "VOLIBEAR_R23",
+      "target": "selected_enemy",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "discard"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "discard"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R23"
+    },
+    {
+      "code": "R24",
+      "runtime_id": "VOLIBEAR_R24",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R24"
+    },
+    {
+      "code": "R25",
+      "runtime_id": "VOLIBEAR_R25",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R25"
+    },
+    {
+      "code": "R27",
+      "runtime_id": "VOLIBEAR_R27",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R27"
+    },
+    {
+      "code": "R28",
+      "runtime_id": "VOLIBEAR_R28",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R28"
+    },
+    {
+      "code": "R29",
+      "runtime_id": "VOLIBEAR_R29",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 3,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R29"
+    },
+    {
+      "code": "R30",
+      "runtime_id": "VOLIBEAR_R30",
+      "target": "none_or_effect_selected",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "deployed_power"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "deployed_power"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R30"
+    },
+    {
+      "code": "R31",
+      "runtime_id": "VOLIBEAR_R31",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 2,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 2,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#R31"
+    },
+    {
+      "code": "T01",
+      "runtime_id": "VOLIBEAR_T01",
+      "target": "selected_enemy",
+      "lightning_spell": false,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#T01"
+    },
+    {
+      "code": "T02",
+      "runtime_id": "VOLIBEAR_T02",
+      "target": "none_or_effect_selected",
+      "lightning_spell": true,
+      "faces": [
+        {
+          "upgraded": false,
+          "cost": 1,
+          "after_use": "exhaust"
+        },
+        {
+          "upgraded": true,
+          "cost": 1,
+          "after_use": "exhaust"
+        }
+      ],
+      "printed_effects": "cards_s2.json#T02"
+    }
+  ]
+}

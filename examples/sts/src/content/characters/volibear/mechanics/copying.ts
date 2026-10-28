@@ -22,7 +22,7 @@ export const volibearCopying=rules.defineRules({requires:[battles,cardInstances,
       b.assign(source,rules.query(cardInstances.exports.current,b.read(v=>v.input.source))),
       b.assign(identity,rules.call(cardPiles.exports.allocateIdentity,piles)),
       b.assign(copy,rules.spawnEntity({
-        kind:cardInstances.exports.kind,definition:rules.definitionOf(cardInstances.exports.kind,b.read(v=>v.input.source)),
+        kind:cardInstances.exports.kind,definition:rules.definitionOf(cardInstances.exports.kind,b.read(v=>v.query(cardInstances.exports.behaviorEntity,v.input.source))),
         owner:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).actor),
         scope:b.read(v=>v.get(rules.query(battles.exports.current,v.input.battle)).scope),
         setup:{mode:1,master:null,uniqueId:identity,specialData:b.read(v=>v.get(source).specialData),upgraded:b.read(v=>v.get(source).upgraded)},

@@ -1,3 +1,4 @@
+import {volibearS2Powers} from './powers/s2.ts';
 import {volibearThunderGuard} from './mechanics/thunder-guard.ts';
 import {PS,MS} from '../../../combat-identifiers.ts';
 import {statusTexts} from '../../powers/descriptions.ts';
@@ -15,8 +16,8 @@ import {volibearDamageTraining} from './mechanics/damage-training.ts';
 import {powers} from '../../../rules/powers.ts';
 import {battles} from '../../../rules/battles.ts';
 /** Character-specific public data, composed into STS's existing observation. */
-export const volibearPresentation=rules.defineRules({requires:[volibearThunderGuard,lightning,stormCharge,volibearDamageTraining,volibearNextAttack,volibearNextPlayDiscount,volibearRepeat,volibearEngagePreparation,volibearDomain,volibearTraining,powers,battles],build(){
-  const effects=rules.defineQuery({input:z.object({battle:z.number(),enemies:z.array(z.number().nullable())}),output:z.array(z.object({actor:z.number(),target:z.string(),name:z.string(),text:z.string(),level:z.number(),active:z.boolean()})),dependencies:[volibearThunderGuard.exports.active,stormCharge.exports.current,battles.exports.status,powers.exports.entries,powers.exports.current,powers.exports.display,powers.exports.presentation],base:(r,input)=>{
+export const volibearPresentation=rules.defineRules({requires:[volibearS2Powers,volibearThunderGuard,lightning,stormCharge,volibearDamageTraining,volibearNextAttack,volibearNextPlayDiscount,volibearRepeat,volibearEngagePreparation,volibearDomain,volibearTraining,powers,battles],build(){
+  const effects=rules.defineQuery({input:z.object({battle:z.number(),enemies:z.array(z.number().nullable())}),output:z.array(z.object({actor:z.number(),target:z.string(),name:z.string(),text:z.string(),level:z.number(),active:z.boolean()})),dependencies:[volibearS2Powers.exports.effects,volibearThunderGuard.exports.active,stormCharge.exports.current,battles.exports.status,powers.exports.entries,powers.exports.current,powers.exports.display,powers.exports.presentation],base:(r,input)=>{
     const board=r.query(battles.exports.status,input.battle);
     const entries=r.query(powers.exports.entries,board.registry).flatMap(entry=>{
       const custom=r.query(powers.exports.display,entry.entity),state=r.query(powers.exports.current,entry.entity),p=r.query(powers.exports.presentation,entry.entity);
@@ -28,11 +29,9 @@ export const volibearPresentation=rules.defineRules({requires:[volibearThunderGu
       return[{...display,actor:state.actor,target:state.actor===board.actor?'player':'enemy:'+enemyIndex,level:state.level,active:state.active}];
     });
     const charge=r.query(stormCharge.exports.current,input.battle);
-    if(charge.amount||charge.spent)entries.push(...[
-      {name:'蓄雷',text:stormCharge.exports.text+lightning.exports.chargeText,level:charge.amount},
-      {name:'本回合已消耗蓄雷',text:stormCharge.exports.turnSpentText,level:charge.turnSpent},
-      {name:'本战已消耗蓄雷',text:stormCharge.exports.spentText,level:charge.spent},
-    ].map(entry=>({...entry,actor:board.actor,target:'player',active:true})));
+    entries.push({name:'雷势',text:stormCharge.exports.text+lightning.exports.chargeText,level:charge.amount,actor:board.actor,target:'player',active:true});
+    entries.push({name:'本回合雷伤次数',text:'每段完整雷伤结算计1次，全体雷伤同样计1次。',level:charge.strikes,actor:board.actor,target:'player',active:true});
+    for(const power of r.query(volibearS2Powers.exports.effects,input.battle))entries.push({name:power.name,text:power.text,level:power.level,actor:power.owner,target:'player',active:true});
     for(const guard of r.query(volibearThunderGuard.exports.active,input.battle))entries.push({name:'雷霆护身',text:volibearThunderGuard.exports.text,level:guard.amount,actor:guard.owner,target:'player',active:true});
     return entries;
   }});

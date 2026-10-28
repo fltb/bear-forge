@@ -1,3 +1,4 @@
+import {volibearS2Powers} from '../powers/s2.ts';
 import {rules} from '../../../../rules/execution.ts';
 import {battles} from '../../../../rules/battles.ts';
 import {resources} from '../../../../rules/resources.ts';
@@ -11,10 +12,10 @@ import {volibearDomain} from '../mechanics/domain.ts';
 import {volibearEngage} from '../mechanics/engage.ts';
 import {volibearEngagePreparation} from '../mechanics/engage-preparation.ts';
 import {volibearCardDescriptions as cards} from './metadata.ts';
-import {volibearCardPrograms,card,compose,queued} from './programs.ts';
+import {volibearCardPrograms,card,block,draw,compose,queued} from './programs.ts';
 import {openDomain,deployPower,faceTarget,conditional,ordered} from './operations.ts';
 
-export const volibearDomainCards=rules.defineRules({requires:[volibearCardPrograms,volibearDomain,volibearEngage,volibearEngagePreparation,basicPowers],build(){
+export const volibearDomainCards=rules.defineRules({requires:[volibearS2Powers,volibearCardPrograms,volibearDomain,volibearEngage,volibearEngagePreparation,basicPowers],build(){
   const extension=[1,2] as const,healing=[4,6] as const,weakAmount=[2,3] as const;
   const extend=describeAmounts(rules.defineEffect<CardUse,void>(b=>rules.call(volibearDomain.exports.extend,{battle:b.read(v=>v.input.battle),turns:b.read(v=>cardAmount(extension,v))})),[extension],n=>volibearDomain.exports.describe(n));
   const face=faceTarget(),open=openDomain(1),strength=deployPower(basicPowers.exports.programs.Strength,[2,3]);
@@ -25,9 +26,8 @@ export const volibearDomainCards=rules.defineRules({requires:[volibearCardProgra
   const weaken=describeAmounts(rules.defineEffect<CardUse,void>(b=>rules.forEach(rules.query(battles.exports.targets,b.read(v=>v.input.battle)),target=>rules.call(powers.exports.apply,{registry:b.read(v=>v.query(battles.exports.status,v.input.battle).registry),scope:b.read(v=>v.query(battles.exports.status,v.input.battle).scope),actor:target,source:b.read(v=>v.input.owner),definition:basicPowers.exports.EnemyWeak,amount:b.read(v=>cardAmount(weakAmount,v)),debuff:true}))),[weakAmount],n=>`对全体敌人施加${n}虚弱。`);
   return {exports:{
     ManifestDivinity:card(cards.C18,compose(queued(open),queued(weaken))),
-    OnlyCombat:card(cards.U18,compose(queued(open),queued(face)),{created:describeProgram(registerCardAbilities(volibearEngagePreparation.exports.declaresEngage),'')}),
-    LingeringStorm:card(cards.U19,queued(extend)),
-    MyLawAlone:card(cards.R01,queued(openDomain(null))),
+    LingeringStorm:card(cards.U19,compose(draw([1,2]),queued(open),queued(volibearS2Powers.exports.deployLingering))),
+    MyLawAlone:card(cards.R01,compose(block([10,14]),queued(openDomain(null)))),
     ReturnToWild:card(cards.R13,queued(returnToWild)),
   }};
 }});

@@ -29,6 +29,6 @@ export const volibearEngage=rules.defineRules({requires:[enemies,battles],build(
       b.return(result),
     );
   });
-  const text='立即通过正常敌人行动入口让指定敌人使用本轮行动机会；已用过机会不再行动，正常敌人阶段跳过。本次实际行动且战斗未结束后才派发迎战完成响应。';
+  const text='目标立即执行本轮剩余行动；若已行动则跳过。迎战会承受攻击，格挡正常生效。';
   return {exports:{execute,completed:completed.public,text}};
 }});

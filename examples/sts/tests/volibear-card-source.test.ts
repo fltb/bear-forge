@@ -36,17 +36,17 @@ for(const [code,identity] of Object.entries(volibearCardDescriptions)){
 }
 
 test('fixed attack capability follows executing atoms, including wrapped and repeated attacks',()=>{
-  for(const code of ['C06','U20','U08','U24','U31','R20'] as const)assert.equal(hasFixedAttack(get(code).use!),true,code);
+  for(const code of ['C06','U20','U08','U24','U31','T01'] as const)assert.equal(hasFixedAttack(get(code).use!),true,code);
   for(const code of ['U05','R07','R21','B02'] as const)assert.equal(hasFixedAttack(get(code).use!),false,code);
   assert.deepEqual(get('U05').metadata.variants.map(v=>v.damage),[0,0]);
-  assert.deepEqual(get('U08').metadata.variants.map(v=>v.damage),[8,10]);
-  assert.deepEqual(get('R20').metadata.variants.map(v=>v.damage),[4,5]);
+  assert.deepEqual(get('U08').metadata.variants.map(v=>v.damage),[10,14]);
+  assert.deepEqual(get('T01').metadata.variants.map(v=>v.damage),[7,11]);
 });
 
 test('Wing Statue consumes actual base damage metadata, not type, growth or composite totals',()=>{
   // These are the public damage values consumed by the production event's >=10
   // predicate, not a second fixed-attack classification maintained by cards.
-  for(const [code,expected] of [['U05',[false,false]],['U07',[true,true]],['U08',[false,true]],['C02',[false,false]],['R20',[false,false]]] as const){
+  for(const [code,expected] of [['U05',[false,false]],['U07',[true,true]],['U08',[true,true]],['C02',[false,false]],['T01',[false,true]]] as const){
     assert.deepEqual(get(code).metadata.variants.map(v=>v.damage>=10),expected,code);
   }
 });
@@ -78,12 +78,12 @@ test('actual conditional branches fail closed on every undescribed child',()=>{
   }
 });
 
-test('conditional, selection and charge cards retain their executing distinctions',()=>{
-  assert.match(get('C06').text!,/效果开始时.*否则/);
-  assert.match(get('U36').text!,/消耗2蓄雷.*2（3）能量.*至少2蓄雷/);
-  assert.match(get('R17').text!,/消耗量×3（4）.*不额外释放蓄雷/);
-  assert.match(get('U24').text!,/非半死.*每次实际打出至多/);
-  assert.match(get('R11').text!,/翻倍.*6（10）/);
-  assert.match(get('C14').text!,/未升级消耗/);
-  assert.match(get('R01').text!,/升级后固有/);
+test('S2 rule text reflects new costs, timing and native lightning',()=>{
+ assert.match(get('C06').text!,/效果开始时.*否则/);
+ assert.match(get('U36').text!,/1（2）能量/);
+ assert.match(get('R17').text!,/先获得.*雷势/);
+ assert.match(get('U24').text!,/实际生命损失恢复/);
+ assert.match(get('C14').text!,/未升级消耗/);
+ assert.doesNotMatch(get('R01').text!,/固有/);
+ assert.match(get('R29').text!,/全部.*手牌/);
 });

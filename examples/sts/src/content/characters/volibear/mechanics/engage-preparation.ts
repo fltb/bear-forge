@@ -51,7 +51,7 @@ export const volibearEngagePreparation=rules.defineRules({requires:[battles],bui
     );
   });
   const pending=rules.defineQuery({input:z.int32(),output:z.int32(),reads:[state],dependencies:[battles.exports.status],base:(r,battle)=>r.entities(state).filter(id=>{const s=r.component(id,state);return s.battle===battle&&s.turn===r.query(battles.exports.status,battle).turn&&s.play===null;}).length});
-  const text=`本回合下一张声明迎战效果的牌减${reduction}费，最低0；不叠加，实际打出即消费，放弃可选迎战仍消费。`;
+  const text=`本回合下一张声明迎战效果的牌减${reduction}费，最低0；不叠加，实际打出即消费。`;
   describeProgram(prepare,text);
   return {exports:{pending,eligible,declaresEngage,prepare,text}};
 }});

@@ -20,7 +20,7 @@ test('Volibear normal A20 start, rewards and successive combats complete in the 
         if(!combats.has(frame.game.floor)){
           assert.equal(frame.battle.turn,0);assert.equal(frame.battle.player.energy,3);
           assert.equal(frame.battle.hand.length,5);assert.equal(frame.battle.player.strength,0);
-          assert.ok(frame.battle.effects?.some(e=>e.name==='蓄雷'&&e.level===1));
+          assert.ok(frame.battle.effects?.some(e=>e.name==='雷势'&&e.level===0));
           combats.add(frame.game.floor);
         }
         if(combats.size===3){assert.ok(frame.game.deck.length>=13);break;}

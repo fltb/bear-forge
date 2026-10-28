@@ -6,6 +6,6 @@ export const volibearBasicCards=rules.defineRules({requires:[volibearCardProgram
   return {exports:{
     Strike:card(cards.B01,attack([6,9])),
     Defend:card(cards.B02,block([5,8])),
-    ThunderClaw:card(cards.B03,compose(attack([7,10]),thunder([2,3]))),
+    ThunderClaw:card(cards.B03,compose(attack([8,11]),thunder([3,5]))),
   }};
 }});

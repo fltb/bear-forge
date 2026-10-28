@@ -1,8 +1,13 @@
-// Use the pure domain card: Manifest Divinity now also applies Weak.
+// Isolate enemy behavior with a fixture invoking the production domain operation.
+import {card,queued} from "../src/content/characters/volibear/cards/programs.ts";
+import {openDomain} from "../src/content/characters/volibear/cards/operations.ts";
+import {volibearCardDescriptions} from "../src/content/characters/volibear/cards/metadata.ts";
+import {volibearContent} from "../src/program/volibear-content.ts";
 import {damage} from '../src/rules/damage.ts';
 import {hitResultSchema} from '../src/rules/damage.schemas.ts';
 import type {HitResult} from '../src/rules/damage.types.ts';
 import {volibearCommonCards} from '../src/content/characters/volibear/cards/common.ts';
+import {combatEnemyPowers} from '../src/content/enemies/shared/combat-powers.ts';
 import {enemyDefensePowers} from '../src/content/enemies/shared/defense-powers.ts';
 import {beyondPowers} from '../src/content/enemies/beyond/powers.ts';
 import {potionPowers} from '../src/content/potions/powers.ts';
@@ -26,6 +31,7 @@ import {volibearDomainCards} from '../src/content/characters/volibear/cards/doma
 import {volibearDomain} from '../src/content/characters/volibear/mechanics/domain.ts';
 import {powers} from '../src/rules/powers.ts';
 import {basicPowers} from '../src/content/powers/attributes.ts';
+import {exordiumBosses} from '../src/content/enemies/exordium/bosses.ts';
 import {beyondBosses} from '../src/content/enemies/beyond/bosses.ts';
 import {bronzeOrb} from '../src/content/enemies/city/bronze-orb.ts';
 import {moveId} from '../src/combat-identifiers.ts';
@@ -35,12 +41,13 @@ import type {TurnActor} from '../src/rules/turns.types.ts';
 import {enemyActionSchema} from '../src/rules/enemies.schemas.ts';
 import type {EnemyAction} from '../src/rules/enemies.types.ts';
 
-const setupSchema=programSchemas.setup.extend({scenario:z.enum(['boss','acid','spike','corpse','revive','escaped','time','champ','harden','warp','implant','thieves','orb','awakened','slow','heart','flight','plated','shifting','wither','minion','retaliation','gremlin','collector','repto']),domain:z.boolean().optional(),thiefSlot:z.number().int().min(0).max(1).optional(),thiefMove:z.enum(['mug','smoke','escape']).optional(),fullHand:z.boolean().optional(),opsCards:z.boolean().optional(),midRevivalDomain:z.boolean().optional()});
+const setupSchema=programSchemas.setup.extend({scenario:z.enum(['boss','acid','spike','corpse','revive','escaped','time','champ','harden','warp','implant','thieves','orb','awakened','slow','heart','flight','plated','guardian','guardian-return','shifting','fading','entangled','wither','minion','retaliation','gremlin','collector','repto']),domain:z.boolean().optional(),thiefSlot:z.number().int().min(0).max(1).optional(),thiefMove:z.enum(['mug','smoke','escape']).optional(),fullHand:z.boolean().optional(),opsCards:z.boolean().optional(),midRevivalDomain:z.boolean().optional()});
 export type EnemyContinuationCase=z.infer<typeof setupSchema>;
 const {defineRules,defineQuery,defineEffect,defineComponent,defineEntity,sequence,call,query,when,forEach,spawnEntity,install,on,updateLocalComponent}=rules;
 // Only constructs an explicit position. Cards, splits, deployment, revival, queues and
 // turn advancement remain the production implementations in the controlled Context.
-const fixture=defineRules({requires:[volibearCommonCards,enemyDefensePowers,beyondPowers,potionPowers,combatContentRules,enemyDeployment,slimes,volibearEngageCards,volibearBasicCards,volibearDomainCards,volibearDomain,basicPowers,beyondBosses,bronzeOrb],build(m){
+const fixture=defineRules({requires:[exordiumBosses,combatEnemyPowers,volibearContent.cards,volibearCommonCards,enemyDefensePowers,beyondPowers,potionPowers,combatContentRules,enemyDeployment,slimes,volibearEngageCards,volibearBasicCards,volibearDomainCards,volibearDomain,basicPowers,beyondBosses,bronzeOrb],build(m){
+  const domainProbe=card({...volibearCardDescriptions.C18,id:"FIXTURE_DOMAIN",metadata:{...volibearCardDescriptions.C18.metadata,name:"领域测试",variants:volibearCardDescriptions.C18.metadata.variants.map(v=>({...v,cost:0})) as unknown as typeof volibearCardDescriptions.C18.metadata.variants}},queued(openDomain(1)));
   const done=defineComponent({schema:z.boolean(),initial:()=>false});
   const filled=defineComponent({schema:z.boolean(),initial:()=>false});
   const actions=defineComponent({schema:z.array(enemyActionSchema),initial:()=>[]});
@@ -72,7 +79,7 @@ const fixture=defineRules({requires:[volibearCommonCards,enemyDefensePowers,beyo
     condition:defineQuery({input:z.custom<rules.ReactionContext<TurnActor,EnemyContinuationCase>>(),output:z.boolean(),dependencies:[battles.exports.status],base:(r,c)=>c.environment.scenario==='orb'&&r.query(battles.exports.status,c.event.battle).turn===2}),
     effect:defineEffect<rules.ReactionContext<TurnActor,EnemyContinuationCase>,void>(b=>sequence(
       call(cardPiles.exports.create,{piles:b.read(v=>v.query(battles.exports.status,v.input.event.battle).piles),definition:volibearBasicCards.exports.Strike,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null}),
-      when(b.read(v=>v.input.environment.domain===true),call(cardPiles.exports.create,{piles:b.read(v=>v.query(battles.exports.status,v.input.event.battle).piles),definition:volibearDomainCards.exports.LingeringStorm,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null})),
+      when(b.read(v=>v.input.environment.domain===true),call(cardPiles.exports.create,{piles:b.read(v=>v.query(battles.exports.status,v.input.event.battle).piles),definition:domainProbe,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null})),
     )),
   });
   const fillHand=on(turns.exports.idle,{
@@ -121,7 +128,15 @@ const fixture=defineRules({requires:[volibearCommonCards,enemyDefensePowers,beyo
           call(powers.exports.apply,{registry:b.read(v=>board(v).registry),actor:target,definition:basicPowers.exports.Strength,amount:-3,source:b.read(v=>v.input.event.actor),debuff:true,scope:b.read(v=>board(v).scope)}),
           call(enemies.exports.setMove,{enemy:controller,move:moveId.CORRUPT_HEART_BUFF}),
         )),
+        when(b.read(v=>v.input.environment.scenario==='fading'),call(powers.exports.set,{entity:b.read(v=>v.query(powers.exports.find,{registry:board(v).registry,actor:v.get(target),definition:beyondPowers.exports.Fading})!),next:{level:1,active:true,justApplied:false}})),
+        when(b.read(v=>v.input.environment.scenario==='entangled'),call(powers.exports.apply,{registry:b.read(v=>board(v).registry),actor:b.read(v=>board(v).actor),definition:combatEnemyPowers.exports.Entangled,amount:1,source:target,debuff:true,scope:b.read(v=>board(v).scope)})),
         when(b.read(v=>v.input.environment.scenario==='wither'),call(enemies.exports.setMove,{enemy:controller,move:moveId.WRITHING_MASS_WITHER})),
+        when(b.read(v=>['guardian','guardian-return'].includes(v.input.environment.scenario)),sequence(
+          call(resources.exports.consumeBlock,{entity:target,amount:100}),
+          call(powers.exports.set,{entity:b.read(v=>v.query(powers.exports.find,{registry:board(v).registry,actor:v.get(target),definition:exordiumBosses.exports.ModeShift})!),next:{level:6,active:true,justApplied:false}}),
+          when(b.read(v=>v.input.environment.scenario==='guardian-return'),call(powers.exports.remove,b.read(v=>v.query(powers.exports.find,{registry:board(v).registry,actor:v.get(target),definition:exordiumBosses.exports.ModeShift})!))),
+          call(enemies.exports.setMove,{enemy:controller,move:b.read(v=>v.input.environment.scenario==='guardian'?moveId.THE_GUARDIAN_FIERCE_BASH:moveId.THE_GUARDIAN_TWIN_SLAM)}),
+        )),
         when(b.read(v=>v.input.environment.scenario==='flight'),sequence(
           call(resources.exports.setHealth,{entity:target,hp:100,maxHp:100}),
           call(enemies.exports.setMove,{enemy:controller,move:moveId.BYRD_PECK}),
@@ -148,13 +163,13 @@ const fixture=defineRules({requires:[volibearCommonCards,enemyDefensePowers,beyo
         })})),
         b.assign(piles,b.read(v=>board(v).piles)),
         forEach(b.read(v=>[...v.query(zones.exports.members,v.query(cardPiles.exports.bindings,v.get(piles)).hand)]),card=>call(cardPiles.exports.exhaust,{piles,card})),
-        forEach([0,1],()=>call(cardPiles.exports.create,{piles,definition:volibearEngageCards.exports.StandAndFight,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null})),
+        forEach([0,1],()=>call(cardPiles.exports.create,{piles,definition:volibearContent.cards.exports.byCode.C11,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null})),
         call(cardPiles.exports.create,{piles,definition:volibearBasicCards.exports.Strike,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null}),
         when(b.read(v=>v.input.environment.opsCards===true),forEach([volibearCommonCards.exports.Pursuit,volibearCommonCards.exports.HoldGround],definition=>call(cardPiles.exports.create,{piles,definition,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null}))),
         when(b.read(v=>['flight','slow'].includes(v.input.environment.scenario)),forEach([0,1,2],()=>call(cardPiles.exports.create,{piles,definition:volibearBasicCards.exports.Strike,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null}))),
         when(b.read(v=>v.input.environment.scenario==='slow'),call(cardPiles.exports.create,{piles,definition:volibearBasicCards.exports.Defend,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null})),
         when(b.read(v=>v.input.environment.scenario==='warp'),forEach([0,1],()=>call(cardPiles.exports.create,{piles,definition:volibearBasicCards.exports.Defend,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null}))),
-        when(b.read(v=>v.input.environment.domain===true&&v.input.environment.scenario!=='revive'),call(cardPiles.exports.create,{piles,definition:volibearDomainCards.exports.LingeringStorm,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null})),
+        when(b.read(v=>v.input.environment.domain===true&&v.input.environment.scenario!=='revive'),call(cardPiles.exports.create,{piles,definition:domainProbe,upgraded:false,specialData:0,destination:1,shuffle:false,mutable:null})),
         call(resources.exports.rechargeEnergy,{entity:b.read(v=>v.input.event.actor),amount:30}),
       );
     }),
@@ -163,7 +178,7 @@ const fixture=defineRules({requires:[volibearCommonCards,enemyDefensePowers,beyo
   const anchor=defineEntity(kind,undefined,{components:[done,filled,actions,hits,revivalObservations]});
   const entry=defineEffect<EnemyContinuationCase,Frame>(b=>{const result=b.local<Frame>();return sequence(
     spawnEntity({definition:anchor,owner:null,scope:0,setup:b.input}),
-    b.assign(result,call(combatContentRules.exports.entry,{seed:b.read(v=>v.input.seed),encounter:b.read(v=>v.input.scenario==='gremlin'?encounterId.GREMLIN_LEADER:v.input.scenario==='collector'?encounterId.COLLECTOR:v.input.scenario==='repto'?encounterId.REPTOMANCER:v.input.scenario==='awakened'?encounterId.AWAKENED_ONE:v.input.scenario==='slow'?encounterId.GIANT_HEAD:v.input.scenario==='heart'?encounterId.THE_HEART:['flight','retaliation'].includes(v.input.scenario)?encounterId.THREE_BYRDS:v.input.scenario==='plated'?encounterId.SHELL_PARASITE:v.input.scenario==='shifting'?encounterId.TRANSIENT:v.input.scenario==='wither'?encounterId.WRITHING_MASS:v.input.scenario==='minion'?encounterId.AUTOMATON:['boss','acid','spike'].includes(v.input.scenario)?encounterId.SLIME_BOSS:['revive','harden'].includes(v.input.scenario)?encounterId.THREE_DARKLINGS:['time','warp'].includes(v.input.scenario)?encounterId.TIME_EATER:v.input.scenario==='champ'?encounterId.CHAMP:v.input.scenario==='implant'?encounterId.WRITHING_MASS:v.input.scenario==='thieves'?encounterId.TWO_THIEVES:v.input.scenario==='orb'?encounterId.AUTOMATON:encounterId.TWO_LOUSE),relics:[],potion:b.read(v=>v.input.scenario==='orb'?potionId.FIRE_POTION:null),durable:true,elite:false})),b.return(result),
+    b.assign(result,call(combatContentRules.exports.entry,{seed:b.read(v=>v.input.seed),encounter:b.read(v=>v.input.scenario==='gremlin'?encounterId.GREMLIN_LEADER:v.input.scenario==='collector'?encounterId.COLLECTOR:v.input.scenario==='repto'?encounterId.REPTOMANCER:v.input.scenario==='awakened'?encounterId.AWAKENED_ONE:v.input.scenario==='slow'?encounterId.GIANT_HEAD:v.input.scenario==='heart'?encounterId.THE_HEART:['guardian','guardian-return'].includes(v.input.scenario)?encounterId.THE_GUARDIAN:['flight','retaliation'].includes(v.input.scenario)?encounterId.THREE_BYRDS:v.input.scenario==='plated'?encounterId.SHELL_PARASITE:['shifting','fading'].includes(v.input.scenario)?encounterId.TRANSIENT:v.input.scenario==='wither'?encounterId.WRITHING_MASS:v.input.scenario==='minion'?encounterId.AUTOMATON:['boss','acid','spike'].includes(v.input.scenario)?encounterId.SLIME_BOSS:['revive','harden'].includes(v.input.scenario)?encounterId.THREE_DARKLINGS:['time','warp'].includes(v.input.scenario)?encounterId.TIME_EATER:v.input.scenario==='champ'?encounterId.CHAMP:v.input.scenario==='implant'?encounterId.WRITHING_MASS:v.input.scenario==='thieves'?encounterId.TWO_THIEVES:v.input.scenario==='orb'?encounterId.AUTOMATON:encounterId.TWO_LOUSE),relics:[],potion:b.read(v=>v.input.scenario==='orb'?potionId.FIRE_POTION:null),durable:true,elite:false})),b.return(result),
   );});
   return{exports:{entry,performed,hitList,revivalViews}};
 }});

@@ -8,7 +8,7 @@ import {createHumanPolicy} from '@bear-forge/policies';
 import type {JsonValue} from '@bear-forge/contracts/game';
 import {createSimulator} from '../../../examples/sts/src/simulator.ts';
 import {openSimulatorStore} from '../../../examples/sts/src/simulator-store.ts';
-import {decisionPresentation,chooseMultiple,eventLines,renderTui,tabs} from './sts-tui-view.ts';
+import {decisionPresentation,actionMatches,chooseMultiple,eventLines,renderTui,tabs,needsConfirmation,resultSummary} from './sts-tui-view.ts';
 import type {TuiModel} from './sts-tui-view.ts';
 
 export async function runTui(args=process.argv.slice(2),input=process.stdin,output=process.stdout){
@@ -25,7 +25,7 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
   const seed=flags.get('--seed')??randomBytes(8).readBigUInt64LE().toString();if(!/^\d+$/.test(seed)||BigInt(seed)>0xffffffffffffffffn)throw Error('seed 必须是十进制 uint64');
   const directory=resolve(flags.get('--resume')??flags.get('--save')??`data/sts-saves/${new Date().toISOString().replace(/[:.]/g,'-')}-${randomUUID().slice(0,8)}`);
   output.write(`正在${flags.has('--resume')?'恢复':'创建'} STS；存档：${directory}\n`);
-  const started=performance.now(),store=await openSimulatorStore(directory,flags.has('--resume')?'resume':'new');
+  const store=await openSimulatorStore(directory,flags.has('--resume')?'resume':'new');
   let trace:Awaited<ReturnType<typeof openJsonlTrace>>|undefined;
   if(flags.get('--trace')!=='off'){
     const tracePath=resolve(flags.get('--trace')??`${directory}/trace-${new Date().toISOString().replace(/[:.]/g,'-')}.jsonl`);
@@ -33,7 +33,7 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
   }
   let session:Awaited<ReturnType<typeof createSimulator>>;
   try{session=await createSimulator({store,...(trace?{trace}:{}),resume:flags.has('--resume'),setup:{character,seed}});}catch(error){await trace?.close?.();await store.close();throw error;}
-  const initial=await session.observe(),model:TuiModel={batch:initial,tab:0,scroll:0,selected:0,filter:'',filtering:false,message:`${flags.has('--resume')?'直接恢复':'已创建'}；耗时 ${(performance.now()-started).toFixed(0)}ms；自动存档开启`,busy:false,log:eventLines(initial),focus:'actions',confirm:false,multi:null};
+  const initial=await session.observe(),model:TuiModel={batch:initial,tab:initial.state.observation.game.screen==='MAP_SCREEN'?2:0,scroll:0,selected:0,filter:'',filtering:false,message:'自动保存已开启',busy:false,log:eventLines(initial),focus:'actions',confirm:false,multi:null};
   let settle:((action:JsonValue)=>void)|null=null,finished=false,exitRequested=false,saved=true,abandonRequested=false,abandoned=false,faulted=false;
   const abort=new AbortController(),drawTimes:number[]=[];
   const policy=createHumanPolicy((_request,signal)=>new Promise<JsonValue>((accept,reject)=>{settle=value=>{signal.removeEventListener('abort',cancel);settle=null;accept(value);};function cancel(){settle=null;reject(signal.reason);}signal.addEventListener('abort',cancel,{once:true});}));
@@ -51,7 +51,7 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
     if(finished||!model.batch.state.request)return;
     try{
       const result=await session.decide(policy,abort.signal);
-      if(result.accepted){model.batch=result.batch;saved=result.saved;model.log.push(...eventLines(result.batch));model.log=model.log.slice(-1000);model.filter='';model.selected=0;model.scroll=0;model.confirm=false;model.multi=null;model.message=result.saved?'已执行并保存':`动作已执行，但保存失败：${'saveError' in result?result.saveError:''}；按 s 重试，不能继续。`;}
+      if(result.accepted){const summary=resultSummary(model.batch,result.batch);const wasMap=model.batch.state.observation.game.screen==='MAP_SCREEN';model.batch=result.batch;if(model.batch.state.observation.game.screen==='MAP_SCREEN')model.tab=2;else if(wasMap)model.tab=0;saved=result.saved;model.log.push(...eventLines(result.batch));model.log=model.log.slice(-1000);model.filter='';model.selected=0;model.scroll=0;model.confirm=false;model.multi=null;model.message=result.saved?summary:`动作已执行，但保存失败：${'saveError' in result?result.saveError:''}；按 s 重试，不能继续。`;}
       else model.message=result.reason;
       if(session.traceStatus().failed)model.message+='；日志写入已停止：'+session.traceStatus().error;
       model.busy=false;draw();
@@ -68,7 +68,7 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
     if(model.filtering){if(key.name==='escape'){model.filtering=false;model.filter='';}else if(key.name==='return')model.filtering=false;else if(key.name==='backspace')model.filter=[...model.filter].slice(0,-1).join('');else if(text&&!key.ctrl&&!key.meta)model.filter+=text;model.selected=0;draw();return;}
     if(key.name==='s'){void save();return;}
     if((output.columns??80)<60||(output.rows??24)<16)return;
-    const actions=decisionPresentation(model.batch).actions.filter(a=>a.label.toLowerCase().includes(model.filter.toLowerCase())),candidates=model.batch.state.observation.battle?.select?.candidates??[],last=Math.max(0,(model.multi===null?actions.length:candidates.length)-1);
+    const actions=decisionPresentation(model.batch).actions.filter(a=>actionMatches(model.batch,a,model.filter)),candidates=model.batch.state.observation.battle?.select?.candidates??[],last=Math.max(0,(model.multi===null?actions.length:candidates.length)-1);
     if(key.name==='escape'){model.confirm=false;model.filter='';model.selected=0;model.multi=null;}
     else if(key.name==='m'&&actions.some(a=>a.bits>>>29===3)){model.multi=model.multi===null?[]:null;model.selected=0;model.filter='';model.message='多选：↑↓ 移动，Space 勾选，Enter 提交原规则允许的组合；Esc 返回完整动作列表。';}
     else if(key.name==='space'&&model.multi!==null&&candidates[model.selected]){const index=candidates[model.selected]!.index;model.multi=model.multi.includes(index)?model.multi.filter(i=>i!==index):[...model.multi,index];}
@@ -83,7 +83,7 @@ export async function runTui(args=process.argv.slice(2),input=process.stdin,outp
       if(!saved){model.message='尚未保存，请按 s 重试。';draw();return;}
       const action=model.multi===null?actions[model.selected]:chooseMultiple(model.batch,model.multi);
       if(!action){model.message='当前组合不在原规则合法动作中；请调整选择，没有执行。';draw();return;}
-      if(['discard-potion','leave','skip-card','skip-relic','end-turn'].includes(action.kind)&&!model.confirm){model.confirm=true;draw();return;}
+      if(needsConfirmation(model.batch,action)&&!model.confirm){model.confirm=true;draw();return;}
       model.busy=true;model.confirm=false;settle({bits:action.bits});
     }
     draw();

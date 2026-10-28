@@ -67,9 +67,9 @@ export const statusTexts:Record<string,string>=Object.freeze({
   THORNS:`玩家：${potionPowers.exports.programs.Thorns.text}敌人：${beyondPowers.exports.programs.Thorns.text}`,
 });
 export const volibearMechanics=Object.freeze({
-  蓄雷:stormCharge.exports.text+lightning.exports.chargeText,
+  雷势:stormCharge.exports.text+lightning.exports.chargeText,
   迎战:volibearEngage.exports.text,
   雷伤:lightning.exports.text,
   领域:volibearDomain.exports.text,
-  准备:volibearPreparation.exports.text,
+  兽化:'攻击变为裂骨之爪，其他牌变为风暴之躯；保留实体、升级、减费和保留，形态打出后消耗，战后恢复原牌。',
 });

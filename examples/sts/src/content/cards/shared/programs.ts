@@ -1,4 +1,7 @@
-import {attackProgram,inheritPrograms,programMetadata,registerAmountBase,describeProgram,programText,amountText,describeAmount} from './program-facts.ts';
+import {ruleModules} from '@bear-forge/card-engine';
+import {z} from 'zod';
+import {cardUseSchema} from '../../../rules/card-instances.schemas.ts';
+import {damageTermsSchema,withDamageTerms,attackProgram,inheritPrograms,programMetadata,registerAmountBase,describeProgram,programText,amountText,describeAmount} from './program-facts.ts';
 import {cardTargets} from '../../../rules/card-targets.ts';
 import {cardEffects} from '../../../rules/card-effects.ts';
 import {rules} from '../../../rules/execution.ts';
@@ -36,11 +39,21 @@ export type DescribedPower=Readonly<{definition:PowerDefinition;name:string;text
 export function concreteCard(id:keyof typeof cards,use:rules.Effect<CardUse,void>,policies:Partial<Pick<CardConfig,'canUse'|'canTransform'|'endTurn'|'created'|'removed'|'returned'>>={}){
   return rules.defineEntity(cardInstances.exports.kind,{id,metadata:programMetadata(cards[id],use),text:cardRuleText(cards[id],use,...Object.values(policies).filter((effect):effect is NonNullable<typeof effect>=>effect!==undefined)),use,canUpgrade:upgradeOnce(cards[id]),upgrade:standardUpgrade(cards[id]),...policies});
 }
-export function targetAttack(amount:CardAmount,count:CardAmount=1){return describeAmounts(attackProgram(defineEffect<CardUse,void>(b=>{
-  const hits=b.local<import('../../../rules/damage.types.ts').HitRequest[]>();
-  return sequence(b.assign(hits,b.read(v=>v.query(cardTargets.exports.enemies,v.input).map(target=>({battle:v.input.battle,source:v.input.owner,target,amount:v.query(attributes.exports.attackAmount,{source:v.input.owner,target,base:cardAmount(amount,v),card:v.input.card}),attack:true,selfDamage:false})))),
-    forEach(b.read(v=>Array.from({length:cardAmount(count,v)},(_,i)=>i)),()=>forEach(hits,request=>enqueue(cardEffects.exports.hit,{use:b.input,request,targeted:true},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'}))));
-}),amount),[amount,count],(damage,hits)=>`对目标造成${damage}伤害${hits==='1'?'':`，重复${hits}次`}。`);}
+export function targetAttack(amount:CardAmount,count:CardAmount=1){
+  const segment=defineEffect<{use:CardUse;hits:import('../../../rules/damage.types.ts').HitRequest[]},void>(b=>{const performed=b.local<boolean>();return sequence(
+    b.assign(performed,false),forEach(b.read(v=>v.input.hits),request=>rules.when(b.read(v=>v.query(battles.exports.status,v.input.use.battle).outcome===0&&v.query(attributes.exports.damageable,v.get(request).target)),sequence(
+      b.assign(performed,true),ruleModules.runTaskGroup(actionQueue,cardEffects.exports.hit,{use:b.read(v=>v.input.use),request,targeted:true}),
+    ))),rules.when(performed,call(cardEffects.exports.finishAttackSegment,{use:b.read(v=>v.input.use)})),
+  );});
+  const effect=describeAmounts(attackProgram(defineEffect<CardUse,void>(b=>{
+    const hits=b.local<import('../../../rules/damage.types.ts').HitRequest[]>();
+    return sequence(b.assign(hits,b.read(v=>v.query(cardTargets.exports.enemies,v.input).map(target=>({battle:v.input.battle,source:v.input.owner,target,amount:v.query(attributes.exports.attackAmount,{source:v.input.owner,target,base:cardAmount(amount,v),card:v.input.card}),attack:true,selfDamage:false})))),
+      forEach(b.read(v=>Array.from({length:cardAmount(count,v)},(_,i)=>i)),()=>enqueue(segment,{use:b.input,hits},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'})));
+  }),amount),[amount,count],(damage,hits)=>`对目标造成${damage}伤害${hits==='1'?'':`，重复${hits}次`}。`);
+  if(typeof amount!=='function'&&typeof count!=='function')withDamageTerms(effect,rules.defineQuery({input:cardUseSchema,output:damageTermsSchema,dependencies:[cardTargets.exports.enemies,attributes.exports.attackAmount],base:(r,use)=>r.query(cardTargets.exports.enemies,use).map(target=>({label:'普通攻击',target,amount:r.query(attributes.exports.attackAmount,{source:use.owner,target,base:typeof amount==='number'?amount:amount[use.state.upgraded?1:0],card:use.card}),hits:typeof count==='number'?count:count[use.state.upgraded?1:0]}))}));
+  return effect;
+}
+
 export function cardBlock(amount:CardAmount,twice=false){return describeAmounts(defineEffect<CardUse,void>(b=>enqueue(cardEffects.exports.gainBlock,{use:b.input,amount:b.read(v=>{
   const first=v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:cardAmount(amount,v)});return twice?v.query(attributes.exports.blockAmount,{actor:v.input.owner,base:first}):first;
 })},{queue:actionQueue,source:b.read(v=>v.input.card),lifetime:b.read(v=>v.query(battles.exports.status,v.input.battle).actionScope),eligible:'captured'})),[amount],value=>`获得${value}格挡${twice?'（格挡修正计算两次）':''}。`);}

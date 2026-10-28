@@ -8,7 +8,7 @@ import {createAdventureStart} from './start.ts';
 
 const cards=createVolibearCatalog(combatChoices,{
   discard:CardScreen.VolibearDiscard,exhaust:CardScreen.VolibearExhaust,discardToTop:CardScreen.Headbutt,scry:CardScreen.VolibearScry,
-  retain:CardScreen.VolibearRetain,copy:CardScreen.VolibearCopy,recover:CardScreen.VolibearRecover,train:CardScreen.VolibearTrain,
+  retain:CardScreen.VolibearRetain,copy:CardScreen.VolibearCopy,recover:CardScreen.VolibearRecover,train:CardScreen.VolibearTrain,beast:CardScreen.VolibearBeast,search:CardScreen.VolibearSearch,
 },booleanCombatAdapter,booleanCombatDependencies);
 const history=createBooleanCardChoiceHistory(cards.exports.optionalChoices,[cards]);
 /** Production port composition, shared by the character's normal adventure root. */

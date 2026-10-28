@@ -12,11 +12,14 @@ import type {HitRequest,HitResult} from './damage.types.ts';
 export type CardHit={use:CardUse;request:HitRequest;targeted:boolean};
 export type CardHitReceipt=CardHit&{result:HitResult};
 export type CardBlock={use:CardUse;amount:number};
+export type AttackSegment={use:CardUse};
 /** Explicit direct-effect provenance. Nested responses use their own ordinary
  * resource/damage calls and cannot inherit a card's receipt accidentally. */
 export const cardEffects=rules.defineRules({requires:[battles,resources,damage,attributes],build(m){
   const hitResolved=m.own(rules.defineEvent({payload:typedValue<CardHitReceipt>(),dispatch:'immediate'}));
   const blockGranted=m.own(rules.defineEvent({payload:typedValue<CardBlock>(),dispatch:'immediate'}));
+  const attackSegmentResolved=m.own(rules.defineEvent({payload:typedValue<AttackSegment>(),dispatch:'immediate'}));
+  const finishAttackSegment=m.atom({input:typedValue<AttackSegment>(),output:z.undefined(),reads:[],writes:[],emits:[attackSegmentResolved],run(_r,payload){return{writes:[],events:[{event:attackSegmentResolved,payload}],result:undefined};}});
   const announceHit=m.atom({input:typedValue<CardHitReceipt>(),output:z.undefined(),reads:[],writes:[],emits:[hitResolved],run(_r,payload){return{writes:[],events:[{event:hitResolved,payload}],result:undefined};}});
   const announceBlock=m.atom({input:typedValue<CardBlock>(),output:z.undefined(),reads:[],writes:[],emits:[blockGranted],run(_r,payload){return{writes:[],events:[{event:blockGranted,payload}],result:undefined};}});
   const resolveHit=rules.defineEffect<CardHit,HitResult>(b=>{const result=b.local<HitResult>(),live=b.local<boolean>();return rules.sequence(
@@ -34,5 +37,5 @@ export const cardEffects=rules.defineRules({requires:[battles,resources,damage,a
     rules.when(b.read(v=>v.get(amount)>0),rules.call(announceBlock,{use:b.read(v=>v.input.use),amount})),
   );});
   describeProgram(hitResolved.public,'卡牌直接伤害结算后');describeProgram(blockGranted.public,'卡牌实际获得格挡后');
-  return{exports:{resolveHit,hit,gainBlock,hitResolved:hitResolved.public,blockGranted:blockGranted.public}};
+  return{exports:{resolveHit,hit,gainBlock,finishAttackSegment,attackSegmentResolved:attackSegmentResolved.public,hitResolved:hitResolved.public,blockGranted:blockGranted.public}};
 }});

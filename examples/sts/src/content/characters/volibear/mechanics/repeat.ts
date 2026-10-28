@@ -8,7 +8,7 @@ import type {CardUse} from '../../../../rules/card-instances.types.ts';
 const setup=z.object({battle:z.int32(),turn:z.int32()});
 export const volibearRepeat=rules.defineRules({requires:[battles,cardInstances],build(m){
   const repetitions=1;
-  const eligible=rules.defineQuery({input:z.int32(),output:z.boolean(),dependencies:[cardInstances.exports.metadata,cardInstances.exports.variant],base:(r,card)=>r.query(cardInstances.exports.metadata,card).type===0&&r.query(cardInstances.exports.variant,card).target});
+  const eligible=rules.defineQuery({input:z.int32(),output:z.boolean(),dependencies:[cardInstances.exports.metadata,cardInstances.exports.variant],base:(r,card)=>r.query(cardInstances.exports.metadata,card).type===0});
   const state=rules.defineComponent({schema:setup.extend({play:z.int32().nullable()}),initial:()=>({battle:0,turn:0,play:null})});
   const repeat=rules.modify(battles.exports.effectRepetitions,{
     condition:rules.defineQuery({input:z.custom<rules.ModifierContext<CardUse,number>>(),output:z.boolean(),reads:[state],dependencies:[eligible,battles.exports.current],base:(r,c)=>{
@@ -45,7 +45,7 @@ export const volibearRepeat=rules.defineRules({requires:[battles,cardInstances],
     );
   });
   const pending=rules.defineQuery({input:z.int32(),output:z.int32(),reads:[state],dependencies:[battles.exports.status],base:(r,battle)=>r.entities(state).filter(id=>{const s=r.component(id,state);return s.battle===battle&&s.turn===r.query(battles.exports.status,battle).turn&&s.play===null;}).length});
-  const text=`本回合下一张实际打出的指定单体攻击，额外结算${repetitions}次完整效果，不算重新打出。`;
+  const text=`本回合下一张实际打出的攻击，额外结算${repetitions}次完整效果，不算重新打出。`;
   describeProgram(prepare,text);
   return {exports:{pending,prepare,text}};
 }});

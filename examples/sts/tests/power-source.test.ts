@@ -45,7 +45,7 @@ test('shared public status names preserve distinct player and enemy rules',()=>{
 });
 
 test('mechanic and potion relic text consumes the executable recipes',()=>{
-  assert.equal(volibearMechanics.蓄雷,stormCharge.exports.text+lightning.exports.chargeText);
+  assert.equal(volibearMechanics.雷势,stormCharge.exports.text+lightning.exports.chargeText);
   assert.equal(volibearMechanics.雷伤,lightning.exports.text);
   assert.equal(potionRelics.exports.relicTexts.SACRED_BARK,sacredBark.text);
   assert.equal(sacredBark.multiplier(false),1);

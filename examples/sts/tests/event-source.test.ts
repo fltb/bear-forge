@@ -139,8 +139,8 @@ test('Wing Statue gates actual Volibear production decks using composed damage a
     {key:'U05',upgraded:false,eligible:false}, // Dynamic enemy-count attack: metadata sentinel 0.
     {key:'U05',upgraded:true,eligible:false},
     {key:'U07',upgraded:false,eligible:true}, // Fixed 28 damage.
-    {key:'U08',upgraded:false,eligible:false}, // Growing attack: base 8.
-    {key:'U08',upgraded:true,eligible:true}, // Same composition: upgraded base 10.
+    {key:'U08',upgraded:false,eligible:true}, // S2 fixed base 10 before the bite-mark bonus.
+    {key:'U08',upgraded:true,eligible:true}, // Upgraded fixed base 14.
     {key:'B02',upgraded:true,eligible:false}, // Non-attack: metadata sentinel -1.
   ] as const;
   for(const {key,upgraded,eligible} of cases){

@@ -17,10 +17,10 @@ export const volibearOpportunities=rules.defineRules({requires:[enemies,battles]
     if(use.target===null)return false;
     const controller=r.query(enemies.exports.forActor,use.target);if(controller===null)return false;
     const enemy=r.query(enemies.exports.current,controller);
-    return enemy.battle===use.battle&&enemy.opportunityTurn===r.query(battles.exports.current,use.battle).turn&&!r.query(enemies.exports.acted,controller)&&r.query(enemies.exports.intent,controller).attack;
+    return enemy.battle===use.battle&&enemy.opportunityTurn===r.query(battles.exports.current,use.battle).turn&&r.query(enemies.exports.intent,controller).attack;
   }});
   const actedText='目标属于本场战斗且已使用本轮敌人行动机会。';
-  const awaitingAttackText='目标属于本场战斗且未使用本轮行动机会，当前意图包含攻击。';
+  const awaitingAttackText='目标属于本场战斗，当前意图包含攻击。';
   describeProgram(acted,actedText);describeProgram(awaitingAttack,awaitingAttackText);
   return {exports:{acted,awaitingAttack,actedText,awaitingAttackText}};
 }});

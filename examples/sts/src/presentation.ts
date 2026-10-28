@@ -33,13 +33,14 @@ export function enemyIntentLabel(b:NonNullable<Observation['battle']>,index:numb
   if(b.intentHidden)return '隐藏';
   const intent=b.intents?.find(i=>i.index===index),monster=b.monsters.find(m=>m.index===index);
   if(!intent)return '无';
+  if(intent.acted)return '已行动（本轮不再行动）';
   const name=intent.name==='LAGAVULIN_SLEEP'
     ?`${monster&&(BigInt(monster.statusBits)&(1n<<BigInt(MS.ASLEEP)))!==0n?'睡眠':'已唤醒，当前仍为过渡行动'}${intent.attack?'':'（本次不攻击）'}`
     :`${intentTexts[intent.name as keyof typeof intentTexts]??(intent.hits>0?'攻击':'特殊行动')}（${intent.name}）`;
   return name+(intent.hits>0?`，${intent.attack?'攻击':'非攻击伤害'} ${intent.attackDamage}×${intent.hits}（格挡与伤害减免前）`:'');
 }
 const selectionTypes:Record<number,string>={1:'变换',2:'变换并升级',3:'升级',4:'移除',5:'复制',6:'获得',7:'设为固有',8:'献祭'};
-const selectionTasks:Record<string,string>={ARMAMENTS:'升级',CODEX:'选择加入抽牌堆',DISCOVERY:'选择加入手牌',DUAL_WIELD:'复制',EXHAUST_ONE:'消耗',EXHAUST_MANY:'消耗',EXHUME:'从消耗堆回收',FORETHOUGHT:'放至抽牌堆底并减费',GAMBLE:'弃置并抽等量牌',HEADBUTT:'置于抽牌堆顶',LIQUID_MEMORIES_POTION:'回收并本回合0费',SECRET_TECHNIQUE:'检索技能',SECRET_WEAPON:'检索攻击',WARCRY:'置于抽牌堆顶','弃牌':'弃置','消耗牌':'消耗','预见':'预见：弃置选中的牌，其余保持顺序','保留攻击':'保留','复制攻击':'复制','回收攻击':'回收','强化攻击':'强化'};
+const selectionTasks:Record<string,string>={ARMAMENTS:'升级',CODEX:'选择加入抽牌堆',DISCOVERY:'选择加入手牌',DUAL_WIELD:'复制',EXHAUST_ONE:'消耗',EXHAUST_MANY:'消耗',EXHUME:'从消耗堆回收',FORETHOUGHT:'放至抽牌堆底并减费',GAMBLE:'弃置并抽等量牌',HEADBUTT:'置于抽牌堆顶',LIQUID_MEMORIES_POTION:'回收并本回合0费',SECRET_TECHNIQUE:'检索技能',SECRET_WEAPON:'检索攻击',WARCRY:'置于抽牌堆顶','弃牌':'弃置','消耗牌':'消耗','预见':'预见：弃置选中的牌，其余保持顺序','保留攻击':'保留','复制攻击':'复制','回收攻击':'回收','强化攻击':'强化','兽化手牌':'兽化','检索牌':'检索'};
 export function describeAction(o:Observation,bits:number){
   const g=o.game,b=o.battle,index=bits&65535,target=(bits>>>16)&8191,type=bits>>>29;
   function action(kind:string,label:string,details:Record<string,unknown>={}){return{kind,label,details};}
@@ -58,7 +59,7 @@ export function describeAction(o:Observation,bits:number){
       const indices=type===3?Array.from({length:29},(_,i)=>i).filter(i=>(bits&0x1fffffff)&(1<<i)):[index];
       const candidates=b.select?.candidates;if(!candidates)throw Error('Selection candidates are not published');
       const skip=type===2&&index===b.select?.skipIndex,selected=skip?[]:indices.map(i=>{const c=candidates.find(c=>c.index===i);if(!c)throw Error('Missing selection candidate '+i);return c;});
-      return action(skip?'skip-selection':'select-cards',skip?'跳过选择':`${verb}：${selected.length?selected.map(c=>`[${c.index}] ${describeCard(c.card.id,c.card.upgraded).name}`).join('、'):'不选择任何牌'}`,{task,indices:selected.map(c=>c.index)});
+      return action(skip?'skip-selection':'select-cards',skip?'跳过选择':`${verb}：${selected.length?selected.map(c=>`[${c.index}] ${describeCard(c.card.id,c.card.upgraded).name}${c.card.upgraded?'+':''}`).join('、'):'不选择任何牌'}`,{task,indices:selected.map(c=>c.index)});
     }
     if(type!==0)throw Error('Unknown combat action '+bits);
     const c=b.hand[index];if(!c)throw Error('Missing playable hand card');const d=describeCard(c.id,c.upgraded);

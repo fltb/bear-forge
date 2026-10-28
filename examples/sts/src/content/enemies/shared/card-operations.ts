@@ -1,3 +1,5 @@
+import {cardInstances} from '../../../rules/card-instances.ts';
+import {effectTrace} from '../../../rules/effect-trace.ts';
 import {rules} from '../../../rules/execution.ts';
 import {combatOperations,defineOperation,OperationKind} from '../../../rules/combat-operations.ts';
 import {zones} from '../../../rules/zones.ts';
@@ -6,7 +8,7 @@ import {permanentDecks} from '../../../rules/permanent-decks.ts';
 import type {CardConfig,CardSetup,CardMutable} from '../../../rules/card-instances.types.ts';
 import type {DeckObtain} from '../../../rules/permanent-decks.types.ts';
 
-export const enemyCardOperations=rules.defineRules({requires:[combatOperations,zones,cardPiles,permanentDecks],build(){
+export const enemyCardOperations=rules.defineRules({requires:[cardInstances,effectTrace,combatOperations,zones,cardPiles,permanentDecks],build(){
   const storage=rules.defineEntity(zones.exports.kind,{capacity:1});
   const store=defineOperation<{owner:number;scope:number;piles:number;card:number},number|null>(OperationKind.StoreCard,null,b=>{const zone=b.local<number>();return rules.sequence(
     b.assign(zone,rules.spawnEntity({definition:storage,owner:b.read(v=>v.input.owner),scope:b.read(v=>v.input.scope)})),
@@ -22,6 +24,6 @@ export const enemyCardOperations=rules.defineRules({requires:[combatOperations,z
     rules.call(cardPiles.exports.moveToHand,{piles:b.read(v=>v.input.piles),card}),b.return(card),
   );});
   const obtain=defineOperation<DeckObtain,number[]>(OperationKind.ObtainCard,[],b=>{const cards=b.local<number[]>();return rules.sequence(b.assign(cards,rules.call(permanentDecks.exports.obtain,b.input)),b.return(cards));});
-  const create=defineOperation<{piles:number;definition:rules.EntityDefinition<CardConfig,CardSetup>;upgraded:boolean;specialData:number;destination:0|1|2|3;shuffle:boolean;mutable:CardMutable|null},number|null>(OperationKind.CreateCard,null,b=>{const card=b.local<number>();return rules.sequence(b.assign(card,rules.call(cardPiles.exports.create,b.input)),b.return(card));});
+  const create=defineOperation<{piles:number;definition:rules.EntityDefinition<CardConfig,CardSetup>;upgraded:boolean;specialData:number;destination:0|1|2|3;shuffle:boolean;mutable:CardMutable|null},number|null>(OperationKind.CreateCard,null,b=>{const card=b.local<number>();return rules.sequence(b.assign(card,rules.call(cardPiles.exports.create,b.input)),rules.forEach(b.read(v=>{const owner=v.query(effectTrace.exports.current,undefined).at(-1)?.owner;return owner==null?[]:[owner];}),actor=>rules.call(cardInstances.exports.setOriginActor,{entity:card,actor})),b.return(card));});
   return{exports:{store,release,obtain,create}};
 }});

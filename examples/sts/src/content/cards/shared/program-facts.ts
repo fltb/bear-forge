@@ -1,15 +1,38 @@
 import {describeProgram,programText} from '../../../rules/program-descriptions.ts';
 export {describeProgram,programText} from '../../../rules/program-descriptions.ts';
-import type {rules} from '../../../rules/execution.ts';
+import {rules} from '../../../rules/execution.ts';
+import {z} from 'zod';
+import {cardUseSchema} from '../../../rules/card-instances.schemas.ts';
 import type {CardIdentity,CardMetadata,CardUse} from '../../../rules/card-instances.types.ts';
 import type {CardAmount} from './programs.ts';
 
 /** Assembly-only projections attached to the actual effect definition. These are
  * never interpreted to execute a card and never become mutable Context state. */
 type Attack = Readonly<{amount:CardAmount;fixed:boolean}>;
+const nativeLightning=new WeakSet<object>();
+export function thunderProgram<T extends rules.Effect<CardUse,void>>(effect:T):T{nativeLightning.add(effect);return effect;}
+export function hasNativeLightning(effect:rules.Effect<CardUse,void>):boolean{return nativeLightning.has(effect);}
 const attacks = new WeakMap<rules.Effect<CardUse,void>,readonly Attack[]>();
 const amountBases=new WeakMap<Extract<CardAmount,Function>,CardAmount>();
 const amountTexts=new WeakMap<object,string>();
+
+/** Read-only, current-state damage operands provided by the real constructors.
+ * No effect execution, RNG, hidden piles, damage checkpoints or future state. */
+export const damageTermsSchema=z.array(z.object({label:z.string(),target:z.number().nullable(),amount:z.number(),hits:z.number()}));
+export type DamageTerms=z.infer<typeof damageTermsSchema>;
+const damageTerms=new WeakMap<object,rules.Query<CardUse,DamageTerms>>();
+const domainOpeners=new WeakSet<object>();
+export function opensDomain<T extends object>(effect:T):T{domainOpeners.add(effect);return effect;}
+export function programOpensDomain(effect:object){return domainOpeners.has(effect);}
+const noDamageTerms=rules.defineQuery({input:cardUseSchema,output:damageTermsSchema,base:()=>[]});
+export function damageTermsFor(effect:object){return damageTerms.get(effect)??noDamageTerms;}
+export function withDamageTerms<T extends object>(effect:T,projection:rules.Query<CardUse,DamageTerms>):T{damageTerms.set(effect,projection);return effect;}
+export function inheritDamageTerms<T extends object>(effect:T,...children:object[]):T{
+  if(children.some(programOpensDomain))domainOpeners.add(effect);else domainOpeners.delete(effect);
+  const queries=children.map(damageTermsFor).filter(q=>q!==noDamageTerms);
+  if(!queries.length){damageTerms.delete(effect);return effect;}
+  return withDamageTerms(effect,rules.defineQuery({input:cardUseSchema,output:damageTermsSchema,dependencies:queries,base:(r,use)=>queries.flatMap(q=>r.query(q,use))}));
+}
 
 /** Opaque callback descriptions belong to the constructor that implements them. */
 export function describeAmount<T extends CardAmount>(amount:T,text:string):T{
@@ -43,6 +66,8 @@ export function attackProgram(effect:rules.Effect<CardUse,void>,amount:CardAmoun
 
 /** Combinators preserve capabilities without inspecting opaque TS callbacks. */
 export function inheritPrograms(effect:rules.Effect<CardUse,void>,...children:rules.Effect<CardUse,void>[]):rules.Effect<CardUse,void>{
+  inheritDamageTerms(effect,...children);
+  if(children.some(child=>nativeLightning.has(child)))nativeLightning.add(effect);
   attacks.set(effect,children.flatMap(child=>attacks.get(child)??[]));
   const descriptions=children.map(programText);
   describeProgram(effect,descriptions.every(text=>text!==undefined)?descriptions.filter(Boolean).join(''):undefined);

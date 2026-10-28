@@ -72,7 +72,7 @@ export const stsPorts=defineRules({requires:[adventureChoices,combatChoices,comb
   const selectMetadata=defineEffect<rules.ReactionContext<PendingCardChoice>,void>(b=>call(combatSessions.exports.setSelectionMetadata,b.read(v=>{
     const session=v.query(combatSessions.exports.forBattle,v.input.event.battle);if(session===null)throw Error('Selection requires a combat session');
     const screen=v.input.event.screen,simple=([CardScreen.Armaments,CardScreen.ExhaustOne,CardScreen.Headbutt,CardScreen.LiquidMemories,CardScreen.Discovery] as number[]).includes(screen);
-    const custom=([CardScreen.VolibearDiscard,CardScreen.VolibearExhaust,CardScreen.VolibearScry,CardScreen.VolibearRetain,CardScreen.VolibearCopy,CardScreen.VolibearRecover,CardScreen.VolibearTrain] as number[]).includes(screen);
+    const custom=([CardScreen.VolibearDiscard,CardScreen.VolibearExhaust,CardScreen.VolibearScry,CardScreen.VolibearRetain,CardScreen.VolibearCopy,CardScreen.VolibearRecover,CardScreen.VolibearTrain,CardScreen.VolibearBeast,CardScreen.VolibearSearch] as number[]).includes(screen);
     if(custom)return{session,pickCount:v.input.event.maximum??1,canPickZero:v.input.event.minimum===0,canPickAnyNumber:v.input.event.multiple===true&&v.input.event.minimum===0};
     return{session,...(simple?{pickCount:screen===CardScreen.Discovery&&!v.query(combatSessions.exports.current,session).haveUsedDiscoveryAction?v.query(combatSessions.exports.current,session).selectionMetadata.pickCount:1,canPickZero:false,canPickAnyNumber:false}:screen===CardScreen.ExhaustMany?{pickCount:v.input.event.maximum??0}:screen===CardScreen.Forethought?{canPickAnyNumber:false}:{})};
   })));

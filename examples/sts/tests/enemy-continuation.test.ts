@@ -46,14 +46,14 @@ for(const domain of [false,true])for(const phase of ['player','enemy'] as const)
     try{
       const s=d.session(),owner=s.roster[0]!.actor!,power=d.query(powers.exports.find,{registry:d.query(battles.exports.status,s.battle).registry,actor:owner,definition:beyondBosses.exports.TimeWarp})!;
       assert.equal(d.query(powers.exports.level,power),10);
-      d.play(domain?'VOLIBEAR_U19':'VOLIBEAR_B02');
-      assert.equal(d.query(powers.exports.level,power),11);assert.equal(d.frame().battle!.turn,0);
-      const f=phase==='player'?d.play('VOLIBEAR_B04',0):d.play('VOLIBEAR_B02');
-      assert.equal(d.query(powers.exports.level,power),0);
-      assert.equal(f.battle!.monsters[0]!.strength,2,'12th card always grants the allowed strength');
+      d.play(domain?'FIXTURE_DOMAIN':'VOLIBEAR_B02');
+      assert.equal(d.query(powers.exports.level,power),domain?10:11);assert.equal(d.frame().battle!.turn,0);
+      const f=phase==='player'?d.play('VOLIBEAR_C11',0):d.play('VOLIBEAR_B02');
+      assert.equal(d.query(powers.exports.level,power),domain?10:0);
+      assert.equal(f.battle!.monsters[0]!.strength,domain?0:2,'domain disables the entire Time Warp ability');
       assert.equal(f.battle!.turn,domain?0:1,'only the unsuppressed early-end operation ends the player turn');
       if(domain){
-        d.play('VOLIBEAR_B02');assert.equal(d.query(powers.exports.level,power),1);assert.equal(d.frame().battle!.monsters[0]!.strength,2);
+        d.play('VOLIBEAR_B02');assert.equal(d.query(powers.exports.level,power),10);assert.equal(d.frame().battle!.monsters[0]!.strength,0);
         assert.equal(d.frame().battle!.turn,0);d.act(END);
       }
       assert.equal(d.actions().length,1,'engaging on card 12 must not duplicate the normal enemy action');
@@ -71,8 +71,8 @@ for(const domain of [false,true])for(const phase of ['player','enemy'] as const)
       const run=d.query(adventures.exports.instances,undefined)[0]!,deck=d.query(adventures.exports.bindings,run).deck;
       const count=()=>d.query(permanentDecks.exports.view,deck).deck.filter(c=>c.id==='PARASITE').length,before=count();
       assert.equal(d.frame().battle!.intents![0]!.name,'WRITHING_MASS_IMPLANT');
-      if(domain)d.play('VOLIBEAR_U19');
-      if(phase==='player')d.play('VOLIBEAR_B04',0);else d.act(END);
+      if(domain)d.play('FIXTURE_DOMAIN');
+      if(phase==='player')d.play('VOLIBEAR_C11',0);else d.act(END);
       assert.equal(count(),before+(domain?0:1));assert.equal(d.actions().length,1);assert.equal(d.actions()[0]!.move,moveId.WRITHING_MASS_IMPLANT);
       assert.notEqual(d.frame().battle!.intents![0]!.name,'WRITHING_MASS_IMPLANT','AI advances even when the implant is suppressed');
       assert.equal(d.query(turns.exports.current,d.session().controller).phase,0);
@@ -85,9 +85,9 @@ for(const domain of [false,true])for(const phase of ['player','enemy'] as const)
     const d=driver('thieves',domain,{thiefSlot,thiefMove});
     try{
       const initial=d.frame(),controller=d.session().roster[thiefSlot]!.controller!,gold=initial.game.gold;
-      if(domain)d.play('VOLIBEAR_U19');
-      const hp=d.frame().battle!.player.hp,block=d.frame().battle!.player.block+(phase==='player'?7:0);
-      if(phase==='player')d.play('VOLIBEAR_B04',thiefSlot);else d.act(END);
+      if(domain)d.play('FIXTURE_DOMAIN');
+      const hp=d.frame().battle!.player.hp,block=d.frame().battle!.player.block+(phase==='player'?8:0);
+      if(phase==='player')d.play('VOLIBEAR_C11',thiefSlot);else d.act(END);
       const f=d.frame(),state=d.query(enemies.exports.current,controller),stolen=d.query(enemies.exports.presentation,controller).miscInfo;
       const attacks=Number(thiefMove==='mug')+Number(phase==='enemy');
       assert.equal(f.game.gold,gold-(domain?0:attacks*20));
@@ -112,12 +112,12 @@ for(const domain of [false,true])for(const phase of ['player','enemy'] as const)
     const d=driver('orb',domain,{fullHand});
     try{
       const s=d.session(),actor=s.roster[0]!.actor!,registry=d.query(battles.exports.status,s.battle).registry,piles=d.query(battles.exports.status,s.battle).piles;
-      if(phase==='player')d.play('VOLIBEAR_B04',0);else d.act(END);
+      if(phase==='player')d.play('VOLIBEAR_C11',0);else d.act(END);
       const power=d.query(powers.exports.find,{registry,actor,definition:bronzeOrb.exports.Stasis});assert.notEqual(power,null);
       const zone=d.query(bronzeOrb.exports.heldZone,power!)!,held=d.query(zones.exports.members,zone);assert.equal(held.length,1);
       const card=held[0]!,identity=d.query(cardInstances.exports.current,card).uniqueId;
       assert.ok(!d.query(cardPiles.exports.membership,piles).registered.includes(card));
-      if(domain)d.play('VOLIBEAR_U19');
+      if(domain)d.play('FIXTURE_DOMAIN');
       assert.equal(d.frame().battle!.domain!.active,domain);
       assert.deepEqual(d.query(zones.exports.members,zone),[card],'opening domain must preserve the stored card');
       assert.ok(d.query(combatStorageViews.exports.slots,registry).some(slot=>slot.zone===zone),'domain must not hide existing storage');
@@ -139,8 +139,8 @@ for(const domain of [false,true])for(const phase of ['player','enemy'] as const)
   test(`new Stasis remains suppressible while existing storage cleanup is unconditional; domain=${domain}, phase=${phase}`,()=>{
     const d=driver('orb',domain);
     try{
-      if(domain)d.play('VOLIBEAR_U19');
-      if(phase==='player')d.play('VOLIBEAR_B04',0);else d.act(END);
+      if(domain)d.play('FIXTURE_DOMAIN');
+      if(phase==='player')d.play('VOLIBEAR_C11',0);else d.act(END);
       const s=d.session(),power=d.query(powers.exports.find,{registry:d.query(battles.exports.status,s.battle).registry,actor:s.roster[0]!.actor!,definition:bronzeOrb.exports.Stasis});
       assert.equal(power===null,domain,'only new theft is suppressed, not the release hook');
       if(power!==null)assert.equal(d.query(zones.exports.members,d.query(bronzeOrb.exports.heldZone,power)!).length,1);
@@ -156,8 +156,8 @@ for(const domain of [false,true]){
         const initial=d.frame().battle!.monsters[0]!;
         assert.equal(initial.hp,100);assert.equal(initial.strength,-3);assert.equal(initial.weak,2);assert.equal(initial.vulnerable,2);
         assert.equal(d.frame().battle!.intents![0]!.name,scenario==='time'?'TIME_EATER_HASTE':'THE_CHAMP_ANGER');
-        if(domain){d.play('VOLIBEAR_U19');assert.equal(d.frame().battle!.domain!.active,true);}
-        const f=phase==='player'?d.play('VOLIBEAR_B04',0):d.act(END),enemy=f.battle!.monsters[0]!;
+        if(domain){d.play('FIXTURE_DOMAIN');assert.equal(d.frame().battle!.domain!.active,true);}
+        const f=phase==='player'?d.play('VOLIBEAR_C11',0):d.act(END),enemy=f.battle!.monsters[0]!;
         assert.equal(enemy.hp,scenario==='time'&&!domain?240:100,'only an unsuppressed Haste heals');
         if(domain){assert.ok(enemy.weak>0,'domain preserves Weak');assert.ok(enemy.vulnerable>0,'domain preserves Vulnerable');}
         else{assert.equal(enemy.weak,0);assert.equal(enemy.vulnerable,0);}
@@ -169,46 +169,46 @@ for(const domain of [false,true]){
     });
   }
 
-  test(`a pending Darkling revival stays atomic and resumes after domain expiry; domain=${domain}`,()=>{
+  test(`a pending Darkling revival is canceled by domain and otherwise remains atomic; domain=${domain}`,()=>{
     const d=driver('revive',domain);
     try{
       assert.equal(d.frame().battle!.domain!.active,false);
       const maxHp=d.frame().battle!.monsters[0]!.maxHp,controller=d.session().roster[0]!.controller!;
       d.play('VOLIBEAR_B01',0);d.act(END);
       assert.equal(d.frame().battle!.domain!.active,domain);
-      assert.equal(d.query(enemies.exports.current,controller).halfDead,true);
-      assert.equal(d.frame().battle!.intents!.find(i=>i.index===0)!.name,'DARKLING_REINCARNATE');
+      assert.equal(d.query(enemies.exports.current,controller).halfDead,!domain);
+      if(!domain)assert.equal(d.frame().battle!.intents!.find(i=>i.index===0)!.name,'DARKLING_REINCARNATE');
       d.act(END);
       if(domain){
-        const f=d.frame();assert.equal(f.battle!.monsters[0]!.hp,0);assert.equal(d.query(enemies.exports.current,controller).halfDead,true);
+        const f=d.frame();assert.equal(f.battle!.monsters[0]!.hp,0);assert.equal(d.query(enemies.exports.current,controller).halfDead,false);
         assert.equal(f.battle!.monsters[0]!.strength,0,'suppressed revival does not partially initialize powers');
         assert.ok(!presentDecision(observe(f),f.actions).actions.some(a=>a.kind==='play-card'&&a.details.target===0));
         assert.equal(f.battle!.domain!.active,false);d.act(END);
       }
-      assert.equal(d.frame().battle!.monsters[0]!.hp,Math.trunc(maxHp/2));
+      assert.equal(d.frame().battle!.monsters[0]!.hp,domain?0:Math.trunc(maxHp/2));
       assert.equal(d.query(enemies.exports.current,controller).halfDead,false);
-      assert.ok(d.actions().some(a=>a.enemy===controller&&a.move===moveId.DARKLING_REINCARNATE));
+      assert.equal(d.actions().some(a=>a.enemy===controller&&a.move===moveId.DARKLING_REINCARNATE),!domain);
     }finally{d.close();}
   });
 
   test(`Darkling Harden keeps both independent strength and block; domain=${domain}`,()=>{
     const d=driver('harden',domain);
     try{
-      if(domain)d.play('VOLIBEAR_U19');
-      const f=d.play('VOLIBEAR_B04',0),enemy=f.battle!.monsters[0]!;
+      if(domain)d.play('FIXTURE_DOMAIN');
+      const f=d.play('VOLIBEAR_C11',0),enemy=f.battle!.monsters[0]!;
       assert.equal(enemy.strength,2);assert.equal(enemy.block,12);assert.equal(enemy.hp,1);
     }finally{d.close();}
   });
 }
 
 for(const domain of [false,true])for(const scenario of ['boss','acid','spike'] as const)for(const phase of ['player','enemy'] as const){
-  test(`${scenario} split during ${phase} phase preserves health, slots and next-round opportunities; domain=${domain}`,()=>{
+  test(`${scenario} split preserves health and slots outside domain and is terminally canceled inside domain (${phase}); domain=${domain}`,()=>{
     const d=driver(scenario,domain);
     try{
       const initial=d.frame(),parent=d.session().roster[0]!.controller!;
       assert.equal(initial.battle!.monsters[0]!.hp,20);
-      if(domain)d.play('VOLIBEAR_U19');
-      let f=phase==='player'?d.play('VOLIBEAR_B04',0):d.act(END);
+      if(domain)d.play('FIXTURE_DOMAIN');
+      let f=phase==='player'?d.play('VOLIBEAR_C11',0):d.act(END);
       if(domain){
         assert.equal(d.session().roster.filter(e=>e.controller!==null).length,1,'domain blocks split deployment');
         assert.equal(d.session().roster[0]!.controller,parent);assert.equal(f.battle!.monsters[0]!.hp,20);
@@ -216,6 +216,9 @@ for(const domain of [false,true])for(const scenario of ['boss','acid','spike'] a
         if(phase==='player'){d.act(END);assert.equal(d.actions().length,1,'engaged parent must not act twice');}
         assert.equal(d.frame().battle!.domain!.active,false);
         f=d.act(END);
+        assert.equal(d.session().roster.filter(e=>e.controller!==null).length,1,'a canceled split cannot resume after domain expiry');
+        assert.equal(d.session().roster[0]!.controller,parent);
+        return;
       }
       const splitActions=domain?2:1,playerSplit=phase==='player'&&!domain;
       const s=d.session(),children=s.roster.flatMap((e,index)=>e.controller===null?[]:[{...e,index}]);
@@ -234,7 +237,7 @@ for(const domain of [false,true])for(const scenario of ['boss','acid','spike'] a
       const targets=f.actions.filter(a=>a.bits>>>29===0&&f.battle!.hand[a.bits&65535]?.id==='VOLIBEAR_B01').map(a=>(a.bits>>>16)&8191);
       if(playerSplit)assert.deepEqual(targets,children.map(c=>c.index));
       if(playerSplit){
-        d.play('VOLIBEAR_B04',children[0]!.index);
+        d.play('VOLIBEAR_C11',children[0]!.index);
         assert.equal(d.actions().length,1,'repeated engage must not grant a claimed child an action');
         d.act(END);
         assert.equal(d.actions().length,1,'children skip the remaining enemy phase of their creation round');
@@ -259,7 +262,7 @@ test('a killed enemy loses its intent without changing the surviving target slot
     const text=formatDecision(observe(f),presentDecision(observe(f),f.actions));
     assert.match(text,/敌人\[0\].*意图 无/);
     const hp=b.monsters[1]!.hp;
-    d.play('VOLIBEAR_B04',1);
+    d.play('VOLIBEAR_C11',1);
     assert.deepEqual(d.actions().map(a=>a.enemy),[d.session().roster[1]!.controller!]);
     assert.equal(d.frame().battle!.monsters[1]!.hp,hp,'targeting slot 1 still engages the survivor');
   }finally{d.close();}
@@ -298,7 +301,7 @@ test('restoring the controlled Context after an engage split preserves child act
   let restored:typeof parent|undefined;
   try{
     unwrap(await bind(parent));unwrap(await parent.run());
-    const f=await view(parent),card=f.battle!.hand.findIndex(c=>c.id==='VOLIBEAR_B04');
+    const f=await view(parent),card=f.battle!.hand.findIndex(c=>c.id==='VOLIBEAR_C11');
     assert.notEqual(card,-1);unwrap(await bind(parent,card));unwrap(await parent.run());
     const split=await view(parent);assert.deepEqual(split.battle!.monsters.filter(m=>m.hp>0).map(m=>m.hp),[20,20]);
     const snapshot=unwrap(await loaded.persistence!.save(parent));await parent.close();

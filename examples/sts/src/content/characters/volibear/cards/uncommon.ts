@@ -50,7 +50,7 @@ export const volibearUncommonCards=rules.defineRules({requires:[volibearS2Powers
   return {exports:{
     StormReturns:card(cards.U11,queued(volibearRepeat.exports.prepare)),
     StormConduction:card(cards.U02,compose(thunder([6,9]),queued(volibearS2Powers.exports.deployConduction))),
-    Standing:card(cards.U03,compose(block([8,12]),queued(deployPower(volibearStanding.exports.programs.Standing,[12,8])))),
+    Standing:card(cards.U03,compose(block([8,12]),queued(deployPower(volibearStanding.exports.programs.Standing,[6,3])))),
     MountainLift:card(cards.U05,attack(describeAmount((v:rules.ReadView<CardUse>)=>v.get(rules.query(resources.exports.current,v.input.owner)).block,'当前格挡（不消耗格挡）'),1,false,false)),
     SavageBite:card(cards.U06,attack([8,11],3)),
     MountainCollapse:card(cards.U07,attack([28,36]),{created:describeProgram(registerCardAbilities(mountainDiscount),'本回合此前对该目标每打出一张攻击减费1，最终费用不低于0。')}),

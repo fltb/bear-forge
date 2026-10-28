@@ -96,7 +96,7 @@ export const volibearS2Powers=rules.defineRules({requires:[cardEffects,volibearN
     deployScars:deploy('战痕','每实例每回合首次迎战后，获得指定力量与1雷势。',[1,2],[scars]),
     deployFury:deploy('愈战愈烈','每实例每回合第2张实际攻击支付后、牌效前，获得指定力量及雷势。',[1,2],[fury]),
     deployAftershock:deploy('雷霆余威','每实例在本回合第2、4、6…次雷伤后获得1能量，不限触发次数；部署时本回合已有至少2次雷伤，立即获得1能量。',1,[aftershock],aftershockDeploy),
-    deployArmor:deploy('雷甲','每次雷伤后，获得指定格挡。',[2,3],[armor]),
+    deployArmor:deploy('雷甲','每次雷伤后，获得指定格挡。',[3,4],[armor]),
     deployWelcome:deploy('迎雷','每实例每回合首次迎战后，下一张攻击本回合减指定费用。',[1,2],[onEngage(coupon)]),
     deployLingering:deploy('风暴不散','每次迎战后抽1张牌并延长领域1轮。',1,[onEngage(drawAndExtend,false)]),
     deployPool:deploy('雷池','回合结束及每实例每回合首次迎战后，造成指定全体雷伤。',[4,6],[endPool,onEngage(strike),poolContinues]),

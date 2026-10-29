@@ -1,6 +1,6 @@
 import type { Component } from './rules-module.types.ts';
 import {cancelTask} from './rules-tasks.ts';
-import { indexEntity, unindexEntity, removeRegistration } from './rules-indexes.ts';
+import { indexEntity, unindexEntity, removeRegistration, indexIds } from './rules-indexes.ts';
 import { card } from './card.ts';
 import { ownRuleValue } from './rules-values.ts';
 import { definitions,handle,statements,freezeAuthorInput,expression } from './rules-internal.ts';
@@ -77,8 +77,8 @@ export function despawnEntity(spec:{entity:Input<number>;reason:Input<unknown>})
     card.branch(s=>s.locals.removing.dispose!==null,[card.operation(s=>{stateOf(s.state).sources.push(s.input.entity);}),card.invoke(s=>s.locals.removing.dispose,s=>({entity:s.input.entity,owner:s.locals.removing.owner,scope:s.locals.removing.scope,reason:ownRuleValue(s.input.reason)})),card.operation(s=>{if(stateOf(s.state).sources.pop()!==s.input.entity)throw Error('Invalid entity source stack');})]),
     card.operation(s=>{
       const state=stateOf(s.state);
-      for(const id of [...(state.indexes.registrationsBySource[s.input.entity]??[])])removeRegistration(state,link.bindings,id);
-      for(const id of [...(state.indexes.tasksBySource[s.input.entity]??[])]){const task=state.tasks[id]!;if((task.source===s.input.entity&&task.eligible==='source-present')||(task.effect.source===s.input.entity&&task.effect.selector!==null))cancelTask(state,task.id);}
+      for(const id of indexIds(state.indexes.registrationsBySource,s.input.entity))removeRegistration(state,link.bindings,id);
+      for(const id of indexIds(state.indexes.tasksBySource,s.input.entity)){const task=state.tasks[id]!;if((task.source===s.input.entity&&task.eligible==='source-present')||(task.effect.source===s.input.entity&&task.effect.selector!==null))cancelTask(state,task.id);}
       unindexEntity(state,s.input.entity);
       delete state.entities[s.input.entity];
     }),card.return(()=>true),

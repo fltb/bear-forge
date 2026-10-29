@@ -21,6 +21,21 @@ test('property traversal retains insertion order after branch-local deletion and
   assert.deepEqual(keys,['b','c','a']);assert.deepEqual(values,[2,3,4]);assert.deepEqual([...store.entries()],[['a',1],['b',2]]);
 });
 
+test('repeated property overwrites preserve independent writers and insertion order across forks',()=>{
+  const parent=new CowProperties<number>();
+  for(let i=0;i<96;i++)parent.set('key'+i,i);
+  const child=parent.fork(),sibling=parent.fork();
+  for(let i=0;i<128;i++){parent.set('key0',i);child.set('key0',-i);sibling.set('key95',1000+i);}
+  assert.equal(parent.get('key0'),127);assert.equal(child.get('key0'),-127);assert.equal(sibling.get('key0'),0);
+  assert.equal(parent.get('key95'),95);assert.equal(child.get('key95'),95);assert.equal(sibling.get('key95'),1127);
+  const grandchild=child.fork();child.set('key0',7);grandchild.set('key0',8);
+  grandchild.delete('key1');grandchild.set('key1',9);
+  assert.equal(child.get('key0'),7);assert.equal(grandchild.get('key0'),8);
+  assert.deepEqual([...child.entries()].map(([key])=>key),Array.from({length:96},(_,i)=>'key'+i));
+  assert.deepEqual([...grandchild.entries()].slice(-2),[['key95',95],['key1',9]]);
+  assert.equal(child.get('key1'),1);assert.equal(parent.get('key1'),1);
+});
+
 test('resumable cursors honor sparse lower bounds and deletion without per-entry result objects',()=>{
   const store=new CowStore<string>(),keys=[0,31,32,1024,2**30,2**45,Number.MAX_SAFE_INTEGER];
   for(const key of keys)store.set(key,String(key));

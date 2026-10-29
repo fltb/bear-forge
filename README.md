@@ -119,6 +119,32 @@ npm run check --workspace @bear-forge/sts
 
 作者程序及传递依赖使用严格 ES Module；`.js`/`.ts` 按 ESM 解析，CommonJS 和 Script 输入在准入阶段拒绝。测试输出直接显示，不提交运行日志或验收报告。构建产物在 `build/`，演示与实验输出由 `--output` 指定，均为业务产物，不提交 Git。
 
+## 卡牌内核性能复现
+
+以下入口只运行专用 Card Core 和原 STS 规则。每个样本创建新的 Context，动作取自当次合法选项；不读取动作带，不恢复封存搜索。使用同一 Node 24 版本，交错运行两个提交的独立工作树，避免并发测试干扰计时。
+
+```sh
+# 几何规模：数组、替换链、事件环境、FX/Query、FIFO 任务
+npm run performance:kernel -w @bear-forge/runtime-card -- --case all
+
+# 原战斗路径的压力夹具；每个角色用独立进程对照
+npm run performance:kernel -w @bear-forge/sts -- --workload combat --character ironclad --warmup 5 --samples 7
+npm run performance:kernel -w @bear-forge/sts -- --workload combat --character volibear --warmup 5 --samples 7
+
+# 正常开局经过完整生产 BaseGame，启用玩家展示事件，运行到真实死亡或胜利
+npm run performance:kernel -w @bear-forge/sts -- --workload run --lane basegame --detailed-events
+
+# 单独核对全部公开请求、事件与最终输出；此模式不作为性能分数
+npm run performance:kernel -w @bear-forge/sts -- --workload combat --verify --samples 1 --warmup 0
+
+# 预热后采样新 Context 样本（含初始化、执行和关闭）；不作为性能分数
+npm run performance:kernel -w @bear-forge/sts -- --workload combat --character ironclad --profile /tmp/sts-kernel.cpuprofile
+```
+
+内核微基准的 `--size` 支持逗号分隔规模；`--samples`、`--warmup` 调整独立样本数。`fx-query` 测标量调用，`fx-record` 测有 schema 的对象参数和结果；事件捕获可用 `--listeners`、`--events` 分别改变监听器和事件数。STS `combat` 复用已有高生命战斗夹具（9990/10000 HP），默认 Chosen＋Cultist；`--encounter TIME_EATER` 可测另一种原规则。该压力夹具不代表正常初始生命的胜率。`run` 使用工程合法动作策略，死亡同样是真实终局，不是通关质量评估。初始化、后续执行和关闭分别计时；公开边界哈希与指令数用于确认可比工作量，微基准倍率不能当作整局倍率。
+
+STS 输出保留每个样本的墙钟与进程 CPU 用时；后者包含 GC 工作线程，不能当作主线程墙钟。峰值 RSS 覆盖装配、预热及全部样本，`heapUsed` 未强制 GC，均不能解释为单场战斗的净分配量。`--profile` 只接受一个角色，预热后才开始采样，窗口包含新 Context 初始化、执行、最终哈希、关闭及汇总输出，排除 Program 装配和预热；它不是严格的 execute-only profile，输出的 `profileScope` 说明此边界，并明确标记计时无效。排查停顿可另加 Node 的 `--trace-gc-nvp`、`--trace-deopt`，不要把这些诊断运行当作速度分数。BaseGame 基准也不包含完整 TUI 的调度、自动存档与终端渲染。
+
 ## 文档
 
 全部文档的分类索引（框架通用／STS 专属／历史归档）见 [docs/README.md](docs/README.md)。最短阅读路径：本页 → [项目介绍](docs/project-overview.md) → [需求](docs/requirements.md)／[架构](docs/architecture.md)／[协议](docs/protocol.md) → 按任务读规格文档 → [当前进度](docs/plan.md)。

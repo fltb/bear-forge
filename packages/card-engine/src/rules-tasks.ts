@@ -1,6 +1,6 @@
 import {card} from './card.ts';
 import {ownRuleValue} from './rules-values.ts';
-import { indexTask, removeTask, removeIndex } from './rules-indexes.ts';
+import { indexTask, removeTask, removeIndex, indexIds } from './rules-indexes.ts';
 import { createDeque, appendDeque, removeDeque, takeDeque } from './rules-deque.ts';
 import {definitions,expressions,handle,statements,expression,freezeAuthorInput} from './rules-internal.ts';
 import {staticDefinitions,declareStatic,stateOf} from './rules-module-internal.ts';
@@ -173,7 +173,7 @@ export function resumeTaskGroup<I>(queue:RuleQueue,tasks:Input<number[]>,input:I
   return runTaskGroup(queue,activate,{tasks,input},guard);
 }
 export function captureScheduled(event:number,payload:unknown,world:unknown,bindings:ModuleBindings,overlay?:ComponentOverlay):number[]{
-  const state=stateOf(world);return (state.indexes.tasksByEvent[event]??[]).filter(id=>{
+  const state=stateOf(world);return indexIds(state.indexes.tasksByEvent,event).filter(id=>{
     const task=state.tasks[id]!;
     const scope=state.scopes[task.lifetime];if(!scope||scope.phase==='closed')return false;
     if(task.eligible==='source-present'&&!validSource(state,task.source))return false;

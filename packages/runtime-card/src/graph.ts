@@ -81,6 +81,9 @@ const numeric = (key: string): number | undefined => {
   return value < 0xffffffff ? value : undefined;
 };
 const fields = (): Record<string, Value> => Object.create(null);
+// Numeric pages have a null prototype and at most 64 own fields. Stop at the
+// first retained field instead of allocating a complete key array per delete.
+const emptyFields = (values: Record<string, Value>): boolean => { for (const _key in values) return false; return true; };
 const clone = (row: Row): Row => ({ ...row, props: row.props.fork(), pages: row.pages?.fork() ?? null });
 
 /** Branch-local views of data identities; shared nodes contain no live proxies. */
@@ -191,7 +194,9 @@ export class CardGraph<T> {
     const array = Array.isArray(value), proto = Object.getPrototypeOf(value);
     if (!array && proto !== null && proto !== Object.prototype) throw TypeError('Non-data card object');
     if (array && proto !== Array.prototype) throw TypeError('Non-standard card array');
-    const id = this.identity.next++, row: Row = { array, nullPrototype: savedNull||proto === null, length: array ? value.length : 0, props: new CowProperties(), pages: new CowStore() };
+    // Named records and hole-only arrays need no numeric store until their
+    // first indexed write. A later fork also avoids copying an unused store.
+    const id = this.identity.next++, row: Row = { array, nullPrototype: savedNull||proto === null, length: array ? value.length : 0, props: new CowProperties(), pages: null };
     const reference = {ref:id};
     this.identity.originals.set(value, reference); this.rows.set(id, row); this.shade(reference);
     for (const key of Reflect.ownKeys(value)) {
@@ -205,11 +210,13 @@ export class CardGraph<T> {
   }
   private get(row: Row, key: string): Value {
     const index = numeric(key);
-    return index === undefined ? row.props.get(key) : row.pages!.get(Math.floor(index / pageWidth))?.[key];
+    return index === undefined ? row.props.get(key) : row.pages?.get(Math.floor(index / pageWidth))?.[key];
   }
   private has(row: Row, key: string): boolean {
     const index = numeric(key);
-    return index === undefined ? row.props.has(key) : Object.hasOwn(row.pages!.get(Math.floor(index / pageWidth)) ?? {}, key);
+    if(index===undefined)return row.props.has(key);
+    const page=row.pages?.get(Math.floor(index/pageWidth));
+    return page!==undefined&&Object.hasOwn(page,key);
   }
   private put(row: Row, key: string, value: Value): void {
     this.cleanImage=null;
@@ -218,9 +225,9 @@ export class CardGraph<T> {
     const index = numeric(key);
     if (index === undefined) row.props.set(key,value);
     else {
-      const page = Math.floor(index / pageWidth);
-      if (!row.pages!.has(page)) row.pages!.set(page, fields());
-      row.pages!.edit(page, value => Object.assign(fields(), value))[key] = value;
+      const page = Math.floor(index / pageWidth), pages = row.pages ??= new CowStore();
+      if (!pages.has(page)) pages.set(page, fields());
+      pages.edit(page, value => Object.assign(fields(), value))[key] = value;
       if(row.array)row.length = Math.max(row.length, index + 1);
     }
   }
@@ -253,13 +260,35 @@ export class CardGraph<T> {
         const current = writable();
         if (current.array && key === 'length') {
           if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) throw RangeError('Invalid array length');
-          if (value < current.length) current.pages!.forEach((_values, page) => {
-            if (page * pageWidth >= value) current.pages!.delete(page);
-            else if ((page + 1) * pageWidth > value) {
-              const values = current.pages!.edit(page, values => Object.assign(fields(), values));
-              for (const name of Object.keys(values)) if (Number(name) >= value) delete values[name];
+          if (value < current.length && current.pages) {
+            const pages=current.pages;
+            if(value===0)pages.clear();
+            else if(value===current.length-1){
+              // Shrinking by one can discard only this index. Array.pop has
+              // already deleted it, so that path needs neither edits nor a cursor.
+              const page=Math.floor(value/pageWidth),retained=pages.get(page);
+              if(retained&&Object.hasOwn(retained,value)){
+                const values=pages.edit(page,values=>Object.assign(fields(),values));delete values[value];
+                if(emptyFields(values))pages.delete(page);
+              }
             }
-          });
+            else {
+              // Start at the truncation boundary. Scanning the retained prefix
+              // on every pop made draining N items quadratic in page count.
+              // The radix cursor skips holes, including huge sparse arrays;
+              // removing its current entry does not invalidate its traversal.
+              const cursor=pages.cursor(Math.floor(value/pageWidth));
+              while(cursor.advance()){
+                const page=cursor.key;
+                if(page*pageWidth>=value)pages.delete(page);
+                else {
+                  const values=pages.edit(page,values=>Object.assign(fields(),values));
+                  for(const name of Object.keys(values))if(Number(name)>=value)delete values[name];
+                  if(emptyFields(values))pages.delete(page);
+                }
+              }
+            }
+          }
           current.length = value;
         } else graph.put(current, key, graph.encode(value));
         return true;
@@ -268,13 +297,21 @@ export class CardGraph<T> {
         if (typeof key !== 'string' || key === 'length' && row().array) return false;
         const current = writable(), index = numeric(key);
         if (index === undefined) current.props.delete(key);
-        else { const page = Math.floor(index / pageWidth); if (current.pages!.has(page)) delete current.pages!.edit(page, values => Object.assign(fields(), values))[key]; }
+        else {
+          const pages=current.pages,page=Math.floor(index/pageWidth);
+          if(pages?.has(page)){
+            const values=pages.edit(page,values=>Object.assign(fields(),values));delete values[key];
+            // Monotonic identity tables must not retain one empty page for
+            // every historical group of IDs while a few entries remain live.
+            if(emptyFields(values))pages.delete(page);
+          }
+        }
         return true;
       },
       has(_target, key) { return typeof key === 'string' && (key === 'length' && row().array || graph.has(row(), key)) || !row().nullPrototype && key in (row().array ? Array.prototype : Object.prototype); },
       ownKeys() {
         const current = row(), result: string[] = [];
-        current.pages!.forEach(values => result.push(...Object.keys(values)));
+        current.pages?.forEach(values => result.push(...Object.keys(values)));
         if(current.array)result.push('length');
         current.props.forEach((_value,key)=>result.push(key)); return result;
       },
@@ -332,7 +369,7 @@ export class CardGraph<T> {
       }
       return true;
     };
-    const entries=(row:Row):[string,Value][]=>{const out:[string,Value][]=[];row.pages!.forEach(values=>{for(const key of Object.keys(values))out.push([key,values[key]!]);});row.props.forEach((value,key)=>out.push([key,value]));return out;};
+    const entries=(row:Row):[string,Value][]=>{const out:[string,Value][]=[];row.pages?.forEach(values=>{for(const key of Object.keys(values))out.push([key,values[key]!]);});row.props.forEach((value,key)=>out.push([key,value]));return out;};
     while(pending.length){
       if((visited++&255)===0)check();const [a,b]=pending.pop()!;
       if(a===null||b===null||typeof a!=='object'||typeof b!=='object'){if(!Object.is(a,b))return false;continue;}
@@ -343,7 +380,7 @@ export class CardGraph<T> {
       if(left===right){
         // Shared rows can still point at independently changed descendants.
         const visit=(value:Value)=>{if(value!==null&&typeof value==='object')pending.push([value,value]);};
-        left.pages!.forEach(values=>{for(const value of Object.values(values))visit(value);});left.props.forEach(visit);continue;
+        left.pages?.forEach(values=>{for(const value of Object.values(values))visit(value);});left.props.forEach(visit);continue;
       }
       if(left.array!==right.array||left.nullPrototype!==right.nullPrototype||left.length!==right.length)return false;
       const x=entries(left),y=entries(right);if(x.length!==y.length)return false;
@@ -394,7 +431,7 @@ export class CardGraph<T> {
         if (row.array && !plainArrayBase || (!row.nullPrototype||nullPrototypes) && key in inherited) Object.defineProperty(out, key, { value: item, writable: true, configurable: true, enumerable: true });
         else out[key] = item;
       };
-      row.pages!.forEach(values => { for (const key of Object.keys(values)) put(key, values[key]!); });
+      row.pages?.forEach(values => { for (const key of Object.keys(values)) put(key, values[key]!); });
       row.props.forEach((value,key)=>put(key,value));
       return out;
     };
@@ -451,7 +488,7 @@ export class CardGraph<T> {
         if (row.array && !plainArrayBase || key in inherited) Object.defineProperty(out, key, { value: item, writable: true, configurable: true, enumerable: true });
         else out[key] = item;
       };
-      row.pages!.forEach(values => { for (const key of Object.keys(values)) { indexed++; put(key, values[key]!); } });
+      row.pages?.forEach(values => { for (const key of Object.keys(values)) { indexed++; put(key, values[key]!); } });
       row.props.forEach((value,key)=>put(key,value));
       const localDense = !row.array || indexed === row.length && row.props.size === 0;
       publication.add(out, localDense);

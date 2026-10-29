@@ -4,6 +4,7 @@ import { expressions,definitions } from './rules-internal.ts';
 import type { AnyEffect } from './rules-internal.ts';
 import { staticDefinitions,authorities } from './rules-module-internal.ts';
 import type { ModuleBindings } from './rules-module-internal.ts';
+import { createIndex } from './rules-indexes.ts';
 /** Structural identity augments, rather than replaces, the caller's frozen implementation identity. */
 export function ruleLayoutIdentity(id:string,bindings:ModuleBindings,names:ReadonlyMap<AnyEffect,string>,trees:readonly unknown[],locals:ReadonlyMap<object,string>):string{
   const seen=new Map<object,number>();
@@ -30,5 +31,7 @@ export function ruleLayoutIdentity(id:string,bindings:ModuleBindings,names:Reado
       metadata.kind==='entity'?encode(metadata.config):null];
   });
   const effects=[...names].map(([effect,name])=>{const metadata=definitions.get(effect)!;return[name,metadata.kind,metadata.kind==='author'?metadata.build.toString():metadata.kind==='port'?metadata.port:metadata.kind==='bound'?[metadata.bind.toString(),encode(metadata.layout),encode(atomProbabilityFor(effect))]:metadata.lower.toString()];});
-  return id+'/'+layoutDigest(JSON.stringify({statics,effects,trees:trees.map(encode),lifecycles:bindings.lifecycles.map(encode)}));
+  // Internal physical state is part of the frozen Program as well. Author
+  // bodies alone cannot distinguish a changed representation in shared helpers.
+  return id+'/'+layoutDigest(JSON.stringify({indexLayout:createIndex(),statics,effects,trees:trees.map(encode),lifecycles:bindings.lifecycles.map(encode)}));
 }

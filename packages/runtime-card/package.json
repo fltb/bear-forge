@@ -16,6 +16,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "performance:kernel": "node --experimental-strip-types tests/kernel-benchmark.ts",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check": "npm run typecheck && npm test",
     "test:probability": "node --experimental-strip-types --test tests/probability.test.ts tests/probability-expansion.test.ts tests/current-loader.test.ts tests/scheduling.test.ts tests/architecture.test.ts tests/execution-blocks.test.ts tests/persistence.test.ts tests/boundary.test.ts tests/immutable-blocks.test.ts tests/typed-entities.test.ts"

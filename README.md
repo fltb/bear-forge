@@ -137,13 +137,13 @@ npm run performance:kernel -w @bear-forge/sts -- --workload run --lane basegame 
 # 单独核对全部公开请求、事件与最终输出；此模式不作为性能分数
 npm run performance:kernel -w @bear-forge/sts -- --workload combat --verify --samples 1 --warmup 0
 
-# 预热后采样执行阶段，避开装配；profile 结果不作为性能分数
+# 预热后采样新 Context 样本（含初始化、执行和关闭）；不作为性能分数
 npm run performance:kernel -w @bear-forge/sts -- --workload combat --character ironclad --profile /tmp/sts-kernel.cpuprofile
 ```
 
 内核微基准的 `--size` 支持逗号分隔规模；`--samples`、`--warmup` 调整独立样本数。`fx-query` 测标量调用，`fx-record` 测有 schema 的对象参数和结果；事件捕获可用 `--listeners`、`--events` 分别改变监听器和事件数。STS `combat` 复用已有高生命战斗夹具（9990/10000 HP），默认 Chosen＋Cultist；`--encounter TIME_EATER` 可测另一种原规则。该压力夹具不代表正常初始生命的胜率。`run` 使用工程合法动作策略，死亡同样是真实终局，不是通关质量评估。初始化、后续执行和关闭分别计时；公开边界哈希与指令数用于确认可比工作量，微基准倍率不能当作整局倍率。
 
-STS 输出保留每个样本的墙钟与进程 CPU 用时；后者包含 GC 工作线程，不能当作主线程墙钟。峰值 RSS 覆盖装配、预热及全部样本，`heapUsed` 未强制 GC，均不能解释为单场战斗的净分配量。`--profile` 只接受一个角色，预热后才开始采样，并明确标记计时无效；排查停顿可另加 Node 的 `--trace-gc-nvp`、`--trace-deopt`，不要把这些诊断运行当作速度分数。
+STS 输出保留每个样本的墙钟与进程 CPU 用时；后者包含 GC 工作线程，不能当作主线程墙钟。峰值 RSS 覆盖装配、预热及全部样本，`heapUsed` 未强制 GC，均不能解释为单场战斗的净分配量。`--profile` 只接受一个角色，预热后才开始采样，窗口包含新 Context 初始化、执行、最终哈希、关闭及汇总输出，排除 Program 装配和预热；它不是严格的 execute-only profile，输出的 `profileScope` 说明此边界，并明确标记计时无效。排查停顿可另加 Node 的 `--trace-gc-nvp`、`--trace-deopt`，不要把这些诊断运行当作速度分数。BaseGame 基准也不包含完整 TUI 的调度、自动存档与终端渲染。
 
 ## 文档
 

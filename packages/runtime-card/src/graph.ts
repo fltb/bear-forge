@@ -194,7 +194,9 @@ export class CardGraph<T> {
     const array = Array.isArray(value), proto = Object.getPrototypeOf(value);
     if (!array && proto !== null && proto !== Object.prototype) throw TypeError('Non-data card object');
     if (array && proto !== Array.prototype) throw TypeError('Non-standard card array');
-    const id = this.identity.next++, row: Row = { array, nullPrototype: savedNull||proto === null, length: array ? value.length : 0, props: new CowProperties(), pages: new CowStore() };
+    // Named records and hole-only arrays need no numeric store until their
+    // first indexed write. A later fork also avoids copying an unused store.
+    const id = this.identity.next++, row: Row = { array, nullPrototype: savedNull||proto === null, length: array ? value.length : 0, props: new CowProperties(), pages: null };
     const reference = {ref:id};
     this.identity.originals.set(value, reference); this.rows.set(id, row); this.shade(reference);
     for (const key of Reflect.ownKeys(value)) {
@@ -208,11 +210,13 @@ export class CardGraph<T> {
   }
   private get(row: Row, key: string): Value {
     const index = numeric(key);
-    return index === undefined ? row.props.get(key) : row.pages!.get(Math.floor(index / pageWidth))?.[key];
+    return index === undefined ? row.props.get(key) : row.pages?.get(Math.floor(index / pageWidth))?.[key];
   }
   private has(row: Row, key: string): boolean {
     const index = numeric(key);
-    return index === undefined ? row.props.has(key) : Object.hasOwn(row.pages!.get(Math.floor(index / pageWidth)) ?? {}, key);
+    if(index===undefined)return row.props.has(key);
+    const page=row.pages?.get(Math.floor(index/pageWidth));
+    return page!==undefined&&Object.hasOwn(page,key);
   }
   private put(row: Row, key: string, value: Value): void {
     this.cleanImage=null;
@@ -221,9 +225,9 @@ export class CardGraph<T> {
     const index = numeric(key);
     if (index === undefined) row.props.set(key,value);
     else {
-      const page = Math.floor(index / pageWidth);
-      if (!row.pages!.has(page)) row.pages!.set(page, fields());
-      row.pages!.edit(page, value => Object.assign(fields(), value))[key] = value;
+      const page = Math.floor(index / pageWidth), pages = row.pages ??= new CowStore();
+      if (!pages.has(page)) pages.set(page, fields());
+      pages.edit(page, value => Object.assign(fields(), value))[key] = value;
       if(row.array)row.length = Math.max(row.length, index + 1);
     }
   }
@@ -256,8 +260,8 @@ export class CardGraph<T> {
         const current = writable();
         if (current.array && key === 'length') {
           if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) throw RangeError('Invalid array length');
-          if (value < current.length) {
-            const pages=current.pages!;
+          if (value < current.length && current.pages) {
+            const pages=current.pages;
             if(value===0)pages.clear();
             else if(value===current.length-1){
               // Shrinking by one can discard only this index. Array.pop has
@@ -294,8 +298,8 @@ export class CardGraph<T> {
         const current = writable(), index = numeric(key);
         if (index === undefined) current.props.delete(key);
         else {
-          const pages=current.pages!,page=Math.floor(index/pageWidth);
-          if(pages.has(page)){
+          const pages=current.pages,page=Math.floor(index/pageWidth);
+          if(pages?.has(page)){
             const values=pages.edit(page,values=>Object.assign(fields(),values));delete values[key];
             // Monotonic identity tables must not retain one empty page for
             // every historical group of IDs while a few entries remain live.
@@ -307,7 +311,7 @@ export class CardGraph<T> {
       has(_target, key) { return typeof key === 'string' && (key === 'length' && row().array || graph.has(row(), key)) || !row().nullPrototype && key in (row().array ? Array.prototype : Object.prototype); },
       ownKeys() {
         const current = row(), result: string[] = [];
-        current.pages!.forEach(values => result.push(...Object.keys(values)));
+        current.pages?.forEach(values => result.push(...Object.keys(values)));
         if(current.array)result.push('length');
         current.props.forEach((_value,key)=>result.push(key)); return result;
       },
@@ -365,7 +369,7 @@ export class CardGraph<T> {
       }
       return true;
     };
-    const entries=(row:Row):[string,Value][]=>{const out:[string,Value][]=[];row.pages!.forEach(values=>{for(const key of Object.keys(values))out.push([key,values[key]!]);});row.props.forEach((value,key)=>out.push([key,value]));return out;};
+    const entries=(row:Row):[string,Value][]=>{const out:[string,Value][]=[];row.pages?.forEach(values=>{for(const key of Object.keys(values))out.push([key,values[key]!]);});row.props.forEach((value,key)=>out.push([key,value]));return out;};
     while(pending.length){
       if((visited++&255)===0)check();const [a,b]=pending.pop()!;
       if(a===null||b===null||typeof a!=='object'||typeof b!=='object'){if(!Object.is(a,b))return false;continue;}
@@ -376,7 +380,7 @@ export class CardGraph<T> {
       if(left===right){
         // Shared rows can still point at independently changed descendants.
         const visit=(value:Value)=>{if(value!==null&&typeof value==='object')pending.push([value,value]);};
-        left.pages!.forEach(values=>{for(const value of Object.values(values))visit(value);});left.props.forEach(visit);continue;
+        left.pages?.forEach(values=>{for(const value of Object.values(values))visit(value);});left.props.forEach(visit);continue;
       }
       if(left.array!==right.array||left.nullPrototype!==right.nullPrototype||left.length!==right.length)return false;
       const x=entries(left),y=entries(right);if(x.length!==y.length)return false;
@@ -427,7 +431,7 @@ export class CardGraph<T> {
         if (row.array && !plainArrayBase || (!row.nullPrototype||nullPrototypes) && key in inherited) Object.defineProperty(out, key, { value: item, writable: true, configurable: true, enumerable: true });
         else out[key] = item;
       };
-      row.pages!.forEach(values => { for (const key of Object.keys(values)) put(key, values[key]!); });
+      row.pages?.forEach(values => { for (const key of Object.keys(values)) put(key, values[key]!); });
       row.props.forEach((value,key)=>put(key,value));
       return out;
     };
@@ -484,7 +488,7 @@ export class CardGraph<T> {
         if (row.array && !plainArrayBase || key in inherited) Object.defineProperty(out, key, { value: item, writable: true, configurable: true, enumerable: true });
         else out[key] = item;
       };
-      row.pages!.forEach(values => { for (const key of Object.keys(values)) { indexed++; put(key, values[key]!); } });
+      row.pages?.forEach(values => { for (const key of Object.keys(values)) { indexed++; put(key, values[key]!); } });
       row.props.forEach((value,key)=>put(key,value));
       const localDense = !row.array || indexed === row.length && row.props.size === 0;
       publication.add(out, localDense);

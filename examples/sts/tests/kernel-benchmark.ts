@@ -132,6 +132,7 @@ for(const character of characters){
     encounter:values.workload==='combat'?values.encounter:null,detailedEvents:values['detailed-events'],warmup,samples,assemblyMs,
     // Verification includes complete-publication hashing and is never a timing score.
     timingValid:!values.verify&&!values.profile,profilingEnabled:!!values.profile,includesPolicy:true,
+    profileScope:values.profile?'post-warmup samples including Context initialization, execution, final hashing, close and reporting; excludes Program assembly and warmup':null,
     initializationScope:'fresh Context through first IO',executionScope:'current-action policy, rule execution and event delivery; excludes final hashing and close',
     medianInitMs:quantile(results.map(r=>r.initMs),.5),medianExecuteMs:quantile(results.map(r=>r.executeMs),.5),
     medianExecuteCpuMs:quantile(results.map(r=>r.executeCpuMs),.5),cpuScope:'process user + system, including GC worker CPU',

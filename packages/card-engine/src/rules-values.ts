@@ -120,7 +120,9 @@ export function ownLoweredRuleValue<T>(value: T, reference?: (value: object) => 
 /** Only a private graph constructed by lowering plus a callback-free schema
  * plan may enter here. No author or parser can retain a writable alias. */
 export function ownPrivateRuleValue<T>(value:T):T{
-  if(value===null||typeof value!=='object')return value;
+  // Pure normalization often preserves the already-owned root. In that case
+  // there is no graph to admit and no traversal worklist to allocate.
+  if(value===null||typeof value!=='object'||isImmutableRuleValue(value))return value;
   const seen=new Set<object>(),pending:object[]=[value];
   while(pending.length){const node=pending.pop()!;if(seen.has(node)||isImmutableRuleValue(node))continue;seen.add(node);
     for(const key of Object.keys(node)){const child=(node as Record<string,unknown>)[key];if(child!==null&&typeof child==='object')pending.push(child);}

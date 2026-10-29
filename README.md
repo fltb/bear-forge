@@ -11,13 +11,15 @@ Node 24（`.node-version` 已固定，fnm/nvm 进入仓库会切换；`engines` 
 ```sh
 npm install
 npm run sts:tui
+# 直接继续最近一局；--list 查看全部存档
+npm run sts:tui -- --resume latest
 # 指定新局目录与角色；目录必须不存在或为空
 npm run sts:tui -- --save data/sts-saves/my-run --character ironclad
 # 保存退出后直接装载原 Context 继续
 npm run sts:tui -- --resume data/sts-saves/my-run
 ```
 
-现有角色 `ironclad` / `volibear`，现有难度 A20。默认自动存档，`q` 或 Ctrl-C 保存退出；不指定目录时会自动生成路径并打印。不同规则源码或 Node 主版本的存档拒绝加载。
+现有角色 `ironclad` / `volibear`，现有难度 A20。默认启动菜单列出可继续的存档；默认位置固定为 `~/.bear-forge/sts/saves`，可用 `BEAR_FORGE_STS_SAVES` 指定。每个动作自动保存，`q`、Ctrl-C、终端关闭均进入保存退出流程。最新版按现场兼容版本恢复，界面或保持现场结构的数值更新不再使存档失效；缺少迁移的结构变化明确报错，原文件保留。
 
 - 操作键位、界面分区、存档与事件接口：[STS 玩家模拟器与 TUI](docs/sts-simulator.md)
 - 旧 JSONL／数字终端逐步入口（评审用，非 TUI）：[STS 玩家入口](docs/sts-entry.md)

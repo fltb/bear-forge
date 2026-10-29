@@ -10,6 +10,7 @@ import type {LoadedCore} from '@bear-forge/contracts/loading';
 import type {SnapshotStore} from '@bear-forge/runtime-card';
 import type {Action,Setup,StsEvent,Ports,Frame} from './game.schemas.ts';
 import {cardDefinition} from './card.ts';
+import {migrateSimulatorSave,simulatorContextVersion} from './simulator-save.ts';
 import {contract} from './contract.ts';
 import {validatePresentationCatalog} from './presentation.ts';
 import type {SimulatorStore,SimulatorView,EventBatch,SimulatorCommand,SimulatorSave,DisplayEvent,DisplayIdentity,CommandReceipt,SimulatorPolicyState} from './simulator.types.ts';
@@ -49,13 +50,13 @@ export async function openSimulator<S>(options:{store:SimulatorStore;setup:S;res
   if(ownedStores.has(storage))throw Error('存档句柄已属于一个会话');
   ownedStores.add(storage);
   try{
-  const restored=options.resume?await storage.read():null;
-  if(restored&&restored.program!==program)throw Error('存档与当前规则代码或 Node 主版本不匹配；请使用创建存档时的版本。未启动或重放游戏。');
+  const stored=options.resume?await storage.read():null;
+  const restored=stored?migrateSimulatorSave(stored,program):null;
   if(restored)await snapshots.put(restored.snapshotId,restored.context);
   const instance=await (async()=>{try{return restored?unwrap(await loaded.persistence!.restore({snapshotId:restored.snapshotId})):unwrap(await loaded.core.start(options.setup));}finally{if(restored)await snapshots.remove(restored.snapshotId);}})();
   const bound=await createGameBinder().bind({instance,contract,persistence:loaded.persistence!});
   if(!bound.ok){await instance.close();throw Error(JSON.stringify(bound.error));}
-  const game=bound.value,sessionId=restored?.sessionId??randomUUID(),character=restored?.character??options.kernel.character;
+  const game=bound.value,sessionId=restored?.sessionId??randomUUID(),character=restored?.character??options.kernel.character,createdAt=restored?.createdAt??new Date().toISOString();
   let revision=restored?.revision??0,cursor=restored?.cursor??0,entities:Record<string,DisplayIdentity>=restored?.entities??{},lastCommand:CommandReceipt|null=restored?.lastCommand??null;
   let policyState:SimulatorPolicyState=restored?.policyState??{version:null,encoderVersion:null,memory:null,random:{state:0,position:0}};
   let pending:Action|null=null,events:DisplayEvent[]=[],actionId=sessionId+':initial',batch:EventBatch|undefined=restored?.batch;
@@ -95,7 +96,7 @@ export async function openSimulator<S>(options:{store:SimulatorStore;setup:S;res
     const reference=unwrap(await game.save!());
     try{
       const context=(await snapshots.get(reference.snapshotId))!;
-      const save:SimulatorSave={format:1,program,sessionId,character,revision,cursor,entities,lastCommand,policyState,batch:batch!,snapshotId:reference.snapshotId,context};
+      const save:SimulatorSave={format:2,contextVersion:simulatorContextVersion,createdAt,savedAt:new Date().toISOString(),program,sessionId,character,revision,cursor,entities,lastCommand,policyState,batch:batch!,snapshotId:reference.snapshotId,context};
       await storage.commit(save);
       if(markerUncertain){await storage.pending(sessionId,revision);markerUncertain=false;}
       dirty=false;
@@ -111,6 +112,9 @@ export async function openSimulator<S>(options:{store:SimulatorStore;setup:S;res
     if(!restored){await storage.pending(sessionId,0);unwrap(await game.run());await collect(-1);dirty=true;await publishTrace();await persist();}
     else { // Rebind a new instance identity, retaining the same logical request/revision.
       batch={...batch!,state:await view()};
+      // Commit the migrated envelope/latest public request before any new action.
+      // This saves the same Context; it never executes an old command.
+      if(stored?.format!==2||restored!.program!==program){dirty=true;await persist();}
       await trace.write(()=>({kind:'resume-boundary',sessionId,...traceBoundary(batch!)}));
     }
   }catch(error){await trace.close();await game.close();throw error;}

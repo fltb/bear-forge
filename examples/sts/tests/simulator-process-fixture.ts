@@ -14,7 +14,7 @@ try{
     const snapshots=memorySnapshotStore(),loadedResult=await createCardLoader({controlled:true,recordCore:false,snapshots,instructionsPerSlice:100_000}).load(combatContentDefinition);
     if(!loadedResult.ok)throw Error(JSON.stringify(loadedResult.error));
     if(resume)CardProgram.prototype.initial=function(){throw Error('Restore must never initialize a game');};
-    session=await openSimulator({store,resume,kernel:{loaded:loadedResult.value,snapshots,program:'original-combat-fixture/1',character:'ironclad'},setup:{seed:'574853884',detailedEvents:true,encounter:encounterId.CULTIST,relics:[],potion:null,durable:false,elite:false,bottledCard:'SECRET_TECHNIQUE'}});
+    session=await openSimulator({store,resume,kernel:{loaded:loadedResult.value,snapshots,program:mode.includes('updated')?'original-combat-fixture/2':'original-combat-fixture/1',character:'ironclad'},setup:{seed:'574853884',detailedEvents:true,encounter:encounterId.CULTIST,relics:[],potion:null,durable:false,elite:false,bottledCard:'SECRET_TECHNIQUE'}});
     if(!resume){
       const {state}=await session.observe(),options=state.request!.options;if(options.kind!=='exact')throw Error('exact');
       const action=options.values.find(a=>{const p=describeAction(state.observation,(a as {bits:number}).bits);return p.kind==='play-card'&&(p.details.card as {id:string}).id==='SECRET_TECHNIQUE';});

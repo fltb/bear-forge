@@ -2,7 +2,7 @@ import {mkdir,open,readFile,rename,rm,stat} from 'node:fs/promises';
 import {dirname,join,resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {serialize,deserialize} from 'node:v8';
-import type {SimulatorSave,SimulatorStore} from './simulator.types.ts';
+import type {StoredSimulatorSave,SimulatorStore} from './simulator.types.ts';
 
 async function durableFile(path:string,bytes:Uint8Array){
   const temp=path+'.'+randomUUID()+'.tmp';
@@ -51,8 +51,9 @@ export async function openSimulatorStore(directory:string,mode:'new'|'resume'):P
     const read=async()=>{
       active();
       let bytes:Buffer;try{bytes=await readFile(savePath);}catch(error){if(missing(error))throw Error('没有已提交的完整存档；上次初始化可能中断，保留目录，不自动重开。');throw error;}
-      const save=deserialize(bytes) as SimulatorSave;
-      if(save.format!==1)throw Error('不兼容的模拟器存档');
+      let save:StoredSimulatorSave;
+      try{save=deserialize(bytes) as StoredSimulatorSave;}catch{throw Error('存档无法解码，可能损坏或当前 Node 无法读取；原文件保留。');}
+      if(save.format!==1&&save.format!==2)throw Error('不兼容的模拟器存档格式；原文件保留。');
       let pending:{sessionId:string;revision:number}|null=null;
       try{pending=JSON.parse(await readFile(pendingPath,'utf8'));}catch(error){if(!missing(error))throw error;}
       if(pending&&(pending.sessionId!==save.sessionId||pending.revision>save.revision))throw Error('上次执行在原子存档提交前中断，最新进展可能已丢失。禁止恢复旧状态补跑；该局保留为 interrupted。');
